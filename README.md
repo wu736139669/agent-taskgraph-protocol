@@ -63,6 +63,7 @@ agent-queue/
 - worker 不临场改方案，发现问题上报 PMO；专家产出物不合格退回重写
 - 一任务一 worktree；台账在文件系统，只有 PMO 能改状态
 - 失败 = 带错误日志重开新会话，不是 PMO 现场修
+- **完成必报**：worker 完成/失败/卡住必须 ping PMO（Goal 里写死报告协议），不通知 = 任务未完成；等待状态写明归属（在等谁/等什么/多久算异常），防"worker 等 PMO、PMO 发呆"的僵局
 - 冲突由 PMO 派发前分析解决，不在 worker 间现场解决
 - 自动 merge 前保留 reviewer gate
 
