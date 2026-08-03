@@ -22,9 +22,9 @@ LOG="${1:?用法: watch-worker.sh <日志路径>}"
 [ -f "$LOG" ] || { echo "❌ 日志不存在: $LOG"; exit 1; }
 
 echo "👁 watch: $LOG"
-echo "   （Ctrl-C 停止；静默即卡死信号；异常先 tail -60 查上下文）"
+echo "   （Ctrl-C 停止；静默即卡死信号；异常先 tail -60 查上下文；tail -F 自动重连轮转）"
 
-tail -f "$LOG" | python3 -u -c "
+tail -F "$LOG" | python3 -u -c "
 import json, sys
 ext = sys.argv[1].rsplit('.', 1)[-1]
 for line in sys.stdin:
