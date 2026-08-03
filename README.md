@@ -85,6 +85,7 @@ agent-queue/
 
 | Level | Trigger | Content |
 |---|---|---|
+| **Routine progress** | Key nodes: new worker starts / fault handled / milestone / stuck / waiting on decision | One-line ping to boss: what's happening / why / next — no need for boss to ask (boss not knowing is also a gap) |
 | Completion report | After each task acceptance | One page (templates/report.md): what / evidence / risk / next |
 | Exception report | Retry limit hit, vague requirement, boss decision needed | Immediate, with suggested options |
 | Batch summary | End of a batch | Table: task / status / time / cost |
