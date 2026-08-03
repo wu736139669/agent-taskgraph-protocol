@@ -136,7 +136,7 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 项目级（常驻，PMO 维护）：
 - `PROJECT.md`：项目恒定信息（技术栈/硬性规范/共享文件锁/岗位工作区映射）——所有 worker 与专家的"先读"文件
-- `STATUS.md`：任务总览板（格式见 `templates/STATUS.md`）——表格：任务号/标题/状态/负责人/轮次/最后更新/卡点。**只含活跃任务**，每次状态变化时更新，done 即移除
+- `STATUS.md`：任务总览板（**轻量视图**，格式见 `templates/STATUS.md`）——codex 环境下"状态"列从 wait_threads / list_threads 同步，PMO 只维护卡点/归属/待决策项；**只含活跃任务**，done 即移除
 - `DECISIONS.md`：团队决策记录（格式见 `templates/DECISIONS.md`，追加式只增不改）——分配决策、方案关键决定、老板指示。防"换会话就忘"。**按主题分区（标题带模块名）**，PMO 开工扫标题选读
 
 任务级（每任务一个目录，随生命周期迁移）：`queue/<inbox|active|review|done|failed>/T1-xxx/`：
@@ -244,6 +244,11 @@ Codex 会话内置线程管理工具（系统提示自带），agent-queue 的�
 4. `wait_threads` 间隔默认 300s（省 token），活跃期加密——即第 8 节 wait 循环的 codex 原生形态
 5. 循环退出条件不变（队列空/老板消息/循环失败/无进展）
 6. claude/hapi 环境无这些工具时，回退到第 7/8 节通用机制（hapi 会话 + 外部守护）
+7. **进度判断分工（原生工具优先）**：
+   - 日常进度 → `wait_threads` / `list_threads`（实时原生，不翻文档）
+   - 任务语义（验收标准/Frozen）→ goal.md
+   - 审计历史（谁何时改状态）→ ledger + DECISIONS
+   - STATUS.md 降级为**轻量视图**：状态列从线程状态同步，PMO 只维护卡点/归属/待决策项
 
 ## 规则（团队纪律）
 
