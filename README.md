@@ -36,6 +36,7 @@ agent-queue/
 │   └── failed/             # 失败待定夺
 │   └── <每任务一个目录：brief.md + ledger.md + report.md>
 └── workers/
+    ├── watch-worker.sh     # ★ 持续监视器：tail worker 日志流式输出进展（PMO watch 模式）
     ├── dispatch.sh         # TODO: 轮询 inbox → 派发 → 归档
     └── run-worker.sh       # TODO: spawn 一个 worker（hapi / claude -p / codex exec）
 ```
@@ -46,7 +47,7 @@ agent-queue/
 2. **装配团队**：按需启用专家岗，产出物不合格退回重写
 3. **拆/编**：拆解四维度（模块/流水线/角色/风险）或编排（冲突面分析 + 分组排期）
 4. **分配派发**：相关性 → 职责匹配 → 负载均衡；一任务一 Goal 一 worktree（Goal = 二元终态判定 + 证据链 + Frozen + Estimate，格式 `templates/goal.md`）；worker 默认独立可见会话（HAPI）且 `--yolo` 权限，相关任务复用会话（`hapi resume`），失败重试才新开；工具/模型/思考等级老板在场先询问，不在则由 PMO 按任务复杂度定
-5. **跟进**：事件驱动为主；15 分钟无事件查 STATUS.md + ledger 时间戳；20 分钟静默判卡死；老板要进度直接给总览板摘要，零打扰
+5. **跟进**：**PMO 持续 watch 模式**——派发时登记日志路径，tail -f 所有活跃 worker 日志实时监听进展（HAPI `~/.hapi/logs/`、Codex rollout jsonl）；20 分钟静默告警判卡死；监视器断线回退台账检查；老板要进度直接给摘要，零打扰
 6. **验收**：三级闸——worker 自验（命令输出）→ reviewer 独立审 → 老板终审（视觉/产品/发布）
 7. **重试**：带错误日志重开新会话，最多 3 次
 8. **合并闸**：按依赖顺序合并，每条合完跑回归，合并前 reviewer 审 diff

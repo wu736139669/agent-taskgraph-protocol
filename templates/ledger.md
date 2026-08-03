@@ -13,7 +13,7 @@
 | 开始时间 | |
 | 最后更新 | |
 | 验收结果 | ✅ / ❌（附命令输出） |
-| 日志指针 | <worker 输出文件路径 / HAPI 会话 ID> |
+| 日志指针 | <日志路径：HAPI 会话 ~/.hapi/logs/ 或 Codex rollout jsonl——watch 监视器的输入> |
 
 ## 备注
 

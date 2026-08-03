@@ -146,12 +146,22 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 会话级（可选）：角色记忆——常驻会话归档时的交接总结（做过什么/踩过什么坑/关键上下文），新会话续接先读。可放 `memory/` 或 ai-shared。
 
+**PMO 持续 watch 模式（默认）——监控必须是机制性的，不是意愿性的**：教训——"每 15 分钟查一次台账"写进了规则，但 PMO 从没真的做过：agent 不会自觉发起定时行为，**没有机制就没有执行**。所以任何"每 X 分钟做 Y"都必须有真实机制（定时器/事件流），否则等于没写。watch 的实现：派发 worker 时登记日志路径——HAPI 会话：`~/.hapi/logs/<session>.log`；Codex：`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`——并在自己会话挂**持续监视器**（tail -f 所有活跃 worker 日志，一个真实挂着的后台进程，每行输出自动作为事件流入 PMO）。进展自动可见，**不依赖 PMO 记得去查**。
+
+**watch 实现手册**：
+- 挂载：`workers/watch-worker.sh <worker 日志路径>`——tail -f + 事件过滤，持续流式输出（📥 USER / 🤖 AGENT / 🛠 CALL / 🏁 终态 / ❌ 错误）。HAPI 会话日志在 `~/.hapi/logs/`，Codex 在 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
+- 事件含义：CALL = 工具调用（进展信号）；AGENT = 实质产出；USER = 输入；终态/错误 = 完成与异常
+- 诊断闭环：看到可疑模式 → `tail -60 <日志>` 查上下文（如 wait 连续出现时看它的调用参数）→ 判断正常/异常 → **误报也要记录**（下次不重复误判）
+- 经验：Codex 的 `wait` 带 `cell_id`/`yield_time_ms` 是 notebook 分片执行（正常）；**静默才是卡死信号**，不是"没有进展事件"
+
 **跟进动作（PMO 例行）**：
-1. 状态变化 → 更新 ledger + 移动任务目录 + 刷新 STATUS.md（三步一体）
-2. 兜底：超 **15 分钟**无事件 → 看 STATUS.md + active 任务 ledger 的最后更新时间
-3. 卡死检测：静默超 **20 分钟** → 查日志 → 续接 / 重开 / 上报老板
-4. 老板要进度 → 直接给 STATUS.md 摘要，不用现场问 worker
-5. 只在四个时点打扰 worker：**完成、失败、卡住、要决策**
+1. 派发时：登记日志指针到 ledger（watch 监视器的输入）
+2. 状态变化 → 更新 ledger + 移动任务目录 + 刷新 STATUS.md（三步一体）
+3. 实时：监视器事件流——worker 进展 / 完成 / 失败即时可见
+4. 卡死检测：活跃 worker 日志**静默超 20 分钟**无新输出 → 事件告警 → 查证 → 续接 / 重开 / 上报老板
+5. 监视器断线（重启 / 网络）→ 回退台账检查，恢复 watch——兜底是恢复手段，不是主机制
+6. 老板要进度 → 直接给 STATUS.md 摘要或实时进展，不用现场问 worker
+7. 只在四个时点打扰 worker：**完成、失败、卡住、要决策**
 
 ## 第 9 节：验收（三级闸）
 
@@ -190,3 +200,4 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 - 冲突由 PMO 派发前分析解决，不在 worker 间现场解决
 - 自动 merge 前保留 reviewer gate
 - 不频繁打扰 worker：只在完成、失败、卡住、要决策四个时点交互
+- **监控靠机制不靠意愿**：任何"每 X 分钟做 Y"的规则必须挂真实定时器或事件流（tail -f / cron / hooks），只写进规则而没有机制 = 不会发生
