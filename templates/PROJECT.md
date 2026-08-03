@@ -37,7 +37,7 @@
 | codex 登录 | ✅/❌ | codex 会话/新线程是否可开 |
 | 开新会话可用路径 | <按探查结果填：hapi runner spawn / codex 新线程 / claude CLI / 子 agent> | 供 Reviewer/worker 真实创建时选用 |
 | 老板可见性偏好 | <✅ 全可见（优先 hapi 开）/ 仅在 VSCode 面板 / 无头日志即可> | 老板是否要求所有会话在 HAPI 界面可见可插话——要求则开新会话优先 hapi |
-| 监控机制登记 | wait 循环：间隔 <N 秒> / 状态 <运行中 / 已退出+原因>；外部守护：<LaunchAgent/tmux/cron 标识> | **开工必须进入 wait 循环并登记；写不出 = 未开工** |
+| 监控机制登记 | wait 循环：间隔 <默认 300s，可调> / 状态 <运行中 / 已退出+原因>；外部守护：<LaunchAgent/tmux/cron 标识> | **开工必须进入 wait 循环并登记；写不出 = 未开工** |
 
 ## 归档约定
 
