@@ -146,13 +146,14 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 会话级（可选）：角色记忆——常驻会话归档时的交接总结（做过什么/踩过什么坑/关键上下文），新会话续接先读。可放 `memory/` 或 ai-shared。
 
-**PMO 持续 watch 模式（默认）——监控必须是机制性的，不是意愿性的**：教训——"每 15 分钟查一次台账"写进了规则，但 PMO 从没真的做过：agent 不会自觉发起定时行为，**没有机制就没有执行**。所以任何"每 X 分钟做 Y"都必须有真实机制（定时器/事件流），否则等于没写。watch 的实现：派发 worker 时登记日志路径——HAPI 会话：`~/.hapi/logs/<session>.log`；Codex：`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`——并在自己会话挂**持续监视器**（tail -f 所有活跃 worker 日志，一个真实挂着的后台进程，每行输出自动作为事件流入 PMO）。进展自动可见，**不依赖 PMO 记得去查**。
+**PMO 进展监控——用 agent 原生能力，不造外部脚手架**：PMO 自己就能读文件、定时、等待（Codex automation / wait 循环，Claude 后台任务 / cron），不需要外部进程代劳。做法：
+1. 派发时登记日志指针到 ledger（HAPI：`~/.hapi/logs/<session>.log`；Codex：`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`）
+2. **原生监控循环（wait thread 方式）**：PMO 周期性（如每 60-120s）读取活跃 worker 日志尾部（`tail -c 2000` 或最后几条事件），与上次读取对比——有新事件 = 在进展；长时间无新写入 = 静默告警 → 走诊断。循环挂在 agent 后台任务 / automation 里，**由 agent 自己跑，不依赖外部进程**
+3. 事件解读：CALL = 工具调用（进展信号）；AGENT = 实质产出；终态/错误 = 完成与异常
+4. 诊断闭环：可疑模式 → 读日志上下文（`tail -60`）→ 判断正常/异常 → **误报也要记录**（下次不重复误判）
+5. 经验：Codex 的 `wait` 带 `cell_id`/`yield_time_ms` 是 notebook 分片执行（正常）；**静默才是卡死信号**
 
-**watch 实现手册**：
-- 挂载：`workers/watch-worker.sh <worker 日志路径>`——tail -f + 事件过滤，持续流式输出（📥 USER / 🤖 AGENT / 🛠 CALL / 🏁 终态 / ❌ 错误）。HAPI 会话日志在 `~/.hapi/logs/`，Codex 在 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
-- 事件含义：CALL = 工具调用（进展信号）；AGENT = 实质产出；USER = 输入；终态/错误 = 完成与异常
-- 诊断闭环：看到可疑模式 → `tail -60 <日志>` 查上下文（如 wait 连续出现时看它的调用参数）→ 判断正常/异常 → **误报也要记录**（下次不重复误判）
-- 经验：Codex 的 `wait` 带 `cell_id`/`yield_time_ms` 是 notebook 分片执行（正常）；**静默才是卡死信号**，不是"没有进展事件"
+**可选增强（不是默认）**：实时性要求高（分钟级进展都要立即知道）时才挂外部事件流——`workers/watch-worker.sh`（tail -F + 过滤）。大多数场景下 agent 原生循环足够。
 
 **跟进动作（PMO 例行）**：
 1. 派发时：登记日志指针到 ledger（watch 监视器的输入）
