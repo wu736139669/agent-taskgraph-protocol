@@ -103,6 +103,21 @@ agent-queue/
 - Monitoring relies on mechanisms, not intentions: "do X every N minutes" needs a real timer or event stream, or it will never happen
 - **Session = project**: one PMO session serves one project (switch = new session); kickoff loads only current scope (PROJECT + STATUS + related goals/decision titles), history is never loaded; STATUS.md holds active tasks only (done = removed)
 
+## Codex-native execution layer (SKILL.md §13)
+
+Codex sessions have built-in thread tools (in their system prompt) that map 1:1 to agent-queue actions — the recommended path on Codex:
+
+| Action | Native tool |
+|---|---|
+| Dispatch (only when boss explicitly asks for a new session) | `create_thread` (visible in sidebar) |
+| Continuous monitoring (native wait loop) | `wait_threads` (1-8 targets, `timeoutMs: 0` snapshot, 300s default) |
+| Constraints / replies | `send_message_to_thread` |
+| Deep inspection | `read_thread` |
+| Handoff on session switch | `handoff_thread` |
+| Overview | `list_threads` |
+
+Internal short parallel work uses invisible sub-agents; claude/hapi environments fall back to the generic mechanisms in §7-8.
+
 ## Install (other machines / sharing)
 
 ```bash

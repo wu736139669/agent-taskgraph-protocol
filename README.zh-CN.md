@@ -100,6 +100,21 @@ agent-queue/
 - 冲突由 PMO 派发前分析解决，不在 worker 间现场解决
 - 自动 merge 前保留 reviewer gate
 
+## codex 原生线程执行层（SKILL.md 第 13 节）
+
+Codex 会话内置线程工具（系统提示自带），与 agent-queue 动作一一映射——Codex 环境推荐路径：
+
+| 动作 | codex 原生工具 |
+|---|---|
+| 派发（仅老板明确要求新会话时） | `create_thread`（侧边栏可见） |
+| 持续监控（wait 循环原生实现） | `wait_threads`（1-8 个目标，`timeoutMs:0` 快照，默认 300s） |
+| 补充约束/回复 | `send_message_to_thread` |
+| 深入排查 | `read_thread` |
+| 换会话接力 | `handoff_thread` |
+| 总览 | `list_threads` |
+
+内部短暂并行用不可见子 agent；claude/hapi 环境回退第 7-8 节通用机制。
+
 ## 安装（跨电脑/给别人用）
 
 **clone + 一条命令**：
