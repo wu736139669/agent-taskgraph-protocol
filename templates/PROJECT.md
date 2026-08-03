@@ -38,3 +38,9 @@
 | 开新会话可用路径 | <按探查结果填：hapi runner spawn / codex 新线程 / claude CLI / 子 agent> | 供 Reviewer/worker 真实创建时选用 |
 | 老板可见性偏好 | <✅ 全可见（优先 hapi 开）/ 仅在 VSCode 面板 / 无头日志即可> | 老板是否要求所有会话在 HAPI 界面可见可插话——要求则开新会话优先 hapi |
 | 监控机制登记 | <automation ID / 后台任务名 / cron 行 + 间隔> | **开工第一步创建并登记；写不出机制证据 = 未开工** |
+
+## 归档约定
+
+- STATUS.md 只含活跃任务（done 即移除，总览板永远小）
+- 已完成任务按月移入 `archive/<YYYY-MM>/`（不压缩不索引，可 grep）
+- 追溯 / 批次总结翻 archive；开工只读本项目热数据，历史不加载

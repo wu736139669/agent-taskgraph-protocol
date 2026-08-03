@@ -136,8 +136,8 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 项目级（常驻，PMO 维护）：
 - `PROJECT.md`：项目恒定信息（技术栈/硬性规范/共享文件锁/岗位工作区映射）——所有 worker 与专家的"先读"文件
-- `STATUS.md`：任务总览板（格式见 `templates/STATUS.md`）——表格：任务号/标题/状态/负责人/轮次/最后更新/卡点。每次状态变化时更新
-- `DECISIONS.md`：团队决策记录（格式见 `templates/DECISIONS.md`，追加式只增不改）——分配决策、方案关键决定、老板指示。防"换会话就忘"
+- `STATUS.md`：任务总览板（格式见 `templates/STATUS.md`）——表格：任务号/标题/状态/负责人/轮次/最后更新/卡点。**只含活跃任务**，每次状态变化时更新，done 即移除
+- `DECISIONS.md`：团队决策记录（格式见 `templates/DECISIONS.md`，追加式只增不改）——分配决策、方案关键决定、老板指示。防"换会话就忘"。**按主题分区（标题带模块名）**，PMO 开工扫标题选读
 
 任务级（每任务一个目录，随生命周期迁移）：`queue/<inbox|active|review|done|failed>/T1-xxx/`：
 - `goal.md`：Goal（原样保存）
@@ -156,6 +156,12 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 7. 经验：Codex 的 `wait` 带 `cell_id`/`yield_time_ms` 是 notebook 分片执行（正常）；**静默才是卡死信号**
 
 **可选增强（不是默认）**：实时性要求高（分钟级进展都要立即知道）时才挂外部事件流——`workers/watch-worker.sh`（tail -F + 过滤）。大多数场景下 agent 原生循环足够。
+
+**会话绑定与加载范围协议（对话即项目）**：
+- **一个 PMO 会话只服务一个项目**：换项目 = 开新会话或明确声明切换（"切换到 X 项目"）；禁止混合批次
+- **开工只读本次范围**：PROJECT.md（恒定）+ STATUS.md（只含活跃任务）+ 本次相关 goal/ledger + 决策记录标题（按主题分区，扫标题选读）——**历史一概不加载**
+- **STATUS.md 只含活跃任务**：任务 done 立即从总览板移除；已完成任务按月挪入 `archive/<YYYY-MM>/`（不压缩、不做索引，能 grep 即可）
+- **批次总结**：收尾汇报需要已完成任务 → 翻当月 `archive/`（可接受的小代价）
 
 **跟进动作（PMO 例行）**：
 1. 派发时：登记日志指针到 ledger（watch 监视器的输入）
@@ -218,3 +224,4 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 - 不频繁打扰 worker：只在完成、失败、卡住、要决策四个时点交互
 - **监控靠机制不靠意愿**：任何"每 X 分钟做 Y"的规则必须挂真实定时器或事件流（tail -f / cron / hooks），只写进规则而没有机制 = 不会发生
 - **PMO 开工必须创建监控机制并登记证据**（automation ID / 后台任务 / cron 行），写不出机制证据 = 未开工
+- **对话即项目**：一个 PMO 会话只服务一个项目（换项目开新会话）；开工只读本次范围（PROJECT + STATUS + 相关 goal/决策标题），历史不加载；STATUS 只含活跃任务，done 即移除

@@ -100,6 +100,7 @@ agent-queue/
 - Conflicts are solved by PMO before dispatch, never between workers on the fly
 - Reviewer gate stays before auto-merge
 - Monitoring relies on mechanisms, not intentions: "do X every N minutes" needs a real timer or event stream, or it will never happen
+- **Session = project**: one PMO session serves one project (switch = new session); kickoff loads only current scope (PROJECT + STATUS + related goals/decision titles), history is never loaded; STATUS.md holds active tasks only (done = removed)
 
 ## Install (other machines / sharing)
 
