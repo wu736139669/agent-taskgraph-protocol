@@ -56,8 +56,9 @@ agent-queue/
 ├── templates/
 │   ├── PROJECT.md          # Project profile (stable facts, workers read first)
 │   ├── STATUS.md           # Task board (refreshed on every state change)
+│   ├── GRAPH.md            # Task graph (mermaid: active tasks as nodes, dependency edges)
 │   ├── DECISIONS.md        # Decision log (append-only team memory)
-│   ├── goal.md             # ★ Goal dispatch template (legal terminal / evidence chain / Frozen / Estimate)
+│   ├── goal.md             # ★ Goal dispatch template (legal terminal / evidence chain / dependency edges / Frozen / Estimate)
 │   ├── ledger.md           # Ledger entry format (state flow, PMO-only writes)
 │   └── report.md           # Completion report format (one page)
 ├── queue/                  # Ledger state machine (filesystem as memory)

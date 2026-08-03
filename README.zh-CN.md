@@ -55,8 +55,9 @@ agent-queue/
 ├── templates/
 │   ├── PROJECT.md          # 项目档案（恒定信息，worker 先读）
 │   ├── STATUS.md           # 任务总览板（每次状态变化刷新）
+│   ├── GRAPH.md            # 任务图（mermaid：节点=活跃任务，边=依赖/交接）
 │   ├── DECISIONS.md        # 决策记录（追加式团队记忆）
-│   ├── goal.md             # ★ Goal 派发模板（Legal terminal 二元终态/证据链/Frozen/Estimate）
+│   ├── goal.md             # ★ Goal 派发模板（Legal terminal 二元终态/证据链/依赖与边/Frozen/Estimate）
 │   ├── ledger.md           # 台账记录格式（状态流，只有 PMO 能改）
 │   └── report.md           # 完成汇报格式（一页纸）
 ├── queue/                  # 台账状态机（文件系统即记忆）
