@@ -164,8 +164,8 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 6. 老板要进度 → 直接给 STATUS.md 摘要或实时进展，不用现场问 worker
 7. 只在四个时点打扰 worker：**完成、失败、卡住、要决策**
 
-**Reviewer 硬标准**（reviewer 用什么工具不绑定——claude 会话 / codex 线程 / HAPI 新会话均可，按老板偏好或 PROJECT.md 配置选择）：
-1. **真实创建**：进入 review 状态 = 当场真实创建 reviewer 并派活（HAPI 会话 / codex 线程 / 子 agent），不是计划事项，禁止口头声称"等独立 review"
+**Reviewer 硬标准**（reviewer 用什么工具不绑定——claude 会话 / codex 线程 / HAPI 新会话 / 子 agent 均可，**按用户真实环境情况选择**：PMO 项目接入时探查本机可用路径并记入 PROJECT.md"本机环境"节，开新会话优先用可用路径，不写死任何工具或命令）：
+1. **真实创建**：进入 review 状态 = 当场真实创建 reviewer 并派活（用 PROJECT.md 记录的环境可用路径），不是计划事项，禁止口头声称"等独立 review"
 2. **独立性本质**：审查上下文与实现上下文隔离（不自审）——无论什么工具形态，审查必须基于证据独立判断
 3. **证据要求**：台账必须记录 reviewer 的真实标识（会话/线程 ID + 日志路径）——**写不出证据 = 没有 reviewer = 验收无效**
 4. 老板在派发前询问工具偏好（claude 还是 codex），老板不在时 PMO 按项目配置决定
