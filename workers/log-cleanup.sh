@@ -7,7 +7,7 @@
 #   ./log-cleanup.sh --apply    # 真正清理
 #
 # 策略:
-#   Codex archived_sessions/  删除 >30 天的 rollout jsonl（已归档的旧会话）
+#   Codex archived_sessions/  删除 >7 天的 rollout jsonl（已归档 = 会话已结束，watch 不再需要）
 #   Codex sessions/           删除 >14 天的 rollout jsonl（活跃会话 mtime 新，天然安全）
 #   HAPI logs/                删除 >7 天的 *.log
 # 注意: watch 中的日志如果已停止写入超过上述天数，也会被清——watch 到的终态后本就该归档
@@ -26,9 +26,9 @@ for dir in "$codex_sessions" "$codex_archived" "$hapi_logs"; do
 done
 
 echo ""
-echo "== Codex archived_sessions (>30天) =="
-find "$codex_archived" -name "*.jsonl" -mtime +30 2>/dev/null | wc -l | xargs echo "  $ACT 文件数:"
-if [ $DRY -eq 0 ]; then find "$codex_archived" -name "*.jsonl" -mtime +30 -delete 2>/dev/null; fi
+echo "== Codex archived_sessions (>7天) =="
+find "$codex_archived" -name "*.jsonl" -mtime +7 2>/dev/null | wc -l | xargs echo "  $ACT 文件数:"
+if [ $DRY -eq 0 ]; then find "$codex_archived" -name "*.jsonl" -mtime +7 -delete 2>/dev/null; fi
 
 echo "== Codex sessions (>14天) =="
 find "$codex_sessions" -name "*.jsonl" -mtime +14 2>/dev/null | wc -l | xargs echo "  $ACT 文件数:"
