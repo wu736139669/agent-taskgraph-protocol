@@ -76,7 +76,7 @@ agent-queue/
 2. **Assemble team**: on-demand expert roles; unqualified outputs are bounced back
 3. **Decompose / Orchestrate**: four decomposition dimensions (module / pipeline / role / risk) or orchestration (conflict-surface analysis + grouping)
 4. **Assign & dispatch**: relevance → role match → load balance; one task = one Goal = one worktree; workers default to independent visible sessions (HAPI) with `--yolo`; related tasks reuse sessions (`hapi resume`); fresh sessions only on first work or failure
-5. **Follow up**: **PMO must create a real monitoring mechanism at kickoff** — Codex automation / background task / cron (per PROJECT.md local environment), registered with ID + interval; **no mechanism evidence = not started**. Each cycle it checks worker log tails + ledger; silence = stuck signal; broken mechanism (restart/deleted) → rebuild when stale ledger is noticed; boss gets a STATUS.md summary on request
+5. **Follow up**: **PMO runs a native wait loop** — `{ wait N → check worker logs + ledger → act → loop }`, never idling (idle = anomaly, rebuild). Interval adaptive: 90s active / 5-10min idle (save tokens). **Explicit exit conditions**: queue empty/batch done, boss message, loop failure, long idle. Loop state registered in ledger (**no registration = not started**); external mechanisms (LaunchAgent/tmux) demoted to guard duty — restart the loop after crash/reboot only
 6. **Accept**: three gates — worker self-check (command output) → reviewer → boss final review
 7. **Retry**: fresh session with error log, max 3 times
 8. **Merge gate**: dependency-ordered merges with regression after each; reviewer gate stays before auto-merge
