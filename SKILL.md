@@ -219,11 +219,13 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 6. 老板要进度 → 直接给 STATUS.md 摘要或实时进展，不用现场问 worker
 7. 只在四个时点打扰 worker：**完成、失败、卡住、要决策**
 
-**Reviewer 硬标准**（reviewer 用什么工具不绑定——claude 会话 / codex 线程 / HAPI 新会话 / 子 agent 均可，**按用户真实环境情况选择**：PMO 项目接入时探查本机可用路径并记入 PROJECT.md"本机环境"节，开新会话优先用可用路径，不写死任何工具或命令）：
+**Reviewer 硬标准**（reviewer 的实现工具可按本机可用路径选择，但必须是
+用户可见、可接管的独立会话；PMO 项目接入时将可用路径记入 PROJECT.md
+“本机环境”节）：
 1. **真实创建**：进入 review 状态 = 当场真实创建 reviewer 并派活（用 PROJECT.md 记录的环境可用路径），不是计划事项，禁止口头声称"等独立 review"
 2. **独立性本质**：审查上下文与实现上下文隔离（不自审）——无论什么工具形态，审查必须基于证据独立判断
 3. **证据要求**：台账必须记录 reviewer 的真实标识（会话/线程 ID + 日志路径）——**写不出证据 = 没有 reviewer = 验收无效**
-4. 老板在派发前询问工具偏好（claude 还是 codex），老板不在时 PMO 按项目配置决定
+4. 老板在派发前询问工具偏好（claude 还是 codex），老板不在时 PMO 按项目配置决定；在 Codex 环境中 reviewer 用 `create_thread`，不得用 `spawn_agent` 冒充可见 reviewer
 
 **协同断点防护——PMO 主动是第一道防线**（防"worker 完成但 PMO 不知道"的僵局）：
 1. **PMO 主动看进展（主机制）**：PMO 定期主动查看——worker 日志尾部（最后写入时间 + 新事件）**和**台账（STATUS.md / ledger 状态）——**不依赖任何通知**。发现完成 → 主动启动验收；发现静默 → 主动诊断；发现等待 → 主动推进。循环挂 agent 原生能力（Codex automation / wait，Claude 后台任务）
@@ -307,3 +309,48 @@ Codex 会话内置线程管理工具（系统提示自带），agent-queue 的�
 - **对话即项目**：一个 PMO 会话只服务一个项目（换项目开新会话）；开工只读本次范围（PROJECT + STATUS + 相关 goal/决策标题），历史不加载；STATUS 只含活跃任务，done 即移除
 - **PMO 关键节点例行汇报**：新 worker 开工 / 故障处理完 / 里程碑 / 卡住时，一句话 ping 老板（现在做什么/为什么/下一步）——老板不知道在干嘛，也是一种断点
 - **文档更新绑定动作**：决策必写（DECISIONS 是决策动作的一部分）、PROJECT 开工前查完整性（缺模板字段即补录）、reviewer 验收顺带核对台账一致性——文档随迭代滚动，不靠记忆
+
+## 第 14 节：批次完结与文档收口
+
+批次是一个明确授权范围内的任务集合，例如串行的多游戏 TestFlight
+发布。批次终态必须可从文件系统恢复，不能只依赖 PMO 聊天汇报。
+
+### 完结闸
+
+1. 逐任务对账：任务目录已从 `active/review` 移到 `done`（或
+   `failed`），Goal/ledger/report 的 legal terminal、源版本、closure、
+   证据路径、reviewer 身份、clean/upstream 和 owned-process 清理一致。
+2. 对发布任务，逐个记录精确 App Store Connect `VALID`（或命名的
+   `BLOCKED`/失败终态）、App/Apple ID/Bundle ID、版本/build、Delivery UUID、
+   签名模式和唯一下一步。`UPLOAD SUCCEEDED` 不能作为批次完成依据。
+3. Reviewer 的真实可查身份（会话/线程 ID 与日志或 JSONL 路径）必须写入
+   任务 ledger/report；缺身份或日志证据的任务不能验收，也不能批量归档。
+4. PMO 更新组合 `STATUS.md`、`PROJECT.md`、`GAME_STATUS.md` 和发布索引；
+   追加一条 `DECISIONS.md` 批次决策，并可建立一份带日期的组合 closeout
+   文档链接所有权威记录。不要复制动态事实到技能或静态 profile。
+5. 清理只限本次拥有的进程和临时路径。精确 `VALID` 后不追加第二次
+   IPA/PCK/privacy 审计、manifest、重建或重传；受保护的当前交付和被引用
+   证据必须保留。
+
+### 队列与 wait 终态
+
+- 批次完成且 `queue/active/`、`queue/review/` 为空时，登记
+  `PMO wait: exited / batch complete`，汇报一次批次总结，然后退出 wait
+  循环。不得把退出后的会话或历史 HAPI 状态描述为“仍在监控”。
+- 新任务、后续开发、Owner 试玩修复或新包必须由 Owner 新授权并创建新
+  Goal；不得从 done 任务、旧会话或旧候选推断继续执行。
+- 只有真实原生 `wait_agent`/`wait_threads` 返回 timeout/interruption 后，
+  才能记录一次 wait 已运行。失败的 `functions.wait` 调用不产生可见卡片，
+  不能写成已启动监控。
+
+### 固定批次总结模板
+
+```text
+批次：<name/date>
+任务：<task> | <PASS/VALID/FAIL/BLOCKED> | source/closure | reviewer/log
+发布：<app/version/build> | Delivery UUID | ASC terminal
+清理：owned process/residue | repository clean/upstream
+开放门：<human/device/tester/review/publish>
+队列：active=<n>, review=<n>; PMO wait=<running|exited + reason>
+下一步：<唯一最短动作；批次完成时写“等待 Owner 新授权”>
+```
