@@ -437,6 +437,8 @@ Please remove secrets, tokens, credentials, private paths, session IDs, customer
 |---|---|
 | `./init.sh <project>` | Initialize project state while preserving existing files |
 | `./init.sh --migrate <project>` | Explicitly rename legacy `.agent-queue/` state and add missing current templates |
+| `./scripts/open-worker-terminal.sh ... --dry-run` | Preview a native Claude/Codex worker command without opening Terminal |
+| `./scripts/open-worker-terminal.sh ...` | Open and verify one worker in a visible macOS Terminal.app window |
 | `./workers/watch-worker.sh <log>` | Compact Codex JSONL or HAPI text logs into progress events |
 | `./workers/log-cleanup.sh` | Dry-run archived Codex logs older than 30 days |
 | `./workers/log-cleanup.sh --apply` | Delete the archived candidates just listed |
@@ -449,6 +451,7 @@ Live directories are scanned only with `--include-live`; deletion occurs only wi
 
 - The skill probes the current environment; it does not assume every Codex exposes `create_thread`, `wait_threads`, or similar tools.
 - Visible, owner-controllable sessions are preferred when available. Use Claude native commands (`claude`, `claude --bg`, `claude agents`, or `claude -p`) for Claude Code and Codex native commands (`codex`, `codex exec`, or `codex resume`) for Codex. Missing capabilities require an explicit fallback, not a fictional reviewer.
+- On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
 - Platform-standard permissions are the default. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project.
 - Frozen scope, worktrees, and reviewers are quality controls, not security sandboxes.
 - Dependency installs, migrations, deletion, privilege expansion, merge, and release should retain Human Gates defined in `PROJECT.md`.

@@ -14,9 +14,10 @@ assert_file() { [ -f "$1" ] || fail "missing file: $1"; }
 assert_dir() { [ -d "$1" ] || fail "missing directory: $1"; }
 assert_link_to() { [ -L "$1" ] && [ "$(readlink "$1")" = "$2" ] || fail "unexpected symlink: $1"; }
 
-echo "[1/7] shell and Python syntax"
+echo "[1/9] shell and Python syntax"
 bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" \
-  "$ROOT/workers/watch-worker.sh" "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
+  "$ROOT/scripts/open-worker-terminal.sh" "$ROOT/workers/watch-worker.sh" \
+  "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
 python3 - "$ROOT/workers/parse-worker-log.py" <<'PY'
 from pathlib import Path
 import sys
@@ -25,12 +26,12 @@ source = Path(sys.argv[1]).read_text()
 compile(source, sys.argv[1], "exec")
 PY
 
-echo "[2/7] Codex log parser fixtures"
+echo "[2/9] Codex log parser fixtures"
 python3 "$ROOT/workers/parse-worker-log.py" --format jsonl \
   < "$ROOT/tests/fixtures/codex-events.jsonl" > "$TMP/parser.out"
 diff -u "$ROOT/tests/fixtures/codex-events.expected" "$TMP/parser.out"
 
-echo "[3/7] update checker states"
+echo "[3/9] update checker states"
 git init --bare "$TMP/update-remote.git" >/dev/null
 git init "$TMP/update-local" >/dev/null
 git -C "$TMP/update-local" checkout -b main >/dev/null
@@ -71,7 +72,7 @@ cp "$ROOT/VERSION" "$TMP/update-not-git/VERSION"
 AGENT_TASKGRAPH_ROOT="$TMP/update-not-git" "$ROOT/scripts/check-update.sh" > "$TMP/update-unavailable.out"
 grep -q 'Update status: unavailable' "$TMP/update-unavailable.out"
 
-echo "[4/7] install, status, conflict, force, and uninstall"
+echo "[4/9] install, status, conflict, force, and uninstall"
 HOME="$TMP/home-install" "$ROOT/install.sh" > "$TMP/install.out"
 assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
@@ -114,7 +115,7 @@ find "$TMP/home-conflict/.claude/skills" -maxdepth 1 -name 'agent-taskgraph.back
   > "$TMP/backups.out"
 [ -s "$TMP/backups.out" ] || fail "forced install did not create a backup"
 
-echo "[5/7] project initialization preserves existing files"
+echo "[5/9] project initialization preserves existing files"
 mkdir -p "$TMP/project"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/init.out"
 for state in inbox active review done failed; do
@@ -148,7 +149,67 @@ fi
 assert_dir "$TMP/project-both/.agent-queue"
 assert_dir "$TMP/project-both/.agent-taskgraph"
 
-echo "[6/7] cleanup is dry-run and archived-only by default"
+echo "[6/9] visible Terminal launcher dry-run and permission gates"
+mkdir -p "$TMP/terminal-project/.agent-taskgraph/queue/active/T1-test"
+echo '# Goal: launcher test' > "$TMP/terminal-project/.agent-taskgraph/queue/active/T1-test/goal.md"
+AGENT_TASKGRAPH_TERMINAL_DIR="$TMP/terminal-runtime" \
+  "$ROOT/scripts/open-worker-terminal.sh" --runtime claude \
+  --project "$TMP/terminal-project" --name test-claude \
+  --goal .agent-taskgraph/queue/active/T1-test/goal.md \
+  --plugin-dir "$ROOT/plugins/agent-taskgraph" --model sonnet --effort high \
+  --permission-mode plan --dry-run > "$TMP/terminal-claude.out"
+grep -q '^runtime: claude$' "$TMP/terminal-claude.out"
+grep -q 'command: claude .*--name test-claude .*--permission-mode plan' "$TMP/terminal-claude.out"
+grep -q 'mode: dry-run (Terminal not opened)' "$TMP/terminal-claude.out"
+[ ! -e "$TMP/terminal-runtime" ] || fail "launcher dry-run created runtime artifacts"
+
+"$ROOT/scripts/open-worker-terminal.sh" --runtime codex \
+  --project "$TMP/terminal-project" --name test-codex \
+  --goal .agent-taskgraph/queue/active/T1-test/goal.md \
+  --model gpt-test --effort high --permission-mode acceptEdits --dry-run \
+  > "$TMP/terminal-codex.out"
+grep -q '^runtime: codex$' "$TMP/terminal-codex.out"
+grep -q 'command: codex .* -s workspace-write -a on-request' "$TMP/terminal-codex.out"
+
+if "$ROOT/scripts/open-worker-terminal.sh" --runtime claude \
+  --project "$TMP/terminal-project" --name test-danger \
+  --goal .agent-taskgraph/queue/active/T1-test/goal.md \
+  --permission-mode bypassPermissions --dry-run > "$TMP/terminal-danger.out" 2>&1; then
+  fail "launcher allowed bypassPermissions without --allow-dangerous"
+fi
+grep -q 'requires the explicit --allow-dangerous flag' "$TMP/terminal-danger.out"
+
+mkdir -p "$TMP/terminal-bin"
+cat > "$TMP/terminal-bin/open" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[ "$1" = "-a" ] && [ "$2" = "Terminal" ]
+bash "$3" >/dev/null 2>&1 &
+SH
+cat > "$TMP/terminal-bin/claude" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+exec sleep 30
+SH
+chmod +x "$TMP/terminal-bin/open" "$TMP/terminal-bin/claude"
+PATH="$TMP/terminal-bin:$PATH" AGENT_TASKGRAPH_TERMINAL_DIR="$TMP/terminal-runtime" \
+  "$ROOT/scripts/open-worker-terminal.sh" --runtime claude \
+  --project "$TMP/terminal-project" --name test-visible \
+  --goal .agent-taskgraph/queue/active/T1-test/goal.md \
+  --permission-mode plan --verify-timeout 5 > "$TMP/terminal-visible.out"
+grep -q '^launched: true$' "$TMP/terminal-visible.out"
+VISIBLE_PID="$(sed -n 's/^pid: //p' "$TMP/terminal-visible.out")"
+[ -n "$VISIBLE_PID" ] || fail "launcher did not report a worker PID"
+kill "$VISIBLE_PID"
+for _ in 1 2 3 4 5; do
+  kill -0 "$VISIBLE_PID" 2>/dev/null || break
+  sleep 0.1
+done
+if kill -0 "$VISIBLE_PID" 2>/dev/null; then
+  fail "launcher test worker was not cleaned up"
+fi
+
+echo "[7/9] cleanup is dry-run and archived-only by default"
 mkdir -p "$TMP/home-logs/.codex/archived_sessions" "$TMP/home-logs/.codex/sessions" "$TMP/home-logs/.hapi/logs"
 touch "$TMP/home-logs/.codex/archived_sessions/old.jsonl" \
   "$TMP/home-logs/.codex/sessions/live.jsonl" "$TMP/home-logs/.hapi/logs/live.log"
@@ -176,7 +237,7 @@ HOME="$TMP/home-logs" "$ROOT/workers/log-cleanup.sh" --days 1 --include-live --a
 [ ! -e "$TMP/home-logs/.codex/sessions/live.jsonl" ] || fail "explicit live cleanup missed Codex log"
 [ ! -e "$TMP/home-logs/.hapi/logs/live.log" ] || fail "explicit live cleanup missed HAPI log"
 
-echo "[7/8] skill metadata, templates, links, version, license, and graph YAML"
+echo "[8/9] skill metadata, templates, links, version, license, and graph YAML"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import re
@@ -207,7 +268,7 @@ if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git -C "$ROOT" diff --check
 fi
 
-echo "[8/8] platform plugin package and marketplace catalog"
+echo "[9/9] platform plugin package and marketplace catalog"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import json
@@ -228,6 +289,7 @@ required = (
     "skills/agent-taskgraph/agents/openai.yaml",
     "skills/agent-taskgraph/init.sh",
     "skills/agent-taskgraph/scripts/check-update.sh",
+    "skills/agent-taskgraph/scripts/open-worker-terminal.sh",
     "skills/agent-taskgraph/templates/PROJECT.md",
     "skills/agent-taskgraph/workers/parse-worker-log.py",
 )
@@ -246,6 +308,7 @@ assert (package / "LICENSE").read_text() == (root / "LICENSE").read_text()
 for relative in (
     "init.sh",
     "scripts/check-update.sh",
+    "scripts/open-worker-terminal.sh",
     "agents/openai.yaml",
     "templates/PROJECT.md",
     "templates/STATUS.md",

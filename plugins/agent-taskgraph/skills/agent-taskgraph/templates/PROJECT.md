@@ -53,6 +53,7 @@
 | codex 登录 | ✅/❌ | 原生 `codex` / `codex exec` / `codex resume` 是否可跑 |
 | 开新会话可用路径 | <按探查结果填：Claude native / Codex native / create_thread / HAPI / 子 agent> | 供 Reviewer/worker 真实创建时选用 |
 | Owner 可见性偏好 | <✅ 全可见 / 仅在编辑器面板 / 无头日志即可> | Owner 是否要求所有会话可见、可接管；记录实际 runtime，不虚构可见会话 |
+| macOS 可见终端模式 | <启用 / 禁用 / 每批次确认> | 启用时用 `scripts/open-worker-terminal.sh` 为 worker/reviewer 打开独立 Terminal.app 窗口 |
 | codex 线程工具 | ✅/❌（create_thread / wait_threads / send_message_to_thread 等） | 工具真实存在时优先使用；否则用 `codex`/`codex exec` fallback |
 | 监控机制登记 | wait 循环：间隔 <默认 600s，可调> / 状态 <运行中 / 已退出+原因>；外部守护：<LaunchAgent/tmux/cron 标识> | **开工必须进入 wait 循环并登记；写不出 = 未开工** |
 

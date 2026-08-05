@@ -432,6 +432,8 @@ claude plugin validate ./plugins/agent-taskgraph
 |---|---|
 | `./init.sh <project>` | 初始化项目实例，保留已有文件 |
 | `./init.sh --migrate <project>` | 显式迁移旧 `.agent-queue/` 状态目录，并补齐缺失的新模板 |
+| `./scripts/open-worker-terminal.sh ... --dry-run` | 只预览 Claude/Codex 原生 worker 命令，不打开终端 |
+| `./scripts/open-worker-terminal.sh ...` | 在 macOS Terminal.app 打开并验证一个可见 worker |
 | `./workers/watch-worker.sh <log>` | 把 Codex JSONL 或 HAPI 文本日志压缩成进展事件流 |
 | `./workers/log-cleanup.sh` | dry-run 列出 30 天前的 Codex 已归档日志 |
 | `./workers/log-cleanup.sh --apply` | 删除刚才列出的已归档候选 |
@@ -444,6 +446,7 @@ claude plugin validate ./plugins/agent-taskgraph
 
 - Skill 会探测当前环境，不假设每个 Codex 都有 `create_thread`、`wait_threads` 等工具。
 - 可用时优先用户可见、可接管的独立会话。Claude Code 优先使用 `claude`、`claude --bg`、`claude agents` 或 `claude -p`；Codex 优先使用 `codex`、`codex exec` 或 `codex resume`。能力不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
+- 在 macOS 上，如果 Owner 要求每个 worker/reviewer 都显示独立 CLI，可使用 `scripts/open-worker-terminal.sh`。必须先 `--dry-run` 预览并批准图和运行参数，再实际打开；PID 验证成功后才能把任务登记为 active。
 - 默认使用平台标准权限。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。
 - Frozen、worktree 和 Reviewer 是质量控制，不是安全沙箱。
 - 依赖安装、数据库迁移、删除、权限扩大、合并和发布应按 `PROJECT.md` 保留 Human Gate。
@@ -460,7 +463,7 @@ claude plugin validate ./plugins/agent-taskgraph
 
 ### 必须安装 HAPI 吗？
 
-不必须。HAPI 是可见会话选项之一。Codex 原生线程、Claude CLI 或平台提供的 Agent 工具都可以作为运行时，但能力不同，必须在 `PROJECT.md` 记录真实可用路径。
+不必须。HAPI 是可选适配器。Claude/Codex 原生命令、原生线程或平台提供的 Agent 工具都可以作为运行时，但能力不同，必须在 `PROJECT.md` 记录真实可用路径。
 
 ### 为什么 spec 冻结后还要批准 graph？
 

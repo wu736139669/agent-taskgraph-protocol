@@ -148,6 +148,8 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - **Codex**：用户可见独立会话使用 `codex -C <project> "<prompt>"`；无头 worker 使用 `codex exec -C <project> "<prompt>"`，必要时用 `codex resume` 或 `codex exec resume` 接力。只有工具列表真实暴露 `create_thread` 时，才优先用它创建可见线程。
 - 每个 Goal 的分配记录必须写明实际 runtime（Claude native / Codex native / HAPI / fallback）、完整启动命令或原生工具名、会话/任务 ID 和日志位置；能力不存在时先报告并请求 Owner 决定，不得假装已创建。
 
+**macOS 可见终端模式**：Owner 要求看到每个 worker/reviewer 的 CLI 时，禁止用隐藏的 `claude --bg` 或无头 `codex exec` 代替。使用 `scripts/open-worker-terminal.sh`：先带 `--dry-run` 展示 runtime、权限、模型、effort、worktree、Goal 和完整命令；Owner 批准后去掉 `--dry-run`，脚本会通过 Terminal.app 打开独立窗口并用 PID 文件验证进程。默认 `--permission-mode plan`；实现任务只有获批后才改为 `acceptEdits`。`bypassPermissions` 还必须同时传 `--allow-dangerous`。launcher/PID/metadata 位于 `${TMPDIR:-/tmp}/agent-taskgraph-terminal/`，其真实路径和 PID 必须写入 ledger；窗口关闭或进程退出后记录清理结果。
+
 **Goal/会话交互协议（强制）**：
 - **Goal 是指令源**：首次派发必须把 Goal 文件路径（或完整内容）发给 worker，并要求先读 `PROJECT.md`、冻结规格、图中本节点及直接依赖、Goal、contract 和 ledger；只在聊天里发一段模糊任务不算派发。
 - **聊天是控制通道**：HAPI/Codex 消息用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收、依赖或资源顺序的消息都触发 graph diff，并同步到 spec/graph/Goal/DECISIONS/ledger。
