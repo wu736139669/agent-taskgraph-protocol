@@ -9,6 +9,7 @@ This directory is the platform-ready package for the `agent-taskgraph` Skill. Th
 | `.codex-plugin/plugin.json` | OpenAI/Codex skills-only manifest |
 | `.claude-plugin/plugin.json` | Claude Code plugin manifest |
 | `skills/agent-taskgraph/` | Self-contained Skill, templates, initializer, workers, and update checker |
+| `skills/agent-taskgraph/references/hapi-runtime.md` | Opt-in HAPI runtime adapter; native Claude/Codex remains the public default |
 | `LICENSE` | Apache-2.0 license for this package |
 
 The package version is `0.8.0-beta.2`. Before a release, keep it equal to the root [`VERSION`](../../VERSION), the Skill [`VERSION`](skills/agent-taskgraph/VERSION), and the Git tag.
@@ -50,3 +51,5 @@ Standalone Git and symlink installs use the root `./install.sh --check-update` c
 ## Synchronization rule
 
 The root `SKILL.md`, templates, workers, and scripts are canonical. When they change, copy the intended release contents into `skills/agent-taskgraph/`, update all version files and manifests together, run `./tests/smoke.sh`, then create a new Git tag. The smoke test checks the copied Skill and package metadata for drift.
+
+Optional adapter references follow the same synchronization rule. Their presence does not activate an adapter; runtime selection remains project-scoped and owner-confirmed.

@@ -16,7 +16,7 @@
 | 开始时间 | |
 | 最后更新 | |
 | 验收结果 | ✅ / ❌（附命令输出） |
-| 日志指针 | <日志路径：HAPI 会话 ~/.hapi/logs/ 或 Codex rollout jsonl——watch 监视器的输入> |
+| 日志指针 | <当前运行时的会话日志、rollout JSONL、Terminal metadata 或等价证据路径——watch 监视器的输入> |
 | 等待归属 | 在等谁：<PMO / worker / Owner>；等什么：<验收 / 指示 / 外部条件>；静默多久算异常：<N 分钟> |
 
 ## 备注

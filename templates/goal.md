@@ -29,7 +29,7 @@
 
 ## 报告协议
 
-- 完成 / 失败 / 卡住时通知 PMO：`hapi ping-peer <PMO 会话 ID>`（消息含任务号 + 状态 + 一句话结果）
+- 完成 / 失败 / 卡住时通过本 Goal 记录的运行时消息通道通知 PMO（消息含任务号 + 状态 + 一句话结果）；若运行时无消息能力，写完证据后由 PMO 监控循环发现
 - worker 只更新本 Goal/产品 evidence ledger 并提交证据；`.agent-taskgraph/queue/*/ledger.md`、目录状态和 STATUS.md 只能由 PMO 更新
 - **不通知 = 任务未完成**，验收闸不通过
 

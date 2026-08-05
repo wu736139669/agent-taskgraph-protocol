@@ -464,6 +464,7 @@ Live directories are scanned only with `--include-live`; deletion occurs only wi
 
 - The skill probes the current environment; it does not assume every Codex exposes `create_thread`, `wait_threads`, or similar tools.
 - Visible, owner-controllable sessions are preferred when available. Use Claude native commands (`claude`, `claude --bg`, `claude agents`, or `claude -p`) for Claude Code and Codex native commands (`codex`, `codex exec`, or `codex resume`) for Codex. Missing capabilities require an explicit fallback, not a fictional reviewer.
+- The public default is `auto + native-first` with no optional adapter enabled. HAPI support ships as an [opt-in runtime adapter](references/hapi-runtime.md): detection may be reported during onboarding, but it is not loaded or activated until the owner selects it in `PROJECT.md`.
 - On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
 - Platform-standard permissions are the default. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project.
 - Frozen scope, worktrees, and reviewers are quality controls, not security sandboxes.
@@ -481,7 +482,7 @@ It is enough to begin intake. The agent reads and triages first; complex work co
 
 ### Is HAPI required?
 
-No. HAPI is optional. Claude native commands, Codex native commands, native threads, or another platform adapter can serve as runtimes, but their real capabilities and the selected command must be recorded in `PROJECT.md`.
+No. Claude/Codex native runtimes are the default. HAPI is an opt-in adapter for owners who want its visible remote-control workflow. An installed HAPI command or runner is only a detected capability; it is never activated silently. Enable it in `PROJECT.md`, verify its real control-plane capabilities, and keep a confirmed native fallback.
 
 ### Why approve a graph after approving the spec?
 

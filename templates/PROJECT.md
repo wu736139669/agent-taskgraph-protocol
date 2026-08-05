@@ -24,7 +24,11 @@
 | Worker 权限 | <平台标准权限 / 当前项目明确授权 yolo> |
 | 自主创建可见会话 | <已授权 / 每批次确认 / 未授权> |
 | 默认 Human Gates | <依赖安装 / 迁移 / 删除 / 权限 / 合并 / 发布等> |
-| 模型与可见性偏好 | <codex/claude/hapi；可见线程/无头> |
+| Runtime preference | <auto / claude-native / codex-native / adapter:<name>> |
+| 原生运行时优先 | <是（公开默认） / 否> |
+| 已启用可选适配器 | <无（公开默认） / hapi / 其他名称> |
+| Runtime fallback 顺序 | <例如：claude-native → codex-native；不允许则写“无”> |
+| 模型与可见性偏好 | <模型/effort；可见线程/可见终端/无头> |
 
 ## 共享文件锁
 
@@ -48,10 +52,10 @@
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
-| hapi / runner | ✅/❌ | 可用则作为可选适配器；必须确认控制面真实支持 spawn |
+| 可选 runtime adapter | <未探测 / 名称 + ✅/❌> | 只探测 Owner 选择或允许评估的 adapter；安装成功不等于已启用，也不等于控制面支持 spawn |
 | claude CLI 登录 | ✅/❌ | 原生 `claude` / `claude --bg` / `claude agents` / `claude -p` 是否可跑 |
 | codex 登录 | ✅/❌ | 原生 `codex` / `codex exec` / `codex resume` 是否可跑 |
-| 开新会话可用路径 | <按探查结果填：Claude native / Codex native / create_thread / HAPI / 子 agent> | 供 Reviewer/worker 真实创建时选用 |
+| 开新会话可用路径 | <按探查结果填：Claude native / Codex native / 原生 thread / 已启用 adapter / 子 agent> | 供 Reviewer/worker 真实创建时选用；不得列入未启用或未验证的路径 |
 | Owner 可见性偏好 | <✅ 全可见 / 仅在编辑器面板 / 无头日志即可> | Owner 是否要求所有会话可见、可接管；记录实际 runtime，不虚构可见会话 |
 | macOS 可见终端模式 | <启用 / 禁用 / 每批次确认> | 启用时用 `scripts/open-worker-terminal.sh` 为 worker/reviewer 打开独立 Terminal.app 窗口 |
 | codex 线程工具 | ✅/❌（create_thread / wait_threads / send_message_to_thread 等） | 工具真实存在时优先使用；否则用 `codex`/`codex exec` fallback |

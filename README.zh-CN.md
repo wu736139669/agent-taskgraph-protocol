@@ -459,6 +459,7 @@ claude plugin validate ./plugins/agent-taskgraph
 
 - Skill 会探测当前环境，不假设每个 Codex 都有 `create_thread`、`wait_threads` 等工具。
 - 可用时优先用户可见、可接管的独立会话。Claude Code 优先使用 `claude`、`claude --bg`、`claude agents` 或 `claude -p`；Codex 优先使用 `codex`、`codex exec` 或 `codex resume`。能力不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
+- 公开默认是 `auto + native-first`，不启用任何可选 adapter。HAPI 作为[按需启用的运行时适配器](references/hapi-runtime.md)随仓库提供：接入时可以报告已检测到，但只有 Owner 在 `PROJECT.md` 选择后才加载和启用。
 - 在 macOS 上，如果 Owner 要求每个 worker/reviewer 都显示独立 CLI，可使用 `scripts/open-worker-terminal.sh`。必须先 `--dry-run` 预览并批准图和运行参数，再实际打开；PID 验证成功后才能把任务登记为 active。
 - 默认使用平台标准权限。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。
 - Frozen、worktree 和 Reviewer 是质量控制，不是安全沙箱。
@@ -476,7 +477,7 @@ claude plugin validate ./plugins/agent-taskgraph
 
 ### 必须安装 HAPI 吗？
 
-不必须。HAPI 是可选适配器。Claude/Codex 原生命令、原生线程或平台提供的 Agent 工具都可以作为运行时，但能力不同，必须在 `PROJECT.md` 记录真实可用路径。
+不必须。Claude/Codex 原生运行时是默认路径。HAPI 只面向需要可见远程控制流程的用户按需启用；检测到 HAPI 命令或 runner 只代表发现能力，绝不会静默激活。启用时必须写入 `PROJECT.md`、验证真实控制面能力，并保留已确认的原生 fallback。
 
 ### 为什么 spec 冻结后还要批准 graph？
 

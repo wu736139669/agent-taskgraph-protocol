@@ -251,6 +251,15 @@ assert skill.startswith("---\nname: agent-taskgraph\n")
 assert "description:" in skill.split("---", 2)[1]
 for phrase in ("一句话足以发起需求", "spec.md", "graph.yaml", "Human Gate"):
     assert phrase in skill, phrase
+assert "references/hapi-runtime.md" in skill
+for adapter_detail in ("HAPI 派发硬门", "hapi runner list", "hapi resume <id>"):
+    assert adapter_detail not in skill, f"HAPI detail leaked into core skill: {adapter_detail}"
+hapi_reference = (root / "references/hapi-runtime.md").read_text()
+for phrase in ("只在", "native-first", "派发硬门", "不得自动启用", "fallback"):
+    assert phrase in hapi_reference, phrase
+project_template = (root / "templates/PROJECT.md").read_text()
+for phrase in ("Runtime preference", "原生运行时优先", "已启用可选适配器", "Runtime fallback"):
+    assert phrase in project_template, phrase
 
 for readme_name in ("README.md", "README.zh-CN.md"):
     readme = (root / readme_name).read_text()
@@ -288,6 +297,7 @@ required = (
     "skills/agent-taskgraph/VERSION",
     "skills/agent-taskgraph/agents/openai.yaml",
     "skills/agent-taskgraph/init.sh",
+    "skills/agent-taskgraph/references/hapi-runtime.md",
     "skills/agent-taskgraph/scripts/check-update.sh",
     "skills/agent-taskgraph/scripts/open-worker-terminal.sh",
     "skills/agent-taskgraph/templates/PROJECT.md",
@@ -307,6 +317,7 @@ assert (package / "skills/agent-taskgraph/SKILL.md").read_text() == (root / "SKI
 assert (package / "LICENSE").read_text() == (root / "LICENSE").read_text()
 for relative in (
     "init.sh",
+    "references/hapi-runtime.md",
     "scripts/check-update.sh",
     "scripts/open-worker-terminal.sh",
     "agents/openai.yaml",

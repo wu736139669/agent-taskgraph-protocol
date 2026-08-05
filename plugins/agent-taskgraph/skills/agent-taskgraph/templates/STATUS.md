@@ -1,6 +1,6 @@
 # 任务总览板（轻量视图）
 
-> PMO 维护。状态从队列目录 + ledger 派生；wait_threads / list_threads / HAPI 只提供实时观察信号，不能直接覆盖任务状态。
+> PMO 维护。状态从队列目录 + ledger 派生；线程状态、运行时消息和日志只提供实时观察信号，不能直接覆盖任务状态。
 > Owner 要进度时，直接贴这张表（或贴线程状态）。
 > 状态只允许：inbox / active / review / done / failed。
 

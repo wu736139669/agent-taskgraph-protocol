@@ -121,8 +121,14 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 2. **职责匹配**：任务类型 → 对应岗位（UI 活给 UI worker）
 3. **负载均衡**：都合适时给最闲的
 
+**运行时选择与适配器合同**：
+- 第一次接入在 `PROJECT.md` 记录 `runtime preference`、原生优先策略、已启用的可选 adapter 和 fallback 顺序。公开默认是 `auto + native-first + optional adapters: none`；发现某个可选 adapter 已安装只能作为能力提示，不能自动启用。
+- `auto` 优先当前宿主真实提供的 Claude/Codex 原生命令或可见线程。Owner 明确选择已启用的可选 adapter 后，才加载对应 reference；选择 HAPI 时读取 [`references/hapi-runtime.md`](references/hapi-runtime.md)，未选择时不要加载其细节。
+- 任何运行时必须按语义提供本 Goal 所需的 `spawn / resume / send / observe-wait / stop / identity-evidence` 能力；命令存在不等于控制面可创建会话。缺少必需能力时该运行时不合格，按已确认 fallback 降级；若降级改变成本、权限或可见性，先请 Owner 决定。
+- 每个 Goal 都记录实际 runtime、模型、effort、权限、完整启动方式、会话标识和证据路径。不得把计划中的 runtime、短暂子进程或仅有退出码 0 的命令登记为已创建会话。
+
 **worker 形态**（按需选）：
-- **独立可见会话（默认）**：由当前平台真实提供的 `create_thread`、HAPI runner 控制面或用户打开的终端会话——可见、可插手、可续接。`hapi runner list` 只能观察，不能创建会话。
+- **独立可见会话（默认）**：由当前平台真实提供的线程控制面或用户打开的终端会话——可见、可插手、可续接。
 - **无头会话**（`claude -p` / `codex exec` / 子 agent）：不可见、快速批量，适合可完全自动化的任务
 
 **worker 运行参数**：
@@ -130,29 +136,23 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - **工具与模型**：优先使用 PROJECT.md 已确认配置；缺配置且选择会显著影响成本、可见性或能力时，在规格冻结时一次询问。机械/简单任务用轻量模型 + 低思考等级，复杂/风险任务用强模型 + 高思考等级。
 
 **会话生命周期**（按任务相关性，不是每次任务都开新会话）：
-- **复用**（运行时的 resume/handoff，如 `hapi resume <id>`）：串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动
+- **复用**（运行时真实提供的 resume/handoff）：串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动
 - **新开**：并行组任务（隔离需要）、首次开工、失败重试、上下文快耗尽（先归档总结再新开）
 
 **派发用 Goal 方式**（格式见 `templates/goal.md`）：每个任务是一份 Goal——引用冻结的 `spec.md` 与 `graph.yaml` 节点，带 **Legal terminal**（"candidate ready" 或 "redesign required: <最早失败边界>" 的二元终态判定）、**Baseline/证据链**、**输入/输出与写入范围**、**Frozen**、**Estimate**。只有低风险 A 类快速任务可把最小规格和验收直接内嵌 Goal且不建图。
 
 派发动作：写 Goal（含分配记录）→ 建 worktree → spawn worker → 台账登记，Goal 移入 `active/`。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
 
-**HAPI 派发硬门（仅可选适配器）**：
-- 不得在 Claude worker/PMO 的 Bash 中直接执行 `hapi claude ...` 充当 spawn。该命令可能启动一个短暂子进程，但不会自动登记到已运行的 runner；runner 随后会把它判为 orphaned 并终止。必须使用宿主真正暴露的 HAPI runner 控制面/API，或请 Owner 在 HAPI/终端中打开会话；没有创建能力时走当前会话或无头 fallback，并在 `PROJECT.md`/ledger 记录。
-- 不得把启动命令接到 `head`、`tail`、`grep` 等会提前关闭 stdin 的管道上；HAPI wrapper 需要保持 stdin，直到 webhook 注册完成。
-- 模型标识必须作为一个完整参数传递并正确引用（例如 `deepseek-v4-flash[1m]`）；方括号未引用会被 zsh 当作 glob，导致命令根本没有执行。
-- “spawn 成功”只能在 runner 返回真实会话 ID，且 `runner list` 与 `inspect-peer`/等价状态同时确认 `active/running`、目标 cwd 和正确 flavor 后登记；shell 退出码为 0 不构成会话已启动证据。
-
-**原生命令适配（优先于 HAPI）**：
+**默认原生命令适配**：
 - **Claude Code**：Owner 入口先 `cd <project>`，再使用 `claude --plugin-dir <plugin-dir>`（或已安装 Skill）；需要后台任务时，仅在 Claude 原生支持 `claude --bg`/`claude agents` 的环境使用这组命令，并记录返回的任务标识。`claude -p` 是无头 fallback。普通 Skill Bash 不得把 `claude ...` 子进程冒充成用户可见独立会话。
 - **Codex**：用户可见独立会话使用 `codex -C <project> "<prompt>"`；无头 worker 使用 `codex exec -C <project> "<prompt>"`，必要时用 `codex resume` 或 `codex exec resume` 接力。只有工具列表真实暴露 `create_thread` 时，才优先用它创建可见线程。
-- 每个 Goal 的分配记录必须写明实际 runtime（Claude native / Codex native / HAPI / fallback）、完整启动命令或原生工具名、会话/任务 ID 和日志位置；能力不存在时先报告并请求 Owner 决定，不得假装已创建。
+- 可选 adapter 只有在 `PROJECT.md` 启用且其 reference 所列硬门满足后才参与选择；否则不读取、不调用，也不出现在默认派发说明里。
 
 **macOS 可见终端模式**：Owner 要求看到每个 worker/reviewer 的 CLI 时，禁止用隐藏的 `claude --bg` 或无头 `codex exec` 代替。使用 `scripts/open-worker-terminal.sh`：先带 `--dry-run` 展示 runtime、权限、模型、effort、worktree、Goal 和完整命令；Owner 批准后去掉 `--dry-run`，脚本会通过 Terminal.app 打开独立窗口并用 PID 文件验证进程。默认 `--permission-mode plan`；实现任务只有获批后才改为 `acceptEdits`。`bypassPermissions` 还必须同时传 `--allow-dangerous`。launcher/PID/metadata 位于 `${TMPDIR:-/tmp}/agent-taskgraph-terminal/`，其真实路径和 PID 必须写入 ledger；窗口关闭或进程退出后记录清理结果。
 
 **Goal/会话交互协议（强制）**：
 - **Goal 是指令源**：首次派发必须把 Goal 文件路径（或完整内容）发给 worker，并要求先读 `PROJECT.md`、冻结规格、图中本节点及直接依赖、Goal、contract 和 ledger；只在聊天里发一段模糊任务不算派发。
-- **聊天是控制通道**：HAPI/Codex 消息用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收、依赖或资源顺序的消息都触发 graph diff，并同步到 spec/graph/Goal/DECISIONS/ledger。
+- **聊天是控制通道**：当前运行时的消息通道用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收、依赖或资源顺序的消息都触发 graph diff，并同步到 spec/graph/Goal/DECISIONS/ledger。
 - **状态分工**：worker 负责实现 worktree、Goal 约定的 produces、Goal 完成区和任务证据；PMO 负责 `.agent-taskgraph/queue/*/ledger.md`、目录状态、`STATUS.md`、reviewer 身份/验收报告和 Owner 汇报。两边只通过 revision、证据路径和 legal terminal 对账，不互相覆盖。
 - **完成协议**：worker 必须在 Goal 完成区或 Goal 指定的 evidence artifact 写明 legal terminal、source/closure revision、测试/证据路径、clean/upstream、owned-process 清理，并通过当前运行时的消息/ping 通知 PMO；PMO 不因“完成了”聊天直接验收。
 - **指导协议**：PMO 的补充指令必须是“当前状态/动作/原因/禁止项/下一终点”五段式，发出后在 PMO ledger 记录；正常进展不发询问式 ping。
@@ -197,7 +197,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **PMO wait 循环——原生持续监控（不空转）**：不主动看，PMO 就什么都不知道。PMO 会话开工后进入 **wait 循环**，永不进入"等消息"空转（空转即异常，重建循环）：
 1. **循环结构**：`{ wait N 秒 → 检查 worker 日志尾部 + 台账 → 处理发现 → 循环 }`——wait 是 codex/claude 原生能力，无需外部进程
-2. **间隔 N 默认 600s（10 分钟）**——Codex 会话优先使用可见的原生 `wait_agent(timeout_ms: 600000)` 等待卡片；有可管理线程时使用 `wait_threads` 的同等 600s 等待。仅在运行环境不提供可见等待接口时，才使用 `functions.wait`/`yield_time_ms: 600000` 作为降级实现。`functions.wait` 只维持后台 cell，不会生成 HAPI 的 “Wait for agent” 卡片。禁止用 shell `sleep`、外部计时脚本或人为空转代替原生等待；可配：关键验收期临时加密到 90s-2 分钟；长空闲拉长到 10 分钟+；PROJECT.md 登记当前间隔
+2. **间隔 N 默认 600s（10 分钟）**——Codex 会话优先使用可见的原生 `wait_agent(timeout_ms: 600000)` 等待卡片；有可管理线程时使用 `wait_threads` 的同等 600s 等待。仅在运行环境不提供可见等待接口时，才使用 `functions.wait`/`yield_time_ms: 600000` 作为降级实现。`functions.wait` 只维持后台 cell，不会生成宿主 UI 的可见等待卡片。禁止用 shell `sleep`、外部计时脚本或人为空转代替原生等待；可配：关键验收期临时加密到 90s-2 分钟；长空闲拉长到 10 分钟+；PROJECT.md 登记当前间隔
 3. **检查内容与分级处理（检查 ≠ 处理）**：①worker 日志尾部（最后写入 + 新事件，`tail -c 2000`）；②台账（STATUS / ledger）。结果分三级：
    - **异常 / 卡点** → 处理（诊断 / 介入 / 上报 Owner）
    - **有进展但无需干预** → 总结记录（监控日志一句话 + 台账更新时间），不动作
@@ -233,7 +233,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **PMO 每轮执行清单（强制闭环）**：`wait` 只是调度器，不是监督本身。每次唤醒必须按以下顺序完成，缺一步就不能重新进入 wait：
 1. **监督（Observe）**：读取所有活跃 worker/reviewer 的会话状态、最新消息/日志尾部和最后更新时间；读取冻结 spec/graph、`STATUS.md`、对应 `ledger.md`、Goal/contract 的 Legal Terminal；检查目标仓库 baseline/upstream、dirty 文件归属和本批次 owned 进程。
-2. **判断（Classify）**：把每个任务归类为 `进展`、`等待/资源占用`、`候选 ready`、`review terminal`、`失败/INVALID`、`阻塞` 或 `owner decision`。HAPI `active/idle` 本身不是进度证据，聊天里的“完成”也不是验收证据。
+2. **判断（Classify）**：把每个任务归类为 `进展`、`等待/资源占用`、`候选 ready`、`review terminal`、`失败/INVALID`、`阻塞` 或 `owner decision`。任何运行时的 `active/idle` 本身都不是进度证据，聊天里的“完成”也不是验收证据。
 3. **指导（Guide）**：只有在任务到达 legal terminal、遇到阻塞/资源冲突、等待归属不清、静默超过阈值或需要决策时，向原 worker 发送一条有边界的指令（做什么、为什么、禁止什么、下一终点）。正常进展不频繁打扰；不得替 worker 改产品代码或擅自扩大 Goal。
 4. **验收（Accept）**：`candidate ready` 立即创建真实、可见、独立 reviewer；对 reviewer 的 PASS/FAIL/INVALID 逐项核对源版本、证据清单、测试/运行输出、清理和身份路径。PASS 才能本地接受，FAIL/INVALID 必须保留不可变历史并派发最小修复或恢复，不得复用旧证据。
 5. **记录（Record）**：将本轮观察、决策、指导、reviewer 身份/日志路径、状态转换和唯一下一步追加到任务 ledger；同步 `STATUS.md` 的卡点/归属/待决策项；关键节点一句话汇报 Owner。没有文件台账记录，不算 PMO 已处理。
@@ -328,9 +328,9 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 3. `create_thread` 是异步派发，**必须用 `wait_threads` 等待进展**
 4. `wait_agent` / `wait_threads` 间隔默认 600s（省 token），活跃期加密——即第 8 节 wait 循环的 Codex 原生形态；当 Owner 要求看到等待卡片时，必须优先使用 `wait_agent`，不能用无卡片的 `functions.wait` 冒充
 5. 循环退出条件不变（队列空/Owner 消息/循环失败/无进展）
-6. Claude 环境无 `create_thread` 时，优先使用 Claude 原生 `claude --bg`/`claude agents` 或 `claude -p`；Codex 环境优先使用 `codex`/`codex exec`；HAPI 仅在其控制面真实可用时作为适配器，不能把 Bash 子进程当成可见会话
+6. Claude 环境无 `create_thread` 时，优先使用 Claude 原生 `claude --bg`/`claude agents` 或 `claude -p`；Codex 环境优先使用 `codex`/`codex exec`；可选 adapter 只在已启用且控制面真实可用时参与选择，不能把 Bash 子进程当成可见会话
 7. **进度判断分工**：
-   - 实时观察信号 → `wait_threads` / `list_threads` / HAPI 日志；这些不单独构成进度证据
+   - 实时观察信号 → `wait_threads` / `list_threads` / 当前运行时日志；这些不单独构成进度证据
    - 任务语义与静态拓扑 → frozen spec + graph + goal
    - 动态权威状态与审计历史 → 队列目录 + ledger + DECISIONS
    - STATUS.md 是从权威状态整理的轻量视图；线程 active/idle 不能直接覆盖任务状态
@@ -369,7 +369,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 - 批次完成且 `queue/active/`、`queue/review/` 为空时，登记
   `PMO wait: exited / batch complete`，汇报一次批次总结，然后退出 wait
-  循环。不得把退出后的会话或历史 HAPI 状态描述为“仍在监控”。
+  循环。不得把退出后的会话或历史运行时状态描述为“仍在监控”。
 - 新任务、后续开发、用户验收修复或新发布必须由用户新授权：不改变原冻结范围的最小修复可新增图节点；改变目标、范围或验收则创建新 spec/graph 批次。不得从 done 任务、旧会话或旧候选推断继续执行。
 - 只有真实原生 `wait_agent`/`wait_threads` 返回 timeout/interruption 后，
   才能记录一次 wait 已运行。失败的 `functions.wait` 调用不产生可见卡片，
