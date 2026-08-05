@@ -148,7 +148,7 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 **PMO wait 循环——原生持续监控（不空转）**：不主动看，PMO 就什么都不知道。PMO 会话开工后进入 **wait 循环**，永不进入"等消息"空转（空转即异常，重建循环）：
 1. **循环结构**：`{ wait N 秒 → 检查 worker 日志尾部 + 台账 → 处理发现 → 循环 }`——wait 是 codex/claude 原生能力，无需外部进程
-2. **间隔 N 默认 300s（5 分钟），已实战采用**——codex 会话用 wait 工具（`yield_time_ms: 300000`）实现；可配：关键验收期临时加密到 90s-2 分钟；长空闲拉长到 10 分钟+；PROJECT.md 登记当前间隔
+2. **间隔 N 默认 600s（10 分钟），已实战采用**——Codex 会话优先使用可见的原生 `wait_agent(timeout_ms: 600000)` 等待卡片；有可管理线程时使用 `wait_threads` 的同等 600s 等待。仅在运行环境不提供可见等待接口时，才使用 `functions.wait`/`yield_time_ms: 600000` 作为降级实现。`functions.wait` 只维持后台 cell，不会生成 HAPI 的 “Wait for agent” 卡片。禁止用 shell `sleep`、外部计时脚本或人为空转代替原生等待；可配：关键验收期临时加密到 90s-2 分钟；长空闲拉长到 10 分钟+；PROJECT.md 登记当前间隔
 3. **检查内容与分级处理（检查 ≠ 处理）**：①worker 日志尾部（最后写入 + 新事件，`tail -c 2000`）；②台账（STATUS / ledger）。结果分三级：
    - **异常 / 卡点** → 处理（诊断 / 介入 / 上报老板）
    - **有进展但无需干预** → 总结记录（监控日志一句话 + 台账更新时间），不动作
@@ -162,7 +162,7 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 5. **循环状态登记台账**（运行中 / 已退出 + 原因）——**开工必须登记循环状态与间隔，写不出 = 未开工**（与 reviewer 证据同等级）
 6. **外部机制（LaunchAgent / tmux / cron）降级为守护角色**：只在会话崩溃、机器重启后重启 wait 循环——不是主机制
 7. 诊断闭环：可疑模式 → 读日志上下文（`tail -60`）→ 判断正常/异常 → **误报也要记录**（下次不重复误判）
-8. 经验：Codex 的 `wait` 带 `cell_id`/`yield_time_ms` 是 notebook 分片执行（正常）；**静默才是卡死信号**
+8. 经验：Codex 的 `wait_agent`/`wait_threads` 是可见原生等待；`functions.wait` 带 `cell_id`/`yield_time_ms` 是无卡片的 notebook 分片降级实现（正常）；**静默才是卡死信号**
 
 **可选增强（不是默认）**：实时性要求高（分钟级进展都要立即知道）时才挂外部事件流——`workers/watch-worker.sh`（tail -F + 过滤）。大多数场景下 agent 原生循环足够。
 
@@ -233,7 +233,7 @@ Codex 会话内置线程管理工具（系统提示自带），agent-queue 的�
 | agent-queue 动作 | codex 原生工具 | 说明 |
 |---|---|---|
 | 派发任务（老板明确要求新会话时） | `create_thread` | 异步派发；创建的线程**用户侧边栏可见**、可接管 |
-| 持续监控进展 | `wait_threads` | **wait 循环的原生实现**：单次 1-8 个目标，`timeoutMs: 0` 即时快照；取代外部 LaunchAgent |
+| 持续监控进展 | `wait_agent` / `wait_threads` | **wait 循环的原生实现**：`wait_agent(timeout_ms: 600000)` 生成用户可见的 “Wait for agent” 卡片；有可管理线程时用 `wait_threads`（单次 1-8 个目标，`timeoutMs: 0` 为即时快照）；取代外部 LaunchAgent |
 | 补充约束 / 回复问题 | `send_message_to_thread` | 原生通道，比 ping 可靠 |
 | 深入排查执行记录 | `read_thread` | 查看完整执行轨迹 |
 | 换会话接力 | `handoff_thread` | 交接上下文与产物，不用从零重述 |
@@ -249,7 +249,7 @@ Codex 会话内置线程管理工具（系统提示自带），agent-queue 的�
    - `spawn_agent`（子 agent）只用于**任务内部短暂并行**（探索、排查、单个任务内的子步骤）——不制造用户侧会话
    - 判断：需要用户看到/接管的工作（reviewer、独立开发任务）→ create_thread；纯内部短暂子步骤 → spawn_agent
 3. `create_thread` 是异步派发，**必须用 `wait_threads` 等待进展**
-4. `wait_threads` 间隔默认 300s（省 token），活跃期加密——即第 8 节 wait 循环的 codex 原生形态
+4. `wait_agent` / `wait_threads` 间隔默认 600s（省 token），活跃期加密——即第 8 节 wait 循环的 Codex 原生形态；当老板要求看到等待卡片时，必须优先使用 `wait_agent`，不能用无卡片的 `functions.wait` 冒充
 5. 循环退出条件不变（队列空/老板消息/循环失败/无进展）
 6. claude/hapi 环境无这些工具时，回退到第 7/8 节通用机制（hapi 会话 + 外部守护）
 7. **进度判断分工（原生工具优先）**：
