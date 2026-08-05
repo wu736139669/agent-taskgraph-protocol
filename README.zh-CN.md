@@ -1,135 +1,438 @@
-[English](README.md) | 中文
+![Agent Queue](promo/agent-queue-hero-title.png)
 
-# agent-queue
+[English](README.md) | [中文](README.zh-CN.md)
 
-多 agent **团队协作编排**：一个秘书/PMO 会话指挥一支由独立 agent 组成的团队干活。模糊需求走"产品架构师 → 技术架构师 → 分岗 worker → reviewer"流水线，台账管理中间状态，可执行验收后归档，失败带日志重开新会话，合并前过 reviewer gate。
+# Agent Queue
 
-> 定位：**团队运营模型 + 流程定义 + 脚本**，不是某个项目的专属方案。任何电脑上任何 agent（Claude 或 Codex）读了 `SKILL.md` 就知道怎么运营这支团队。
+> **Private Beta**：面向已经使用 Claude Code 或 Codex 的邀请用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
-## 使用方法
+Agent Queue 解决的不是“怎样同时开更多 Agent”，而是“怎样让复杂 AI coding 可理解、可控制、可验收、可恢复”。
 
-**触发**：在 Claude Code 或 Codex 会话里说"用 agent-queue 派活"（或触发关键词：派活 / 任务队列 / 多agent写代码 / 编排），当前会话的 agent 就变身秘书/PMO，按 SKILL.md 运营这支团队。
+- 清晰、低风险的小任务走单 Agent 快速路径。
+- 复杂、模糊或高影响任务先读项目、与用户澄清、冻结规格，再建立任务图。
+- Worker 在隔离工作区执行，Reviewer 用独立上下文验收。
+- 规格、任务图、状态和证据落在项目文件中，不依赖某次聊天记忆。
 
-**你（老板）只需要做三件事**：
-1. **给需求**——一句话也行，模糊也行（模糊会触发 PMO 自动装配产品架构师加工成 PRD）
-2. **确认 PROJECT.md**——PMO 第一次接手项目时自动分析生成（技术栈/岗位/规范），你点头即可，不用自己写
-3. **终审**——视觉 / 产品 / 发布这类机器审不了的决策，永远留给你
+**一句话可以开始接单，但复杂任务不会因为一句话就直接开工。**
 
-**三个典型场景**：
-| 你说 | PMO 会怎么走 |
+## 适合谁
+
+| 适合 | 暂不适合 |
 |---|---|
-| "帮我在 book-reader 里加个年份筛选" | 分诊 → 判定单任务 → 直接做或派一个 worker → 验收汇报 |
-| "这周 5 个需求一起派了" | 冲突面分析 → 并行/串行分组 → 多个 worker 同时开工 |
-| "把 5 个游戏完善到能上架" | 拆解 → 装配专家（产品/技术架构）→ 流水线执行 → 阶段验收 |
+| 已经熟悉 Claude Code / Codex，希望把复杂任务交给多 Agent | 希望安装后得到一个无人值守的全自动调度服务 |
+| 同时处理多个需求、跨模块功能、重构、发布准备 | 只需要一次简单补全或单文件小修改 |
+| 需要明确范围、并行边界、验收证据和失败恢复 | 不愿确认任何产品决策，却要求 Agent 自行猜测全部需求 |
+| 愿意在迁移、删除、权限、合并和发布前保留人工闸 | 把 worktree、Reviewer 或提示词当成安全沙箱 |
 
-## 效果
+## 目录
 
-| 你的诉求 | 这套体系怎么给 |
-|---|---|
-| 不用盯每个 agent 会话 | PMO 是唯一接口，主动看进展（日志+台账），只在完成/卡住/要决策时找你 |
-| 并行开发不互相踩脚 | 一任务一 worktree（独立目录+独立分支），互不干扰 |
-| 不被权限弹窗打断 | worker 一律 `--yolo`，安全靠结构（Goal Frozen + worktree 隔离 + reviewer 闸） |
-| 不信"说做完了" | 三级验收：worker 自验 → reviewer 审 → 你终审，命令输出才算数 |
-| 不无缘无故换会话 | 落盘是常态（台账/决策记录），换会话只在隔离/故障/你要求时发生 |
-| 换会话不丢记忆 | durable 文件是事实源（SESSION_CONTINUITY 理念），不靠聊天记忆 |
-| 团队越干越懂项目 | 决策记录 + 角色记忆持续沉淀 |
-| 不担心 worker 卡死没人管 | PMO 主动检查日志静默 + 等待状态有归属，僵局一眼可见 |
+- [快速开始](#快速开始)
+- [最常用的五种用法](#最常用的五种用法)
+- [你会在什么时候被询问](#你会在什么时候被询问)
+- [Agent 会怎样判断任务](#agent-会怎样判断任务)
+- [Graph Engineering](#graph-engineering-在这里是什么意思)
+- [怎样查看进度](#怎样查看进度)
+- [安装、更新与卸载](#安装更新与卸载)
+- [辅助命令](#辅助命令)
+- [常见问题](#常见问题)
+- [Private Beta 边界](#private-beta-边界)
 
-## 团队结构（详见 SKILL.md 第 0 节）
+## 快速开始
 
-| 角色 | 形态 | 干什么 |
-|---|---|---|
-| 秘书/PMO | 常驻，唯一对外接口 | 分诊 → 装配团队 → 拆/编 → 派 → 跟 → 验 → 归 → 报（不写代码） |
-| 专家岗（按需装配） | 角色由项目定义 | 模糊输入 → 可执行规格（如 PRD/技术方案/美术指导/数值…） |
-| Worker（分岗） | 独立会话 ×N | 按 Goal 执行（岗位由项目定义） |
-| Reviewer | 验收时启用 | 审 diff + 重跑验收命令 |
+### 0. 准备环境
 
-专家岗是**机制不是角色**：具体专家由 PMO 按项目定义（可写进 PROJECT.md），SKILL.md 里列的角色只是示例，**勿当固定编制**。小任务只走"PMO + worker"，复杂任务才装配专家（触发判断见 SKILL.md 第 2 节）。
+需要：
 
-## 目录结构
+- Git
+- Bash
+- Python 3
+- 已能正常使用的 Claude Code 或 Codex
+- 此 Private 仓库的访问权限
 
-```
-agent-queue/
-├── SKILL.md                # ★ 技能定义（团队运营模型完整版）
-├── README.md
-├── templates/
-│   ├── PROJECT.md          # 项目档案（恒定信息，worker 先读）
-│   ├── STATUS.md           # 任务总览板（每次状态变化刷新）
-│   ├── DECISIONS.md        # 决策记录（追加式团队记忆）
-│   ├── goal.md             # ★ Goal 派发模板（Legal terminal 二元终态/证据链/Frozen/Estimate）
-│   ├── ledger.md           # 台账记录格式（状态流，只有 PMO 能改）
-│   └── report.md           # 完成汇报格式（一页纸）
-├── queue/                  # 台账状态机（文件系统即记忆）
-│   ├── inbox/              # 待分配
-│   ├── active/             # 执行中
-│   ├── review/             # 验收中
-│   ├── done/               # 验收通过
-│   └── failed/             # 失败待定夺
-│   └── <每任务一个目录：brief.md + ledger.md + report.md>
-└── workers/
-    ├── watch-worker.sh     # ★ 持续监视器：tail worker 日志流式输出进展（PMO watch 模式）
-    ├── dispatch.sh         # TODO: 轮询 inbox → 派发 → 归档
-    └── run-worker.sh       # TODO: spawn 一个 worker（hapi / claude -p / codex exec）
-```
-
-## 工作流（详见 SKILL.md）
-
-1. **分诊**（30 秒）：形态（单任务/大目标/多需求/混合）+ 两个敏感度（模糊度→产品架构师、架构敏感度→技术架构师）
-2. **装配团队**：按需启用专家岗，产出物不合格退回重写
-3. **拆/编**：拆解四维度（模块/流水线/角色/风险）或编排（冲突面分析 + 分组排期）
-4. **分配派发**：相关性 → 职责匹配 → 负载均衡；一任务一 Goal 一 worktree（Goal = 二元终态判定 + 证据链 + Frozen + Estimate，格式 `templates/goal.md`）；worker 默认独立可见会话（HAPI）且 `--yolo` 权限，相关任务复用会话（`hapi resume`），失败重试才新开；工具/模型/思考等级老板在场先询问，不在则由 PMO 按任务复杂度定
-5. **跟进**：**PMO 原生 wait 循环**——`{ wait N 秒 → 检查 worker 日志+台账 → 处理 → 循环 }`，永不空转（空转=异常，重建循环）；间隔按活跃度可配（活跃 90s / 空闲 5-10 分钟省 token）；**显式退出条件**：队列空/批次完成、老板消息、循环失败、长时间无进展；循环状态登记台账（**写不出 = 未开工**）；外部机制（LaunchAgent/tmux）降级为守护——只在崩溃/重启后重启循环
-6. **验收**：三级闸——worker 自验（命令输出）→ reviewer 独立审 → 老板终审（视觉/产品/发布）
-7. **重试**：带错误日志重开新会话，最多 3 次
-8. **合并闸**：按依赖顺序合并，每条合完跑回归，合并前 reviewer 审 diff
-
-## 汇报（三级，不刷屏）
-
-- **例行进展**（关键节点：新 worker 开工/故障处理完/里程碑/卡住，一句话 ping 老板——现在做什么/为什么/下一步）→ 完成汇报（每任务验收后，`templates/report.md`）→ 异常汇报（失败/要决策，立即报带方案）→ 批次总结（一批收尾，表格）
-
-## 原则（从实战踩坑里来的）
-
-- 验收 = 可运行的命令 + 可检查的产物，"agent 说做完了"不算数；**数据级一致优先于字节级**
-- 小任务不编排（编排本身有成本）；PMO 永远不写代码
-- worker 不临场改方案，发现问题上报 PMO；专家产出物不合格退回重写
-- 一任务一 worktree；台账在文件系统，只有 PMO 能改状态
-- **对话即项目**：一个 PMO 会话只服务一个项目（换项目开新会话）；开工只读本次范围（PROJECT + STATUS + 相关 goal/决策标题），历史不加载；STATUS 只含活跃任务，done 即移除
-- **监控靠机制不靠意愿**：任何"每 X 分钟做 Y"的规则必须挂真实定时器或事件流，只写进规则而没有机制 = 不会发生
-- 失败 = 带错误日志重开新会话，不是 PMO 现场修
-- **PMO 主动看进展是第一道防线**：PMO 定期主动检查 worker 日志 + 台账（不依赖通知），发现完成/静默/等待即主动推进；worker 完成必报（Goal 报告协议，ping PMO，不通知 = 未完成）只是事件加速器；等待状态写明归属；老板看 STATUS 是最后兜底——三层防线防"worker 等 PMO、PMO 发呆"的僵局
-- 冲突由 PMO 派发前分析解决，不在 worker 间现场解决
-- 自动 merge 前保留 reviewer gate
-
-## codex 原生线程执行层（SKILL.md 第 13 节）
-
-Codex 会话内置线程工具（系统提示自带），与 agent-queue 动作一一映射——Codex 环境推荐路径：
-
-| 动作 | codex 原生工具 |
-|---|---|
-| 派发（仅老板明确要求新会话时） | `create_thread`（侧边栏可见） |
-| 持续监控（wait 循环原生实现） | `wait_threads`（1-8 个目标，`timeoutMs:0` 快照，默认 300s） |
-| 补充约束/回复 | `send_message_to_thread` |
-| 深入排查 | `read_thread` |
-| 换会话接力 | `handoff_thread` |
-| 总览 | `list_threads` |
-
-内部短暂并行用不可见子 agent；claude/hapi 环境回退第 7-8 节通用机制。
-
-## 安装（跨电脑/给别人用）
-
-**clone + 一条命令**：
+### 1. 克隆并安装
 
 ```bash
-git clone <仓库地址> agent-queue && cd agent-queue && ./install.sh
+git clone https://github.com/wu736139669/agent-queue.git
+cd agent-queue
+./install.sh
+./install.sh --status
 ```
 
-`install.sh` 自动建双端软链（Claude Code `~/.claude/skills/agent-queue` + Codex `~/.codex/skills/agent-queue`），指向同一源目录——改一处，双端生效。
+安装器会把同一份 Skill 安全链接到：
 
-> 注意：分发的是**运营模型**（模板 + 规则 + 空队列），实例数据（任务归档）留在各项目自己的 `.agent-queue/` 里，不随 skill 分发。
+- Claude Code：`~/.claude/skills/agent-queue`
+- Codex：`~/.codex/skills/agent-queue`
 
-## 待办
+正常的状态输出会显示两个目标都指向当前仓库。安装器默认拒绝覆盖已有同名路径；不要一上来使用 `--force`，先运行 `--status` 看清冲突来源。
 
-- [ ] `workers/dispatch.sh` + `run-worker.sh` 执行脚本（轮询 inbox → 建 worktree → spawn worker → 验收 → 归档）
-- [ ] git init + 推 GitHub（跨电脑分发前提，用户决定稍后推）
-- [ ] 用独立 HAPI 会话派一轮真实任务（下一轮试验）
-- [ ] ledger.json 化：记录轮次、通过率、token 成本，评估 PMO 的拆分质量
+### 2. 初始化目标项目
+
+在 Agent Queue 仓库中运行：
+
+```bash
+./init.sh /path/to/your-project
+```
+
+也可以在目标项目中通过已安装的 Skill 运行：
+
+```bash
+cd /path/to/your-project
+~/.codex/skills/agent-queue/init.sh .
+```
+
+使用 Claude Code 安装路径时，将上面的 `.codex` 换成 `.claude`。
+
+初始化会创建：
+
+```text
+your-project/.agent-queue/
+├── PROJECT.md
+├── STATUS.md
+├── DECISIONS.md
+├── templates/
+├── queue/{inbox,active,review,done,failed}/
+└── archive/
+```
+
+重复运行不会覆盖已有文件。
+
+### 3. 在目标项目启动会话
+
+进入目标项目，新开 Claude Code 或 Codex 会话。支持 Skill 选择器时可使用 `$agent-queue`；也可以直接说：
+
+```text
+使用 agent-queue 管理这个项目。
+先只读分析项目并完成项目接入，告诉我已确认事实、合理推断和需要我决定的事项。
+在我确认 PROJECT.md 前不要派发任务。
+```
+
+第一次接入时，Agent 会分析技术栈、目录、构建测试命令、共享文件和运行时能力，然后请你确认 `.agent-queue/PROJECT.md` 中的权限、会话可见性、模型偏好和 Human Gates。
+
+## 最常用的五种用法
+
+### 1. 小任务：直接给结果
+
+```text
+使用 agent-queue 修复登录按钮的禁用状态，并补一个回归测试。
+验收标准是：未填写必填项时不可提交，填写后可提交，现有登录流程不能回归。
+```
+
+预期行为：只读确认相关代码和测试后，如果它确实局部、明确、低风险且不可有效拆分，就退出 PMO 编排，由当前 Agent 实现和自验，不为了“多 Agent”而制造开销。
+
+### 2. 复杂功能：先聊清楚再做
+
+```text
+使用 agent-queue 给这个产品增加团队成员管理。
+先检查现有用户、角色、权限、数据模型和相关 UI，再跟我澄清邀请、移除、角色变更和权限边界。
+在我确认冻结 spec 和任务图前不要写实现代码。
+```
+
+预期行为：
+
+1. Agent 只读检查项目，不先问能从代码里查到的问题。
+2. Agent 返回“已确认 / 合理推断 / 待用户决策”。
+3. 每轮只问少量阻塞执行的问题，并给推荐默认值和影响。
+4. 开放问题清零后，Agent 提交 `spec.md` 摘要让你冻结。
+5. spec 冻结后，Agent 提交 `graph.yaml` 摘要让你批准。
+6. 只有图获批后，才创建 Worker、worktree 和 Reviewer。
+
+一次完整对话大致如下：
+
+```text
+Owner：增加团队成员管理。先理解项目，别急着写。
+
+PMO：
+已确认：当前只有 owner/member 两种角色；成员数据来自 ...；现有设置页在 ...
+合理推断：邀请可能沿用现有邮件服务，但仓库里没有产品规则。
+待你决定：
+1. 谁可以邀请？推荐仅 owner，避免权限扩散。
+2. 被移除成员的历史内容保留还是转移？推荐保留并显示“已离开”。
+3. 本批次是否包含邀请邮件模板？推荐包含，但不改通知系统。
+
+Owner：仅 owner；历史保留；包含邮件模板，不改通知系统。
+
+PMO：这是 spec revision 1 摘要：<目标 / 范围 / 不做 / 边界 / 验收>。
+开放问题：无。请确认是否冻结。
+
+Owner：确认冻结 spec revision 1。先给任务图，不执行。
+
+PMO：graph revision 1 有 5 个节点：数据合同 → 后端与 UI 并行 → 独立验证 → 合并闸。
+共享写入由 merge 节点独占；失败分别回到后端或 UI 修复节点。请确认。
+
+Owner：批准 graph revision 1，开始执行；合并仍需找我确认。
+```
+
+关键点不是固定问三道题，而是 PMO 先用代码证据缩小问题，再让 Owner 决定代码无法回答的产品选择。
+
+### 3. 多个需求：先分析关系再并行
+
+```text
+使用 agent-queue 处理下面 5 个需求：
+1. ...
+2. ...
+3. ...
+4. ...
+5. ...
+
+先识别共享文件、真实依赖、可并行节点和必须串行的部分。
+先给我 spec 与任务图摘要，不要立即派发。
+```
+
+Agent 不应简单地“一需求一 Agent”。只有下游真实消费上游产物时才建立依赖；并行节点必须有不重叠的写入范围。
+
+### 4. 中断后恢复：从文件状态继续
+
+```text
+使用 agent-queue 恢复这个项目的当前批次。
+先读取 .agent-queue/PROJECT.md、STATUS.md、冻结 spec、graph 和 active/review ledger，
+再对照当前会话、分支和 worktree 状态。先汇报差异，不要重复派发已经完成或仍在运行的节点。
+```
+
+恢复时以 `.agent-queue/queue/` 和 ledger 为动态事实源，以冻结 spec/graph 为静态事实源。聊天记录和线程状态只能作为观察信号。
+
+### 5. 执行中改需求：先看影响
+
+```text
+这是一个范围变更：<新要求>。
+暂停受影响节点，给我 spec/graph diff：哪些节点保留、作废、新增，成本和风险怎么变化。
+我确认前不要把新要求加入当前执行。
+```
+
+Agent 不应把新想法静默塞进正在运行的 Goal。
+
+## 你会在什么时候被询问
+
+Agent 应尽量自己从项目中查事实，只把无法安全推断的选择交给你。
+
+| 阶段 | Agent 给你什么 | 你需要做什么 |
+|---|---|---|
+| 项目首次接入 | 技术栈、验收命令、共享锁、运行时和权限策略 | 确认 `PROJECT.md` |
+| 复杂需求澄清 | 已确认、推断、少量产品决策及推荐值 | 回答真正影响范围或行为的问题 |
+| 规格冻结 | 一页内 spec 摘要、开放问题和不做范围 | 明确批准或指出修改项 |
+| 任务图审批 | 节点、依赖、并行点、写入范围、失败路由和人工闸 | 批准图后才开工 |
+| Human Gate | 具体不可逆动作、证据、风险和回滚方式 | 决定是否允许执行 |
+| 最终收口 | 完成内容、测试证据、Reviewer 结果、残余风险 | 终审或提出新批次 |
+
+可以直接使用这些确认语句：
+
+```text
+确认 PROJECT.md 的项目策略。
+确认冻结 spec revision 1；开放问题为无。继续生成任务图，但先不要执行。
+批准 graph revision 1，按图执行。Human Gates 仍需逐项找我确认。
+批准本次 Human Gate：<精确动作>。
+停止当前批次，不再派发新节点；保存现状并给我恢复说明。
+```
+
+“继续做”“你看着办”不应被解释成对迁移、删除、提权、合并或发布的无限授权。
+
+## Agent 会怎样判断任务
+
+| 类型 | 典型情况 | 默认路径 |
+|---|---|---|
+| A. 清晰小任务 | 局部、低风险、容易回滚、验收明确 | 当前 Agent 快速实现和自验 |
+| B. 可拆大目标 | 一个目标包含多个独立可验收部分 | 冻结 spec → 建图 → 分阶段执行 |
+| C. 多个独立需求 | 多项工作共享同一项目 | 分析冲突与依赖 → 并行/串行图 |
+| D. 混合任务 | 功能、修复、调研、发布准备混在一起 | 分类后合并成一张批次图 |
+
+任一任务只要在需求、架构、权限、隐私、支付、迁移、删除或发布方面风险较高，就不能因为它看起来“只有一条需求”而跳过澄清与 Human Gate。
+
+## Graph Engineering 在这里是什么意思
+
+```mermaid
+flowchart LR
+    R[用户目标] --> D[只读理解上下文]
+    D --> S[冻结规格]
+    S --> G[批准任务图]
+    G --> W1[Worker 节点]
+    G --> W2[Worker 节点]
+    W1 --> V[独立验证节点]
+    W2 --> V
+    V -->|通过| H[人工闸 / 收口]
+    V -->|失败| F[最小修复节点]
+    F --> V
+```
+
+- **任务图**：节点是一份可独立验收的工作，边代表真实产物依赖。
+- **所有权图**：一个产物只有一个 writer，并行节点不能写同一范围。
+- **状态图**：`inbox -> active -> review -> done/failed`。
+- **证据图**：冻结输入、产物、命令输出、Reviewer 和下游交接可追溯。
+- **失败图**：失败回到最早失败边界对应的最小修复节点，重试有上限。
+- **人工闸图**：迁移、删除、权限、合并、发布和主观决策明确由人负责。
+
+这首先是一张**交付任务图**，不是代码知识图谱。未来可以接入代码图增强项目理解，但代码图不能代替需求澄清、范围所有权、验收标准和证据链。
+
+## 角色与责任
+
+| 角色 | 做什么 | 不做什么 |
+|---|---|---|
+| PMO / 秘书 | 接入、澄清、spec/graph、派发、监督、路由、收口 | 进入多 Agent 模式后不写实现代码 |
+| 专家岗（按需） | 产出产品、技术、设计、数据或领域合同 | 不替 Owner 静默决定范围 |
+| Worker | 在一个隔离 worktree 执行一个 Goal | 不改计划，不迁移队列状态 |
+| Reviewer | 独立检查 diff 并重跑验收 | 不边审边修 |
+| Owner | 冻结范围、处理 Human Gates、最终验收 | 不需要手工维护日常台账 |
+
+## 怎样查看进度
+
+直接问 PMO：
+
+```text
+给我当前批次状态：每个节点的状态、负责人、最后证据、卡点、等待归属和唯一下一步。
+不要为了回答进度临时询问所有 Worker，先从 ledger 和当前会话状态汇总。
+```
+
+也可以直接查看项目文件：
+
+```bash
+cat .agent-queue/STATUS.md
+find .agent-queue/queue -mindepth 2 -maxdepth 2 -type d | sort
+```
+
+状态含义：
+
+- `inbox`：已定义，尚未派发
+- `active`：Worker 正在执行
+- `review`：候选结果正在独立验收
+- `done`：证据门通过
+- `failed`：重试耗尽或需要 Owner 决策
+
+线程显示 `idle` 或聊天里说“完成了”，都不能单独把任务变成 `done`。
+
+## 项目状态文件
+
+| 文件 | 用途 | 主要维护者 |
+|---|---|---|
+| `.agent-queue/PROJECT.md` | 项目事实、规范、共享文件、权限和运行时策略 | PMO，Owner 确认 |
+| `.agent-queue/STATUS.md` | 当前活跃任务的轻量视图 | PMO 从队列/ledger 派生 |
+| `.agent-queue/DECISIONS.md` | 关键决策的追加式历史 | PMO |
+| `spec.md` | 用户已确认的目标、范围、边界和验收合同 | PMO 与 Owner |
+| `graph.yaml` | 获批的静态节点、依赖、路由和 Human Gates | PMO 与 Owner |
+| `goal.md` | 一个节点的执行合同 | PMO 创建，Worker 回填证据 |
+| `ledger.md` | 动态状态、负责人、轮次和证据指针 | 仅 PMO 迁移状态 |
+| `report.md` | Reviewer 通过后的完成汇报 | PMO |
+
+不要把 API Key、账号凭据、私钥或用户数据写进这些文件。是否把 `.agent-queue/` 提交到产品仓库由团队决定；提交前应检查本机日志路径、会话 ID 和其他隐私字段。
+
+## 安装、更新与卸载
+
+### 查看状态
+
+```bash
+./install.sh --status
+```
+
+### 更新
+
+```bash
+cd /path/to/agent-queue
+git pull --ff-only
+./install.sh --status
+./tests/smoke.sh
+```
+
+安装使用软链，正常更新后不需要重复安装。
+
+### 处理同名冲突
+
+```bash
+./install.sh --status
+./install.sh --force
+```
+
+`--force` 会先把冲突路径移动到带时间戳的备份，再创建软链。备份不会被自动删除或恢复。
+
+### 卸载
+
+```bash
+./install.sh --uninstall
+```
+
+卸载只删除指向当前 checkout 的两个 Skill 软链，不删除 Agent Queue 仓库，也不删除任何项目的 `.agent-queue/`。
+
+## 辅助命令
+
+| 命令 | 用途 |
+|---|---|
+| `./init.sh <project>` | 初始化项目实例，保留已有文件 |
+| `./workers/watch-worker.sh <log>` | 把 Codex JSONL 或 HAPI 文本日志压缩成进展事件流 |
+| `./workers/log-cleanup.sh` | dry-run 列出 30 天前的 Codex 已归档日志 |
+| `./workers/log-cleanup.sh --apply` | 删除刚才列出的已归档候选 |
+| `./workers/log-cleanup.sh --include-live` | 额外预览 live Codex/HAPI 日志，仍不删除 |
+| `./tests/smoke.sh` | 验证安装、初始化、解析器、清理安全和模板 |
+
+日志清理默认不碰 live 目录，只有显式 `--include-live` 才扫描；只有显式 `--apply` 才删除。被 Goal、ledger 或 report 引用的证据日志应保留。
+
+## 运行时与权限
+
+- Skill 会探测当前环境，不假设每个 Codex 都有 `create_thread`、`wait_threads` 等工具。
+- 可用时优先用户可见、可接管的独立会话；不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
+- 默认使用平台标准权限。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。
+- Frozen、worktree 和 Reviewer 是质量控制，不是安全沙箱。
+- 依赖安装、数据库迁移、删除、权限扩大、合并和发布应按 `PROJECT.md` 保留 Human Gate。
+
+## 常见问题
+
+### 每个任务都会启动多个 Agent 吗？
+
+不会。小任务留在当前 Agent；只有可拆、可并行或需要独立验收的复杂任务才进入多 Agent 模式。
+
+### 一句话需求可以吗？
+
+可以作为入口。Agent 会先读项目并分诊；复杂任务必须继续沟通，直到 spec 可冻结。
+
+### 必须安装 HAPI 吗？
+
+不必须。HAPI 是可见会话选项之一。Codex 原生线程、Claude CLI 或平台提供的 Agent 工具都可以作为运行时，但能力不同，必须在 `PROJECT.md` 记录真实可用路径。
+
+### 为什么 spec 冻结后还要批准 graph？
+
+spec 回答“做什么、做到什么算完成”；graph 回答“谁做、依赖什么、写哪里、怎样验证、失败回哪”。二者解决不同问题。
+
+### Agent 卡住或会话断了怎么办？
+
+使用“中断后恢复”提示词。PMO 应先对账文件状态、分支、worktree 和运行会话，再决定续接、最小重试或等待 Owner。
+
+### 可以让 Agent 自动合并或发布吗？
+
+只有 `PROJECT.md` 或当前冻结规格明确授权，且 Reviewer 和对应 Human Gate 已通过时才可以。Skill 文本本身不构成授权。
+
+## Private Beta 边界
+
+已经具备：
+
+- 项目接入、需求澄清、spec 冻结和 graph 审批
+- Goal 拆分、队列/ledger 状态协议、有限失败路由
+- Worker 自验、独立 Reviewer、Owner 终审
+- 冲突安全安装、项目初始化、日志解析和保守清理
+- 本地 smoke test 与 GitHub Actions
+
+尚未实现或不承诺：
+
+- 没有 `dispatch.sh` 和 `run-worker.sh`；派发仍由运行中的 Agent 调用平台工具
+- 没有确定性的 graph validator、ready-node 计算器和状态迁移 CLI
+- 跨运行时效果仍取决于实际工具能力和 Agent 是否正确遵循 `SKILL.md`
+- 当前没有公共 LICENSE 和稳定版本保证；公开发布前需要选择许可证并建立版本说明
+
+## 仓库结构
+
+```text
+agent-queue/
+├── SKILL.md
+├── agents/openai.yaml
+├── install.sh
+├── init.sh
+├── templates/
+├── queue/
+├── workers/
+├── tests/
+└── .github/workflows/test.yml
+```
+
+仓库分发的是运营协议、确定性辅助脚本、模板和空示例队列。每个产品项目的真实状态保存在该项目自己的 `.agent-queue/` 中。
+
+## Roadmap
+
+- 确定性 graph 校验与 ready-node 计算
+- 带一致性检查的安全队列迁移 CLI
+- Codex、HAPI、Claude runtime adapters
+- 重试、通过率、耗时和 token 成本指标
+- 一个非游戏项目和一个纯 Codex 环境的脱敏案例

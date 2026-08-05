@@ -1,42 +1,99 @@
-#!/bin/bash
-# log-cleanup.sh — 会话日志卫生（防止 14GB+ 磁盘膨胀）
-#
-# 清理原则：已结束的会话日志按时间清理；活跃会话（正在写）的日志天然受 mtime 保护。
-# 用法:
-#   ./log-cleanup.sh            # dry-run：只预览将删什么，不删
-#   ./log-cleanup.sh --apply    # 真正清理
-#
-# 策略:
-#   Codex archived_sessions/  删除 >7 天的 rollout jsonl（已归档 = 会话已结束，watch 不再需要）
-#   Codex sessions/           删除 >14 天的 rollout jsonl（活跃会话 mtime 新，天然安全）
-#   HAPI logs/                删除 >7 天的 *.log
-# 注意: watch 中的日志如果已停止写入超过上述天数，也会被清——watch 到的终态后本就该归档
+#!/usr/bin/env bash
+# Preview or delete old session logs. Archived Codex sessions are the safe default scope.
+set -euo pipefail
 
-DRY=1
-[ "$1" = "--apply" ] && DRY=0
-ACT="删除"; [ $DRY -eq 1 ] && ACT="将删除(dry-run)"
+APPLY=0
+INCLUDE_LIVE=0
+DAYS=30
 
-codex_sessions="$HOME/.codex/sessions"
-codex_archived="$HOME/.codex/archived_sessions"
-hapi_logs="$HOME/.hapi/logs"
+usage() {
+  cat <<'EOF'
+Usage: ./workers/log-cleanup.sh [--apply] [--days N] [--include-live]
 
-echo "== 日志卫生检查 =="
-for dir in "$codex_sessions" "$codex_archived" "$hapi_logs"; do
-  [ -d "$dir" ] && du -sh "$dir" 2>/dev/null | awk '{print "当前:", $1, $2}'
+  --apply         Delete the listed files. The default is dry-run.
+  --days N        Select files older than N days (default: 30).
+  --include-live  Also inspect Codex sessions/ and HAPI logs/.
+
+By default only ~/.codex/archived_sessions/*.jsonl is inspected. Preserve any
+logs referenced by task evidence before applying cleanup.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply)
+      APPLY=1
+      shift
+      ;;
+    --include-live)
+      INCLUDE_LIVE=1
+      shift
+      ;;
+    --days)
+      [ "$#" -ge 2 ] || { echo "--days requires a value" >&2; exit 2; }
+      DAYS="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
 done
 
-echo ""
-echo "== Codex archived_sessions (>7天) =="
-find "$codex_archived" -name "*.jsonl" -mtime +7 2>/dev/null | wc -l | xargs echo "  $ACT 文件数:"
-if [ $DRY -eq 0 ]; then find "$codex_archived" -name "*.jsonl" -mtime +7 -delete 2>/dev/null; fi
+case "$DAYS" in
+  ''|*[!0-9]*) echo "--days must be a non-negative integer" >&2; exit 2 ;;
+esac
 
-echo "== Codex sessions (>14天) =="
-find "$codex_sessions" -name "*.jsonl" -mtime +14 2>/dev/null | wc -l | xargs echo "  $ACT 文件数:"
-if [ $DRY -eq 0 ]; then find "$codex_sessions" -name "*.jsonl" -mtime +14 -delete 2>/dev/null; fi
+CANDIDATES="$(mktemp)"
+trap 'rm -f "$CANDIDATES"' EXIT
 
-echo "== HAPI logs (>7天) =="
-find "$hapi_logs" -name "*.log" -mtime +7 2>/dev/null | wc -l | xargs echo "  $ACT 文件数:"
-if [ $DRY -eq 0 ]; then find "$hapi_logs" -name "*.log" -mtime +7 -delete 2>/dev/null; fi
+process_directory() {
+  local label="$1" directory="$2" pattern="$3" found=0 file
+  printf '\n== %s (older than %s days) ==\n' "$label" "$DAYS"
+  if [ ! -d "$directory" ]; then
+    echo "not found: $directory"
+    return 0
+  fi
 
-echo ""
-echo "清理完成" $( [ $DRY -eq 1 ] && echo "(dry-run，未删任何文件；确认后运行 ./log-cleanup.sh --apply)" )
+  : > "$CANDIDATES"
+  if ! find "$directory" -type f -name "$pattern" -mtime "+$DAYS" -print0 > "$CANDIDATES"; then
+    echo "Failed to inspect: $directory" >&2
+    return 1
+  fi
+
+  while IFS= read -r -d '' file; do
+    found=1
+    printf '%s\n' "$file"
+    if [ "$APPLY" -eq 1 ]; then
+      rm -- "$file"
+    fi
+  done < "$CANDIDATES"
+
+  [ "$found" -eq 1 ] || echo "no candidates"
+}
+
+if [ "$APPLY" -eq 1 ]; then
+  echo "mode: apply"
+else
+  echo "mode: dry-run (no files will be deleted)"
+fi
+echo "scope: archived Codex sessions$( [ "$INCLUDE_LIVE" -eq 1 ] && printf ' + live Codex/HAPI logs' )"
+
+process_directory "Codex archived sessions" "$HOME/.codex/archived_sessions" "*.jsonl"
+
+if [ "$INCLUDE_LIVE" -eq 1 ]; then
+  process_directory "Codex live sessions" "$HOME/.codex/sessions" "*.jsonl"
+  process_directory "HAPI logs" "$HOME/.hapi/logs" "*.log"
+fi
+
+if [ "$APPLY" -eq 1 ]; then
+  echo "Cleanup completed."
+else
+  echo "Dry-run completed. Re-run with --apply after reviewing every path."
+fi

@@ -1,0 +1,7 @@
+USER: Build the feature
+AGENT: Reading project context now
+CALL: exec
+CALL: legacy_tool
+AGENT: Legacy agent output
+ERROR: stream_error: connection lost
+END: TASK_COMPLETE

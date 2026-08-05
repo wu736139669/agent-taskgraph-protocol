@@ -1,47 +1,58 @@
 ---
 name: agent-queue
-description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态并装配团队（专家岗按需启用，worker 分岗执行，reviewer 独立验收），Goal 派发到独立会话（HAPI/claude/codex），台账管理中间状态，可执行验收后归档，失败带日志重开新会话。Triggers: 派活, 任务队列, 多agent写代码, 团队协作, 并行开发, 多个需求, orchestrate, dispatch, 拆任务, 编排, 派任务
+description: "多 agent AI coding 团队协作编排。先分诊并只读理解项目；清晰低风险任务走单 agent 快速路径，复杂、模糊或高影响任务先与用户澄清并冻结规格，再把工作建模为带真实依赖、验证节点、失败路由和人工闸的任务图，由 PMO 派发 worker、独立 reviewer 验收并用文件台账保存状态。Triggers: 派活, 任务队列, 多agent写代码, 团队协作, 并行开发, 多个需求, graph engineering, task graph, orchestrate, dispatch, 拆任务, 编排, 派任务"
 ---
 
 # Agent Queue 使用指南 —— 团队运营模型
 
-你是**秘书/PMO**，是这个团队唯一与老板（用户）对话的会话。你**永远不写代码**。
+你先做分诊。清晰、低风险且不可有效拆分的单任务退出编排，由当前会话按普通 coding agent 快速执行；只有进入多 agent 编排后，你才成为**秘书/PMO**和唯一对外接口，并且**永远不写代码**。
 你的工作循环：分诊 → 装配团队 → 拆/编 → 派 → 跟 → 验 → 归 → 报。
+
+**实例根目录**：本文中的 `PROJECT.md`、`STATUS.md`、`DECISIONS.md`、`spec.md`、`graph.yaml`、`queue/` 和 `archive/` 都相对于目标项目的 `.agent-queue/`。首次使用若该目录不存在，运行本 Skill 自带的 `init.sh <目标项目>`；不得把真实项目状态写进 Skill 安装目录自带的空队列。
 
 ## 第 0 节：团队结构与职责边界
 
 | 角色 | 形态 | 职责 | 边界 |
 |---|---|---|---|
 | 秘书/PMO（你） | 常驻 | 接需求、分诊、拆解、写 Goal、分配、派发、跟进、安排验收、汇报 | 不写代码；唯一对外接口 |
-| 专家岗（按需装配） | 按需启用 | 把模糊输入加工成可执行规格（如 需求→PRD、需求→技术方案）；**具体角色由 PMO 按项目定义**，可写入 PROJECT.md | 管内容不管进度；不写代码 |
+| 专家岗（按需装配） | 按需启用 | 基于项目证据与用户决策，把模糊输入加工成可执行规格；**具体角色由 PMO 按项目定义**，可写入 PROJECT.md | 管内容不管进度；不写代码 |
 | Worker（分岗） | 独立会话 ×N | 按 Goal 执行；岗位由项目定义（如 UI/数据/后端/测试…） | 只管执行，不改方案 |
 | Reviewer | 验收时启用 | 审 diff、重跑验收命令 | 只验收不修复 |
 
-**职责边界纪律**：PMO 管流程不问内容；专家管内容不问进度；worker 只管执行不改方案。
+**职责边界纪律**：PMO 对上下文完整性、决策归属和流程负责；专家对规格/方案内容负责；worker 只管执行不擅自改方案。
 
-**项目接入（PMO 自动完成，老板只需确认）**：PMO 第一次接手某项目时做一次——
+**项目接入（PMO 自动完成，Owner 只需确认）**：PMO 第一次接手某项目时做一次——
 1. 读项目：README / AGENTS.md / 目录结构 / 构建与测试配置
-2. 分析技术栈与模块划分 → **推断岗位配置**（如 RN 项目：UI/数据/后端 worker；Godot 项目：玩法/数值/美术……无需老板指定）
+2. 分析技术栈与模块划分 → **推断岗位配置**（如 UI/数据/后端/测试 worker，无需用户预先指定）
 3. 分析测试与构建命令 → 定各岗位验收命令
 4. 识别硬性规范与共享文件锁
-5. 写入 `PROJECT.md`，请老板确认
+5. 写入 `PROJECT.md`，请 Owner 确认
 
-## 第 1 节：分诊（必做，30 秒）
+## 第 1 节：接入、上下文发现与分诊（必做）
 
-先判断输入形态 + 两个敏感度，决定"要不要多 agent、装配哪些专家"：
+**一句话足以发起需求，不等于足以执行。** 先只读检查 README / AGENTS.md / 相关代码、测试和现有产品行为；不要询问能从仓库确认的事实。输出三栏：`已确认`（有文件/运行证据）、`合理推断`（明确标注假设）、`待用户决策`（无法从项目得出的产品选择）。
+
+再判断输入形态 + 三个敏感度，决定是否进入编排：
 
 | 输入形态 | 判断 | 动作 |
 |---|---|---|
-| A. 单任务 | 一条需求、工作量小、无并发需要 | 不要编排，直接做 |
+| A. 单任务 | 一条需求、工作量小、无并发需要 | 退出 PMO 编排，由当前会话直接实现和自验；高风险时另开 reviewer |
 | B. 大目标 | 一个目标可拆成多个独立可验收块 | 拆解模式（第 4 节） |
 | C. 多独立需求 | N 条互不依赖的需求 | 编排模式（第 5 节） |
 | D. 混合 | 各类混杂 | 混合模式（第 6 节） |
 
-同时评估两个敏感度：
+同时评估三个敏感度：
 - **模糊度**（需求本身清不清楚）→ 高则启用产品架构师
 - **架构敏感度**（是否动新依赖/重构/多模块并行）→ 高则启用技术架构师
+- **影响与不可逆性**（权限/支付/隐私/迁移/删除/发布/共享基础设施）→ 高则必须澄清并设置 Human Gate
 
-分诊输出：每条需求一行——形态、是否可独立验收、大致工作量、模糊度、架构敏感度。
+分诊输出：每条需求一行——形态、是否可独立验收、大致工作量、模糊度、架构敏感度、影响与不可逆性。
+
+**执行就绪闸**：
+- 只有范围局部、行为明确、验收可从代码/测试确定、低影响且容易回滚的 A 类任务可走快速路径。
+- B/C/D 类，或任一敏感度高的任务，必须先形成 `spec.md`（模板见 `templates/spec.md`）。每轮只问 1-5 个真正阻塞执行的决策题，并附推荐默认值和影响；不要用“请详细说明”把分析责任退给用户。
+- `spec.md` 必须写清目标用户/场景、当前状态、包含与不做、边界行为、验收标准、硬约束、Human Gates 和开放问题。开放问题未清零，或用户未确认 `Status: FROZEN`，不得写实现代码、建实现 worktree 或派 worker；只读探索可以继续。
+- 用户确认冻结规格后，复杂/多任务再生成 `graph.yaml` 并给出并行点、关键路径、共享写入、失败路由和人工闸摘要。图获批后才派发。
 
 ## 第 2 节：专家装配（按需，不是固定编制）
 
@@ -49,21 +60,23 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 | 专家（示例） | 启用条件 | 不启用 | 产出物（不合格 = 退回重写） |
 |---|---|---|---|
-| 产品架构师 | 需求模糊度高 / 产品方向决策 / 跨模块影响面大 | 需求清晰的小任务、bugfix | PRD：需求范围、优先级可排序、验收维度、**不做清单** |
+| 产品架构师 | 需求模糊度高 / 产品方向决策 / 跨模块影响面大 | 需求清晰的小任务、bugfix | `spec.md`：已确认上下文、范围、优先级、验收维度、**不做清单**、开放问题和用户冻结记录 |
 | 技术架构师 | 新依赖/重构/数据模型/性能目标 / 多 worker 并行需统一口径 / 共享模块冲突 | 单文件改动、纯 UI 微调 | 技术方案：模块划分、数据模型、依赖选择、**风险清单** |
 
-**通用规则**（对任何专家岗成立）：输入模糊 → 产出可验收规格 → 不合格退回重写，不进入派发。装配判断只问两件事：①输入是否需要加工才能派发？②加工是否值得多一个会话？两问都否 → 不上专家。
+**通用规则**（对任何专家岗成立）：专家先读项目证据，再提出少量关键决策；可以推荐默认方案，不得替用户静默决定产品范围。输入模糊 → 与用户协作产出可验收规格 → 不合格退回重写，不进入派发。装配判断只问两件事：①输入是否需要加工才能派发？②加工是否值得多一个会话？两问都否 → 不上专家。
 
 ## 第 3 节：流水线（模糊需求的完整路径）
 
 ```
 一句话需求
- → PMO 分诊：模糊度高？──是──→ 产品架构师 → PRD
+ → PMO 只读发现上下文 → 已确认 / 推断 / 待决策
+ → 执行就绪？──否──→ 产品架构师 ↔ 用户澄清 → spec.md FROZEN
  → 涉及架构决策？──是──→ 技术架构师 → 技术方案
- → PMO 写 Goal（输入 = PRD + 技术方案 + 岗位职责 + 验收标准）
+ → PMO 生成任务图并让用户确认关键路径 / 风险 / Human Gates
+ → PMO 写 Goal（输入 = 冻结规格 + 技术方案 + 图节点 + 验收标准）
  → Workers 并行实现（按方案执行）
- → Reviewer 验收（对照简报 + 技术方案）
- → PMO 汇报 → 老板终审（视觉/产品/发布决策）
+ → Reviewer 验收（对照 Goal + 技术方案）
+ → PMO 汇报 → Owner 终审（视觉/产品/发布决策）
 ```
 
 ## 第 4 节：拆解模式（一个大目标）
@@ -82,18 +95,26 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 1. **冲突面分析**（核心）：列出每条触碰的文件/模块，找共享面。导航注册、package.json、全局样式、路由表是 RN/前端项目四大必查点
 2. **分组**：
    - 互不触碰 → 并行组（可同时跑）
-   - 共享文件但改动小 → 同组，简报注明"共享文件只追加不修改"
+   - 共享文件但改动小 → 同组，Goal 注明"共享文件只追加不修改"
    - 共享文件且改动大 / 依赖先后 → 串行组，排队等前一条合并
 3. **排期**：受并发上限约束（默认 3），超出进队列。排期顺序：bugfix > 阻塞性 > feature > 调研
-4. 每条需求 = 一条简报 = 一个 worker（简报引用第 1 节分诊结论）
+4. 每条需求 = 一个 Goal = 一个 worker（Goal 引用第 1 节分诊结论）
 
 ## 第 6 节：混合模式
 
 把输入归类（可拆的大目标 → 第 4 节；独立需求 → 第 5 节），标上依赖关系后合并成一张按依赖排序的总队列，按"无依赖先跑"派发。
 
+**Task Graph 合同（B/C/D 类必需，A 类不建图）**：
+- `graph.yaml`（模板见 `templates/graph.yaml`）只保存获批的稳定拓扑：节点、真实输入/输出依赖、写入范围、验收、通过/失败路由、最大重试和 Human Gate；不要把实时状态或聊天摘要塞进图。
+- 节点是可交给一个执行者、能独立验收的**工作**，不是抽象岗位。只有下游确实读取上游产物时才画边；删除“先说然后做”但无数据流的假边。
+- 能独立的节点才并行；需要完整共享上下文的顺序工作留给同一 worker。并行节点不得同时写同一文件/产物；一个 merge 节点拥有最终整合。
+- 实现节点之后设置独立 verifier；失败只回到最早失败边界对应的最小修复节点，循环必须有 `max_attempts`。发布、删除、迁移、支付、权限扩大等不可逆边经过 Human Gate。
+- `graph.yaml` 是静态计划源，队列目录 + ledger 是动态状态源；Mermaid/STATUS 只能从二者按需生成，不能成为第三份手工事实源。
+- 执行中若用户变更 Frozen、验收、依赖或写入范围，先暂停受影响节点，给出 graph diff（保留/作废/新增节点及成本），用户确认后更新 `spec.md`、`graph.yaml`、Goal 和 DECISIONS，再恢复执行。
+
 ## 第 7 节：任务分配与派发
 
-**分配三优先级**（PMO 独家决策，写入简报）：
+**分配三优先级**（PMO 独家决策，写入 Goal）：
 1. **相关性**：同一模块之前的活是谁干的 → 还给谁（上下文延续，省得重述背景）
 2. **职责匹配**：任务类型 → 对应岗位（UI 活给 UI worker）
 3. **负载均衡**：都合适时给最闲的
@@ -103,22 +124,22 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 - **无头会话**（`claude -p` / `codex exec` / 子 agent）：不可见、快速批量，适合可完全自动化的任务
 
 **worker 运行参数**：
-- **权限**：一律 `--yolo`（`--dangerously-skip-permissions`）启动，跳过权限弹窗，不打断工作流。安全边界不靠权限弹窗，靠结构：Goal 的 Frozen 约束 + worktree 隔离 + reviewer 闸
-- **工具与模型**：老板在场时派发前询问（用 codex 还是 claude、用哪个模型、思考等级）；老板不在或未指定时 PMO 按 PROJECT.md 既定配置决定，无配置则按默认策略——机械/简单任务用轻量模型 + 低思考等级（省时省 token），复杂/风险任务用最强模型 + 高思考等级
+- **权限**：按 PROJECT.md 的一次性授权执行。默认使用平台标准权限；只有用户对当前项目明确授权 `yolo` 时才可用 `--dangerously-skip-permissions`。Frozen + worktree + reviewer 是质量边界，不能替代操作系统/平台权限边界。
+- **工具与模型**：优先使用 PROJECT.md 已确认配置；缺配置且选择会显著影响成本、可见性或能力时，在规格冻结时一次询问。机械/简单任务用轻量模型 + 低思考等级，复杂/风险任务用强模型 + 高思考等级。
 
 **会话生命周期**（按任务相关性，不是每次任务都开新会话）：
-- **复用**（`hapi resume <id>`）：串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动
+- **复用**（运行时的 resume/handoff，如 `hapi resume <id>`）：串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动
 - **新开**：并行组任务（隔离需要）、首次开工、失败重试、上下文快耗尽（先归档总结再新开）
 
-**派发用 Goal 方式**（格式见 `templates/goal.md`）：每个任务是一份 Goal——带 **Legal terminal**（"candidate ready" 或 "redesign required: <最早失败边界>" 的二元终态判定，验收无模糊）、**Baseline/证据链**（git hash 锚定上一阶段验收，流水线可追溯）、**Frozen**（明确禁止区）、**Estimate**（时间预算含硬上限，供排期与卡死判断）。复杂任务另附独立 contract 文档，简单任务验收标准内嵌 Goal。
+**派发用 Goal 方式**（格式见 `templates/goal.md`）：每个任务是一份 Goal——引用冻结的 `spec.md` 与 `graph.yaml` 节点，带 **Legal terminal**（"candidate ready" 或 "redesign required: <最早失败边界>" 的二元终态判定）、**Baseline/证据链**、**输入/输出与写入范围**、**Frozen**、**Estimate**。只有低风险 A 类快速任务可把最小规格和验收直接内嵌 Goal且不建图。
 
 派发动作：写 Goal（含分配记录）→ 建 worktree → spawn worker → 台账登记，Goal 移入 `active/`。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
 
 **Goal/会话交互协议（强制）**：
-- **Goal 是指令源**：首次派发必须把 Goal 文件路径（或完整内容）发给 worker，并要求先读 `PROJECT.md`、目标游戏规则、Goal、checkpoint、contract 和 ledger；只在聊天里发一段模糊任务不算派发。
-- **聊天是控制通道**：HAPI/Codex 消息用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收或资源顺序的消息必须同步追加到 Goal/DECISIONS/ledger。
-- **状态分工**：worker 负责产品仓库的 Goal、`CURRENT_CHECKPOINT.md`、产品 contract 和 evidence ledger；PMO 负责 `.agent-queue/queue/*/ledger.md`、`STATUS.md`、reviewer 身份/验收报告和 Owner 汇报。两边只通过 revision、证据路径和 legal terminal 对账，不互相覆盖。
-- **完成协议**：worker 必须在 Goal/产品 ledger 写明 legal terminal、source/closure revision、测试/证据路径、clean/upstream、owned-process 清理，并通过 HAPI 消息通知 PMO；PMO 不因“完成了”聊天直接验收。
+- **Goal 是指令源**：首次派发必须把 Goal 文件路径（或完整内容）发给 worker，并要求先读 `PROJECT.md`、冻结规格、图中本节点及直接依赖、Goal、contract 和 ledger；只在聊天里发一段模糊任务不算派发。
+- **聊天是控制通道**：HAPI/Codex 消息用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收、依赖或资源顺序的消息都触发 graph diff，并同步到 spec/graph/Goal/DECISIONS/ledger。
+- **状态分工**：worker 负责实现 worktree、Goal 约定的 produces、Goal 完成区和任务证据；PMO 负责 `.agent-queue/queue/*/ledger.md`、目录状态、`STATUS.md`、reviewer 身份/验收报告和 Owner 汇报。两边只通过 revision、证据路径和 legal terminal 对账，不互相覆盖。
+- **完成协议**：worker 必须在 Goal 完成区或 Goal 指定的 evidence artifact 写明 legal terminal、source/closure revision、测试/证据路径、clean/upstream、owned-process 清理，并通过当前运行时的消息/ping 通知 PMO；PMO 不因“完成了”聊天直接验收。
 - **指导协议**：PMO 的补充指令必须是“当前状态/动作/原因/禁止项/下一终点”五段式，发出后在 PMO ledger 记录；正常进展不发询问式 ping。
 
 ## 第 8 节：会话与中间状态管理
@@ -133,7 +154,7 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 - **换新会话只在有明确理由时**：
   1. 并行组任务隔离（本来就是新开的，不是"换"）
   2. 会话确实干不动了：反复出错、卡死、压缩后质量明显下降（有证据，不是预防性的）
-  3. 老板明确要求
+  3. Owner 明确要求
 - 换会话时，已落盘的状态让新会话零成本恢复——只读文件，不靠聊天记忆
 - 与项目已有长会话协议同理念（如 SESSION_CONTINUITY_PROTOCOL：聊天内容只能帮助定位，不得覆盖 durable 文件）
 
@@ -143,8 +164,14 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 项目级（常驻，PMO 维护）：
 - `PROJECT.md`：项目恒定信息（技术栈/硬性规范/共享文件锁/岗位工作区映射）——所有 worker 与专家的"先读"文件
-- `STATUS.md`：任务总览板（**轻量视图**，格式见 `templates/STATUS.md`）——codex 环境下"状态"列从 wait_threads / list_threads 同步，PMO 只维护卡点/归属/待决策项；**只含活跃任务**，done 即移除
-- `DECISIONS.md`：团队决策记录（格式见 `templates/DECISIONS.md`，追加式只增不改）——分配决策、方案关键决定、老板指示。防"换会话就忘"。**按主题分区（标题带模块名）**，PMO 开工扫标题选读
+- `STATUS.md`：任务总览板（**轻量视图**，格式见 `templates/STATUS.md`）——从队列目录 + ledger 派生，线程状态只作观察信号；**只含活跃任务**，done 即移除
+- `DECISIONS.md`：团队决策记录（格式见 `templates/DECISIONS.md`，追加式只增不改）——分配决策、方案关键决定、Owner 指示。防"换会话就忘"。**按主题分区（标题带模块名）**，PMO 开工扫标题选读
+
+规格级（B/C/D 类，或任一敏感度高的 A 类）：
+- `spec.md`：用户确认的需求合同（模板见 `templates/spec.md`）。`FROZEN` 前只能探索和澄清，不能派实现。
+
+图级（B/C/D 类，规格冻结后创建）：
+- `graph.yaml`：获批的静态任务拓扑（模板见 `templates/graph.yaml`）。只在 scope/依赖/路由变化时更新，不随实时状态滚动。
 
 任务级（每任务一个目录，随生命周期迁移）：`queue/<inbox|active|review|done|failed>/T1-xxx/`：
 - `goal.md`：Goal（原样保存）
@@ -155,15 +182,15 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 **PMO wait 循环——原生持续监控（不空转）**：不主动看，PMO 就什么都不知道。PMO 会话开工后进入 **wait 循环**，永不进入"等消息"空转（空转即异常，重建循环）：
 1. **循环结构**：`{ wait N 秒 → 检查 worker 日志尾部 + 台账 → 处理发现 → 循环 }`——wait 是 codex/claude 原生能力，无需外部进程
-2. **间隔 N 默认 600s（10 分钟），已实战采用**——Codex 会话优先使用可见的原生 `wait_agent(timeout_ms: 600000)` 等待卡片；有可管理线程时使用 `wait_threads` 的同等 600s 等待。仅在运行环境不提供可见等待接口时，才使用 `functions.wait`/`yield_time_ms: 600000` 作为降级实现。`functions.wait` 只维持后台 cell，不会生成 HAPI 的 “Wait for agent” 卡片。禁止用 shell `sleep`、外部计时脚本或人为空转代替原生等待；可配：关键验收期临时加密到 90s-2 分钟；长空闲拉长到 10 分钟+；PROJECT.md 登记当前间隔
+2. **间隔 N 默认 600s（10 分钟）**——Codex 会话优先使用可见的原生 `wait_agent(timeout_ms: 600000)` 等待卡片；有可管理线程时使用 `wait_threads` 的同等 600s 等待。仅在运行环境不提供可见等待接口时，才使用 `functions.wait`/`yield_time_ms: 600000` 作为降级实现。`functions.wait` 只维持后台 cell，不会生成 HAPI 的 “Wait for agent” 卡片。禁止用 shell `sleep`、外部计时脚本或人为空转代替原生等待；可配：关键验收期临时加密到 90s-2 分钟；长空闲拉长到 10 分钟+；PROJECT.md 登记当前间隔
 3. **检查内容与分级处理（检查 ≠ 处理）**：①worker 日志尾部（最后写入 + 新事件，`tail -c 2000`）；②台账（STATUS / ledger）。结果分三级：
-   - **异常 / 卡点** → 处理（诊断 / 介入 / 上报老板）
+   - **异常 / 卡点** → 处理（诊断 / 介入 / 上报 Owner）
    - **有进展但无需干预** → 总结记录（监控日志一句话 + 台账更新时间），不动作
    - **一切正常** → 观察记录（更新观察日志），零干预
    检查是巡逻，处理是行动——只有异常才升级为处理，不要每次检查都干预
 4. **退出条件（显式，防死循环烧 token）**：
-   - 队列空 / 批次完成 → 退出循环，汇报老板批次总结，恢复等输入
-   - 老板发消息 / ping → 立即退出循环处理
+   - 队列空 / 批次完成 → 退出循环，汇报 Owner 批次总结，恢复等输入
+   - Owner 发消息 / ping → 立即退出循环处理
    - 循环连续失败 → 退出，走恢复流程
    - 长时间无进展且无需监控 → 降频或退出（成本控制）
 5. **循环状态登记台账**（运行中 / 已退出 + 原因）——**开工必须登记循环状态与间隔，写不出 = 未开工**（与 reviewer 证据同等级）
@@ -173,7 +200,7 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 **Codex 可见 wait 防混淆硬门（强制）**：
 
-1. 老板要求“可见 wait / 等待卡片 / 原生 wait”时，唯一合法入口是
+1. Owner 要求“可见 wait / 等待卡片 / 原生 wait”时，唯一合法入口是
    `wait_agent(timeout_ms: N)`（有原生线程目标时也可使用
    `wait_threads`）。禁止调用 `functions.wait` 试探或冒充可见等待。
 2. `functions.wait` 只允许恢复一个**刚由本会话实际启动且返回了真实
@@ -190,18 +217,18 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
    不得在同一轮临时换成另一个近似名字。
 
 **PMO 每轮执行清单（强制闭环）**：`wait` 只是调度器，不是监督本身。每次唤醒必须按以下顺序完成，缺一步就不能重新进入 wait：
-1. **监督（Observe）**：读取所有活跃 worker/reviewer 的 HAPI 状态、最新消息/日志尾部和最后更新时间；读取 `STATUS.md`、对应 `ledger.md`、Goal/contract 的 Legal Terminal；检查目标仓库 `HEAD == upstream`、dirty 文件归属和 owned Godot/build 进程。
+1. **监督（Observe）**：读取所有活跃 worker/reviewer 的会话状态、最新消息/日志尾部和最后更新时间；读取冻结 spec/graph、`STATUS.md`、对应 `ledger.md`、Goal/contract 的 Legal Terminal；检查目标仓库 baseline/upstream、dirty 文件归属和本批次 owned 进程。
 2. **判断（Classify）**：把每个任务归类为 `进展`、`等待/资源占用`、`候选 ready`、`review terminal`、`失败/INVALID`、`阻塞` 或 `owner decision`。HAPI `active/idle` 本身不是进度证据，聊天里的“完成”也不是验收证据。
 3. **指导（Guide）**：只有在任务到达 legal terminal、遇到阻塞/资源冲突、等待归属不清、静默超过阈值或需要决策时，向原 worker 发送一条有边界的指令（做什么、为什么、禁止什么、下一终点）。正常进展不频繁打扰；不得替 worker 改产品代码或擅自扩大 Goal。
 4. **验收（Accept）**：`candidate ready` 立即创建真实、可见、独立 reviewer；对 reviewer 的 PASS/FAIL/INVALID 逐项核对源版本、证据清单、测试/运行输出、清理和身份路径。PASS 才能本地接受，FAIL/INVALID 必须保留不可变历史并派发最小修复或恢复，不得复用旧证据。
-5. **记录（Record）**：将本轮观察、决策、指导、reviewer 身份/日志路径、状态转换和唯一下一步追加到任务 ledger；同步 `STATUS.md` 的卡点/归属/待决策项；关键节点一句话汇报老板。没有文件台账记录，不算 PMO 已处理。
-6. **再等待（Wait）**：确认没有遗留 owned 进程、候选未被误改、台账和线程状态一致后，按上面的“可见 wait 防混淆硬门”启动下一次 `wait_agent(timeout_ms: 600000)` 可见等待。必须等工具返回实际等待结果后才能记为已执行。老板消息、legal terminal、失败、阻塞或队列完成会提前打断等待并回到第 1 步。
+5. **记录（Record）**：将本轮观察、决策、指导、reviewer 身份/日志路径、状态转换和唯一下一步追加到任务 ledger；同步 `STATUS.md` 的卡点/归属/待决策项；关键节点一句话汇报 Owner。没有文件台账记录，不算 PMO 已处理。
+6. **再等待（Wait）**：确认没有遗留 owned 进程、候选未被误改、台账和线程状态一致后，按上面的“可见 wait 防混淆硬门”启动下一次 `wait_agent(timeout_ms: 600000)` 可见等待。必须等工具返回实际等待结果后才能记为已执行。Owner 消息、legal terminal、失败、阻塞或队列完成会提前打断等待并回到第 1 步。
 
 **可选增强（不是默认）**：实时性要求高（分钟级进展都要立即知道）时才挂外部事件流——`workers/watch-worker.sh`（tail -F + 过滤）。大多数场景下 agent 原生循环足够。
 
 **会话绑定与加载范围协议（对话即项目）**：
 - **一个 PMO 会话只服务一个项目**：换项目 = 开新会话或明确声明切换（"切换到 X 项目"）；禁止混合批次
-- **开工只读本次范围**：PROJECT.md（恒定）+ STATUS.md（只含活跃任务）+ 本次相关 goal/ledger + 决策记录标题（按主题分区，扫标题选读）——**历史一概不加载**
+- **开工只读本次范围**：PROJECT.md（恒定）+ 本批次冻结 spec/graph + STATUS.md（只含活跃任务）+ 本节点 goal/ledger + 直接依赖产物 + 决策记录相关标题——**无关历史不加载**
 - **STATUS.md 只含活跃任务**：任务 done 立即从总览板移除；已完成任务按月挪入 `archive/<YYYY-MM>/`（不压缩、不做索引，能 grep 即可）
 - **批次总结**：收尾汇报需要已完成任务 → 翻当月 `archive/`（可接受的小代价）
 
@@ -214,9 +241,9 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 1. 派发时：登记日志指针到 ledger（watch 监视器的输入）
 2. 状态变化 → 更新 ledger + 移动任务目录 + 刷新 STATUS.md（三步一体）
 3. 实时：监视器事件流——worker 进展 / 完成 / 失败即时可见
-4. 卡死检测：活跃 worker 日志**静默超 20 分钟**无新输出 → 事件告警 → 查证 → 续接 / 重开 / 上报老板
+4. 卡死检测：活跃 worker 日志**静默超 20 分钟**无新输出 → 事件告警 → 查证 → 续接 / 重开 / 上报 Owner
 5. 监视器断线（重启 / 网络）→ 回退台账检查，恢复 watch——兜底是恢复手段，不是主机制
-6. 老板要进度 → 直接给 STATUS.md 摘要或实时进展，不用现场问 worker
+6. Owner 要进度 → 直接给 STATUS.md 摘要或实时进展，不用现场问 worker
 7. 只在四个时点打扰 worker：**完成、失败、卡住、要决策**
 
 **Reviewer 硬标准**（reviewer 的实现工具可按本机可用路径选择，但必须是
@@ -225,26 +252,26 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 1. **真实创建**：进入 review 状态 = 当场真实创建 reviewer 并派活（用 PROJECT.md 记录的环境可用路径），不是计划事项，禁止口头声称"等独立 review"
 2. **独立性本质**：审查上下文与实现上下文隔离（不自审）——无论什么工具形态，审查必须基于证据独立判断
 3. **证据要求**：台账必须记录 reviewer 的真实标识（会话/线程 ID + 日志路径）——**写不出证据 = 没有 reviewer = 验收无效**
-4. 老板在派发前询问工具偏好（claude 还是 codex），老板不在时 PMO 按项目配置决定；在 Codex 环境中 reviewer 用 `create_thread`，不得用 `spawn_agent` 冒充可见 reviewer
+4. 工具、可见性和权限偏好在 PROJECT/spec 冻结时一次确认；在 Codex 环境中 reviewer 用用户已授权且真实可见的独立线程，未授权或工具不存在则走 PROJECT.md 记录的可用 fallback，不得用不可见子 agent 冒充可见 reviewer
 
 **协同断点防护——PMO 主动是第一道防线**（防"worker 完成但 PMO 不知道"的僵局）：
 1. **PMO 主动看进展（主机制）**：PMO 定期主动查看——worker 日志尾部（最后写入时间 + 新事件）**和**台账（STATUS.md / ledger 状态）——**不依赖任何通知**。发现完成 → 主动启动验收；发现静默 → 主动诊断；发现等待 → 主动推进。循环挂 agent 原生能力（Codex automation / wait，Claude 后台任务）
 2. **完成必报（事件加速器）**：worker 完成 / 失败 / 卡住时按 Goal 报告协议 ping PMO + 更新台账，让 PMO 不用等下一个检查周期。**不通知 = 任务未完成**，验收闸不通过
 3. **联系信息进 Goal**：派发时把 PMO 会话 ID 与通知方式写进 Goal 的分配记录——worker 永远知道活干完了找谁
 4. **等待有归属**：任何"等待"状态在 ledger 写明**在等谁 / 等什么 / 静默多久算异常**——"worker 等 PMO 验收"这类状态必须一眼可识别
-5. **idle 兜底（最后一道）**：PMO 自身空闲（日志只有 UI 心跳）而台账有未处理完成事件 → 老板看 STATUS.md 的"最后更新"列即可发现异常，由老板唤醒或介入
+5. **idle 兜底（最后一道）**：PMO 自身空闲（日志只有 UI 心跳）而台账有未处理完成事件 → Owner 看 STATUS.md 的"最后更新"列即可发现异常，由 Owner 唤醒或介入
 
 ## 第 9 节：验收（三级闸）
 
-1. **worker 自验**：验收命令输出贴回简报末尾（说"完成了"不算）
-2. **Reviewer**：独立会话审 diff + 重跑验收命令（对照简报 + 技术方案）
-3. **老板终审**：视觉/产品/发布决策——机器审不了的部分永远留给老板
+1. **worker 自验**：验收命令输出贴回 Goal 完成区（说"完成了"不算）
+2. **Reviewer**：独立会话审 diff + 重跑验收命令（对照 Goal + 技术方案）
+3. **Owner 终审**：视觉/产品/发布决策——机器审不了的部分永远留给 Owner
 
 验收标准在 Goal 里写死（Legal terminal 二元判定），不可现场加码。写法注意：**数据级一致优先于字节级**（如 JSON 被重排格式 ≠ 数据损坏，按字段对比才算数）。
 
 ## 第 10 节：重试
 
-失败 = **带错误日志重开全新会话**（错误输出贴进新简报），不是 PMO 现场修。默认最多 3 次，超过 → `failed/` 归档，标记原因，汇报老板定夺。
+失败 = **带错误日志重开全新会话**（错误输出贴进新 Goal），不是 PMO 现场修。默认最多 3 次，超过 → `failed/` 归档，标记原因，汇报 Owner 定夺。
 
 ## 第 11 节：合并与闸
 
@@ -252,22 +279,22 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 - 每条合并后跑一次回归（tsc + 冒烟）再合下一条
 - 自动 merge 前保留 reviewer gate：独立会话审 diff（重点查项目硬性规范），通过才合入
 
-## 第 12 节：汇报（三级，不刷屏）
+## 第 12 节：汇报（关键节点，不刷屏）
 
 | 级别 | 触发 | 内容 |
 |---|---|---|
-| **例行进展** | 每次关键节点：新 worker 开工 / 故障处理完 / 里程碑达成 / 卡住 / 等待决策 | **一句话 ping 老板**：现在在做什么 / 为什么 / 下一步——不用老板问（老板不知道也是一种断点） |
+| **例行进展** | 每次关键节点：新 worker 开工 / 故障处理完 / 里程碑达成 / 卡住 / 等待决策 | **一句话 ping Owner**：现在在做什么 / 为什么 / 下一步——不用 Owner 询问 |
 | 完成汇报 | 每个任务验收后 | 一页纸（格式见 `templates/report.md`）：做了什么/验收输出/风险/下一步 |
-| 异常汇报 | 失败超重试上限、需求模糊、要老板决策 | 立即报，带建议方案 |
+| 异常汇报 | 失败超重试上限、需求模糊、要 Owner 决策 | 立即报，带建议方案 |
 | 批次总结 | 一批任务收尾 | 表格：任务/状态/耗时/成本 |
 
-## 第 13 节：codex 原生线程执行层（Codex 环境的推荐路径）
+## 第 13 节：Codex 原生线程执行层（能力存在时的推荐路径）
 
-Codex 会话内置线程管理工具（系统提示自带），agent-queue 的动作全部可映射到原生工具，替代外部机制（tmux/LaunchAgent/ping 轮询）：
+只有当前 Codex 系统提示或工具列表**真实暴露**下列线程能力时，才使用本节映射；不得因为 Skill 写了工具名就假定环境支持。工具缺失或命名不同时，按语义做能力探测并走 PROJECT.md 记录的 fallback。
 
 | agent-queue 动作 | codex 原生工具 | 说明 |
 |---|---|---|
-| 派发任务（老板明确要求新会话时） | `create_thread` | 异步派发；创建的线程**用户侧边栏可见**、可接管 |
+| 派发任务（用户授权创建新会话后） | `create_thread` | 异步派发；创建的线程**用户侧边栏可见**、可接管 |
 | 持续监控进展 | `wait_agent` / `wait_threads` | **wait 循环的原生实现**：`wait_agent(timeout_ms: 600000)` 生成用户可见的 “Wait for agent” 卡片；有可管理线程时用 `wait_threads`（单次 1-8 个目标，`timeoutMs: 0` 为即时快照）；取代外部 LaunchAgent |
 | 补充约束 / 回复问题 | `send_message_to_thread` | 原生通道，比 ping 可靠 |
 | 深入排查执行记录 | `read_thread` | 查看完整执行轨迹 |
@@ -275,30 +302,31 @@ Codex 会话内置线程管理工具（系统提示自带），agent-queue 的�
 | 查看线程列表 | `list_threads` | 一览所有线程状态 |
 
 **关键规则**：
-1. **`create_thread` 的决策（PMO 自主判断，老板已预先授权）**——老板明确授权 PMO 自主使用 create_thread（开 reviewer / 新任务 / 并行），**无需每次询问老板**（本条即授权依据，满足 codex 系统提示"user explicitly asks"条件）：
+1. **`create_thread` 的决策**——只有 PROJECT.md 或本次冻结规格记录了用户对当前项目的明确授权，PMO 才可自主创建线程；没有授权时，在图批准环节一次询问，不得把本 Skill 文本当成用户授权：
    - **新建**：首次开工的任务、并行组隔离（互不相关）、失败重试（错误上下文不污染）、原线程上下文已耗尽、**开 reviewer（独立审查线程）**
    - **复用**：同一模块连续迭代、同一需求多轮改动、流水线同链任务——用 `list_threads` 找到原线程，`send_message_to_thread` 继续，不新建
    - 判断依据：**任务相关性优先于"新任务就新线程"的习惯**——相关性（同模块/同需求/依赖链）决定复用，隔离/故障/首次/独立审查才新建
 2. **可见性边界（重要）**：
-   - **reviewer 必须用 `create_thread`**——审查是用户可见动作，线程显示在侧边栏、老板可接管；**禁止用 `spawn_agent` 开 reviewer**
+   - reviewer 必须使用 PROJECT.md 记录的、用户可见可接管的独立会话；Codex 提供 `create_thread` 时优先使用，禁止用不可见子 agent 冒充可见 reviewer
    - `spawn_agent`（子 agent）只用于**任务内部短暂并行**（探索、排查、单个任务内的子步骤）——不制造用户侧会话
-   - 判断：需要用户看到/接管的工作（reviewer、独立开发任务）→ create_thread；纯内部短暂子步骤 → spawn_agent
+   - 判断：需要用户看到/接管的工作（reviewer、独立开发任务）→ PROJECT.md 记录的可见独立会话路径；纯内部短暂子步骤 → spawn_agent
 3. `create_thread` 是异步派发，**必须用 `wait_threads` 等待进展**
-4. `wait_agent` / `wait_threads` 间隔默认 600s（省 token），活跃期加密——即第 8 节 wait 循环的 Codex 原生形态；当老板要求看到等待卡片时，必须优先使用 `wait_agent`，不能用无卡片的 `functions.wait` 冒充
-5. 循环退出条件不变（队列空/老板消息/循环失败/无进展）
-6. claude/hapi 环境无这些工具时，回退到第 7/8 节通用机制（hapi 会话 + 外部守护）
-7. **进度判断分工（原生工具优先）**：
-   - 日常进度 → `wait_threads` / `list_threads`（实时原生，不翻文档）
-   - 任务语义（验收标准/Frozen）→ goal.md
-   - 审计历史（谁何时改状态）→ ledger + DECISIONS
-   - STATUS.md 降级为**轻量视图**：状态列从线程状态同步，PMO 只维护卡点/归属/待决策项
+4. `wait_agent` / `wait_threads` 间隔默认 600s（省 token），活跃期加密——即第 8 节 wait 循环的 Codex 原生形态；当 Owner 要求看到等待卡片时，必须优先使用 `wait_agent`，不能用无卡片的 `functions.wait` 冒充
+5. 循环退出条件不变（队列空/Owner 消息/循环失败/无进展）
+6. Claude/HAPI 环境无这些工具时，回退到第 7/8 节通用机制（平台会话/消息/日志能力 + 外部守护）
+7. **进度判断分工**：
+   - 实时观察信号 → `wait_threads` / `list_threads` / HAPI 日志；这些不单独构成进度证据
+   - 任务语义与静态拓扑 → frozen spec + graph + goal
+   - 动态权威状态与审计历史 → 队列目录 + ledger + DECISIONS
+   - STATUS.md 是从权威状态整理的轻量视图；线程 active/idle 不能直接覆盖任务状态
 
 ## 规则（团队纪律）
 
-- 小任务不编排；PMO 永远不写代码
-- 验收标准写不清 → 不派发
+- 一句话只能发起分诊；复杂/模糊/高影响任务未完成上下文发现、用户澄清和规格冻结 → 不派发
+- 清晰低风险小任务退出编排后由当前会话执行；一旦进入 PMO 编排，PMO 永远不写代码
+- 验收标准写不清、开放问题未清零、图中存在假边/写入冲突/无上限循环 → 不派发
 - worker 不临场改方案，发现方案问题上报 PMO（由 PMO 决定退回专家或现场授权）
-- 专家产出物不合格（PRD 缺优先级、技术方案缺风险清单）→ 退回重写，不进派发
+- 专家产出物不合格（spec 缺不做清单/用户冻结、技术方案缺风险清单）→ 退回重写，不进派发
 - 一任务一 worktree；台账在文件系统，只有 PMO 能改状态
 - worker 说完成不算，验收命令输出才算
 - 冲突由 PMO 派发前分析解决，不在 worker 间现场解决
@@ -307,38 +335,27 @@ Codex 会话内置线程管理工具（系统提示自带），agent-queue 的�
 - **监控靠机制不靠意愿**：任何"每 X 分钟做 Y"的规则必须挂真实定时器或事件流（tail -f / cron / hooks），只写进规则而没有机制 = 不会发生
 - **PMO 开工必须创建监控机制并登记证据**（automation ID / 后台任务 / cron 行），写不出机制证据 = 未开工
 - **对话即项目**：一个 PMO 会话只服务一个项目（换项目开新会话）；开工只读本次范围（PROJECT + STATUS + 相关 goal/决策标题），历史不加载；STATUS 只含活跃任务，done 即移除
-- **PMO 关键节点例行汇报**：新 worker 开工 / 故障处理完 / 里程碑 / 卡住时，一句话 ping 老板（现在做什么/为什么/下一步）——老板不知道在干嘛，也是一种断点
+- **PMO 关键节点例行汇报**：新 worker 开工 / 故障处理完 / 里程碑 / 卡住时，一句话 ping Owner（现在做什么/为什么/下一步）
 - **文档更新绑定动作**：决策必写（DECISIONS 是决策动作的一部分）、PROJECT 开工前查完整性（缺模板字段即补录）、reviewer 验收顺带核对台账一致性——文档随迭代滚动，不靠记忆
 
 ## 第 14 节：批次完结与文档收口
 
-批次是一个明确授权范围内的任务集合，例如串行的多游戏 TestFlight
-发布。批次终态必须可从文件系统恢复，不能只依赖 PMO 聊天汇报。
+批次是同一份冻结规格和任务图覆盖的授权范围。终态必须可从文件系统恢复，不能只依赖 PMO 聊天汇报。发布平台、游戏引擎、合规字段等领域规则写入 PROJECT.md 引用的项目 Profile，不写死在通用 Skill。
 
 ### 完结闸
 
-1. 逐任务对账：任务目录已从 `active/review` 移到 `done`（或
-   `failed`），Goal/ledger/report 的 legal terminal、源版本、closure、
-   证据路径、reviewer 身份、clean/upstream 和 owned-process 清理一致。
-2. 对发布任务，逐个记录精确 App Store Connect `VALID`（或命名的
-   `BLOCKED`/失败终态）、App/Apple ID/Bundle ID、版本/build、Delivery UUID、
-   签名模式和唯一下一步。`UPLOAD SUCCEEDED` 不能作为批次完成依据。
-3. Reviewer 的真实可查身份（会话/线程 ID 与日志或 JSONL 路径）必须写入
-   任务 ledger/report；缺身份或日志证据的任务不能验收，也不能批量归档。
-4. PMO 更新组合 `STATUS.md`、`PROJECT.md`、`GAME_STATUS.md` 和发布索引；
-   追加一条 `DECISIONS.md` 批次决策，并可建立一份带日期的组合 closeout
-   文档链接所有权威记录。不要复制动态事实到技能或静态 profile。
-5. 清理只限本次拥有的进程和临时路径。精确 `VALID` 后不追加第二次
-   IPA/PCK/privacy 审计、manifest、重建或重传；受保护的当前交付和被引用
-   证据必须保留。
+1. 逐节点对账：图中每个节点都到达 `done` 或 `failed`，且依赖、路由和 Human Gate 与冻结图一致；外部阻塞以命名的 `BLOCKED` legal terminal 归入 `failed`。不得跳过 verifier 或把失败节点伪装成完成。
+2. 逐任务对账：任务目录已从 `active/review` 移到终态目录，Goal/ledger/report 的 legal terminal、源版本、closure、证据路径、reviewer 身份、工作区清洁和 owned-process 清理一致。
+3. Reviewer 的真实可查身份（会话/线程 ID 与日志路径）必须写入 ledger/report；缺身份或证据的任务不能验收，也不能批量归档。
+4. 涉及发布时，按项目 Profile 记录目标平台的精确终态、版本/构建、交付标识和唯一下一步；“已上传”“已触发”等中间事件不能冒充平台终态。
+5. PMO 更新 STATUS、发布/交付索引和 DECISIONS，并生成一份 closeout 链接冻结 spec、最终 graph、所有任务报告和开放 Human Gates。清理只限本批次拥有的进程和临时路径；被引用证据必须保留。
 
 ### 队列与 wait 终态
 
 - 批次完成且 `queue/active/`、`queue/review/` 为空时，登记
   `PMO wait: exited / batch complete`，汇报一次批次总结，然后退出 wait
   循环。不得把退出后的会话或历史 HAPI 状态描述为“仍在监控”。
-- 新任务、后续开发、Owner 试玩修复或新包必须由 Owner 新授权并创建新
-  Goal；不得从 done 任务、旧会话或旧候选推断继续执行。
+- 新任务、后续开发、用户验收修复或新发布必须由用户新授权：不改变原冻结范围的最小修复可新增图节点；改变目标、范围或验收则创建新 spec/graph 批次。不得从 done 任务、旧会话或旧候选推断继续执行。
 - 只有真实原生 `wait_agent`/`wait_threads` 返回 timeout/interruption 后，
   才能记录一次 wait 已运行。失败的 `functions.wait` 调用不产生可见卡片，
   不能写成已启动监控。
@@ -347,10 +364,12 @@ Codex 会话内置线程管理工具（系统提示自带），agent-queue 的�
 
 ```text
 批次：<name/date>
-任务：<task> | <PASS/VALID/FAIL/BLOCKED> | source/closure | reviewer/log
-发布：<app/version/build> | Delivery UUID | ASC terminal
+规格：<spec path/revision> | FROZEN by <user/time>
+图：<graph path/revision> | nodes done/failed | critical path
+任务：<task> | <PASS/FAIL/BLOCKED> | source/closure | reviewer/log
+交付：<artifact/version> | <platform terminal or N/A>
 清理：owned process/residue | repository clean/upstream
-开放门：<human/device/tester/review/publish>
+开放门：<human decision/review/publish or none>
 队列：active=<n>, review=<n>; PMO wait=<running|exited + reason>
 下一步：<唯一最短动作；批次完成时写“等待 Owner 新授权”>
 ```
