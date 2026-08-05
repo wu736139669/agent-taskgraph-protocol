@@ -52,7 +52,7 @@ Agent TaskGraph Protocol is not about opening more agents. It is about making co
 - Bash
 - Python 3
 - A working Claude Code or Codex installation
-- Access to this private repository
+- Optional network access for update checks
 
 ### 1. Clone and install
 
@@ -394,7 +394,7 @@ Keep GitHub as the canonical source and point every other listing to a tag or co
 
 | Channel | Availability | Recommended use |
 |---|---|---|
-| GitHub repository | Available now; private until the final release decision | Source, issues, reviews, and contributor history |
+| GitHub repository | Public now; the product remains Private Beta | Source, issues, reviews, and contributor history |
 | GitHub Releases | Add after the repository is public | Versioned archives, release notes, and checksums |
 | Codex / Claude Code local install | Available now | `./install.sh` links this checkout into `~/.codex/skills/agent-taskgraph` and `~/.claude/skills/agent-taskgraph` |
 | Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |

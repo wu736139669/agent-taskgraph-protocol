@@ -54,7 +54,7 @@ Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而�
 - Bash
 - Python 3
 - 已能正常使用的 Claude Code 或 Codex
-- 此 Private 仓库的访问权限
+- 用于可选更新检查的网络连接
 
 ### 1. 克隆并安装
 
@@ -389,7 +389,7 @@ GitHub 仓库应始终是唯一主源，其他目录或安装包只指向本仓�
 
 | 渠道 | 状态 | 推荐用途 |
 |---|---|---|
-| GitHub 仓库 | 现在可用；最终发布前保持 Private | 源码、Issue、评审和贡献历史 |
+| GitHub 仓库 | 现在已公开；产品仍是 Private Beta | 源码、Issue、评审和贡献历史 |
 | GitHub Releases | 仓库公开后添加 | 版本归档、CHANGELOG、校验和 |
 | Codex / Claude Code 本地安装 | 现在可用 | `./install.sh` 将 checkout 链接到 `~/.codex/skills/agent-taskgraph` 和 `~/.claude/skills/agent-taskgraph` |
 | 团队内部仓库 | 现在可用 | 在受控团队环境中放入或链接到 `.agents/skills/` |
