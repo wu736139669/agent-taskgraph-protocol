@@ -448,7 +448,7 @@ Live directories are scanned only with `--include-live`; deletion occurs only wi
 ## Runtime and Permission Model
 
 - The skill probes the current environment; it does not assume every Codex exposes `create_thread`, `wait_threads`, or similar tools.
-- Visible, owner-controllable sessions are preferred when available. Missing capabilities require an explicit fallback, not a fictional reviewer.
+- Visible, owner-controllable sessions are preferred when available. Use Claude native commands (`claude`, `claude --bg`, `claude agents`, or `claude -p`) for Claude Code and Codex native commands (`codex`, `codex exec`, or `codex resume`) for Codex. Missing capabilities require an explicit fallback, not a fictional reviewer.
 - Platform-standard permissions are the default. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project.
 - Frozen scope, worktrees, and reviewers are quality controls, not security sandboxes.
 - Dependency installs, migrations, deletion, privilege expansion, merge, and release should retain Human Gates defined in `PROJECT.md`.
@@ -465,7 +465,7 @@ It is enough to begin intake. The agent reads and triages first; complex work co
 
 ### Is HAPI required?
 
-No. HAPI is one visible-session option. Codex native threads, Claude CLI, or platform agent tools can serve as runtimes, but their real capabilities must be recorded in `PROJECT.md`.
+No. HAPI is optional. Claude native commands, Codex native commands, native threads, or another platform adapter can serve as runtimes, but their real capabilities and the selected command must be recorded in `PROJECT.md`.
 
 ### Why approve a graph after approving the spec?
 

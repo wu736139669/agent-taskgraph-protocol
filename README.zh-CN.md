@@ -443,7 +443,7 @@ claude plugin validate ./plugins/agent-taskgraph
 ## 运行时与权限
 
 - Skill 会探测当前环境，不假设每个 Codex 都有 `create_thread`、`wait_threads` 等工具。
-- 可用时优先用户可见、可接管的独立会话；不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
+- 可用时优先用户可见、可接管的独立会话。Claude Code 优先使用 `claude`、`claude --bg`、`claude agents` 或 `claude -p`；Codex 优先使用 `codex`、`codex exec` 或 `codex resume`。能力不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
 - 默认使用平台标准权限。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。
 - Frozen、worktree 和 Reviewer 是质量控制，不是安全沙箱。
 - 依赖安装、数据库迁移、删除、权限扩大、合并和发布应按 `PROJECT.md` 保留 Human Gate。

@@ -122,7 +122,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 3. **负载均衡**：都合适时给最闲的
 
 **worker 形态**（按需选）：
-- **独立可见会话（默认）**：HAPI 会话（`hapi runner` spawn）或终端会话——可见、可插手、可续接
+- **独立可见会话（默认）**：由当前平台真实提供的 `create_thread`、HAPI runner 控制面或用户打开的终端会话——可见、可插手、可续接。`hapi runner list` 只能观察，不能创建会话。
 - **无头会话**（`claude -p` / `codex exec` / 子 agent）：不可见、快速批量，适合可完全自动化的任务
 
 **worker 运行参数**：
@@ -136,6 +136,17 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 **派发用 Goal 方式**（格式见 `templates/goal.md`）：每个任务是一份 Goal——引用冻结的 `spec.md` 与 `graph.yaml` 节点，带 **Legal terminal**（"candidate ready" 或 "redesign required: <最早失败边界>" 的二元终态判定）、**Baseline/证据链**、**输入/输出与写入范围**、**Frozen**、**Estimate**。只有低风险 A 类快速任务可把最小规格和验收直接内嵌 Goal且不建图。
 
 派发动作：写 Goal（含分配记录）→ 建 worktree → spawn worker → 台账登记，Goal 移入 `active/`。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
+
+**HAPI 派发硬门（仅可选适配器）**：
+- 不得在 Claude worker/PMO 的 Bash 中直接执行 `hapi claude ...` 充当 spawn。该命令可能启动一个短暂子进程，但不会自动登记到已运行的 runner；runner 随后会把它判为 orphaned 并终止。必须使用宿主真正暴露的 HAPI runner 控制面/API，或请 Owner 在 HAPI/终端中打开会话；没有创建能力时走当前会话或无头 fallback，并在 `PROJECT.md`/ledger 记录。
+- 不得把启动命令接到 `head`、`tail`、`grep` 等会提前关闭 stdin 的管道上；HAPI wrapper 需要保持 stdin，直到 webhook 注册完成。
+- 模型标识必须作为一个完整参数传递并正确引用（例如 `deepseek-v4-flash[1m]`）；方括号未引用会被 zsh 当作 glob，导致命令根本没有执行。
+- “spawn 成功”只能在 runner 返回真实会话 ID，且 `runner list` 与 `inspect-peer`/等价状态同时确认 `active/running`、目标 cwd 和正确 flavor 后登记；shell 退出码为 0 不构成会话已启动证据。
+
+**原生命令适配（优先于 HAPI）**：
+- **Claude Code**：Owner 入口先 `cd <project>`，再使用 `claude --plugin-dir <plugin-dir>`（或已安装 Skill）；需要后台任务时，仅在 Claude 原生支持 `claude --bg`/`claude agents` 的环境使用这组命令，并记录返回的任务标识。`claude -p` 是无头 fallback。普通 Skill Bash 不得把 `claude ...` 子进程冒充成用户可见独立会话。
+- **Codex**：用户可见独立会话使用 `codex -C <project> "<prompt>"`；无头 worker 使用 `codex exec -C <project> "<prompt>"`，必要时用 `codex resume` 或 `codex exec resume` 接力。只有工具列表真实暴露 `create_thread` 时，才优先用它创建可见线程。
+- 每个 Goal 的分配记录必须写明实际 runtime（Claude native / Codex native / HAPI / fallback）、完整启动命令或原生工具名、会话/任务 ID 和日志位置；能力不存在时先报告并请求 Owner 决定，不得假装已创建。
 
 **Goal/会话交互协议（强制）**：
 - **Goal 是指令源**：首次派发必须把 Goal 文件路径（或完整内容）发给 worker，并要求先读 `PROJECT.md`、冻结规格、图中本节点及直接依赖、Goal、contract 和 ledger；只在聊天里发一段模糊任务不算派发。
@@ -315,7 +326,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 3. `create_thread` 是异步派发，**必须用 `wait_threads` 等待进展**
 4. `wait_agent` / `wait_threads` 间隔默认 600s（省 token），活跃期加密——即第 8 节 wait 循环的 Codex 原生形态；当 Owner 要求看到等待卡片时，必须优先使用 `wait_agent`，不能用无卡片的 `functions.wait` 冒充
 5. 循环退出条件不变（队列空/Owner 消息/循环失败/无进展）
-6. Claude/HAPI 环境无这些工具时，回退到第 7/8 节通用机制（平台会话/消息/日志能力 + 外部守护）
+6. Claude 环境无 `create_thread` 时，优先使用 Claude 原生 `claude --bg`/`claude agents` 或 `claude -p`；Codex 环境优先使用 `codex`/`codex exec`；HAPI 仅在其控制面真实可用时作为适配器，不能把 Bash 子进程当成可见会话
 7. **进度判断分工**：
    - 实时观察信号 → `wait_threads` / `list_threads` / HAPI 日志；这些不单独构成进度证据
    - 任务语义与静态拓扑 → frozen spec + graph + goal
