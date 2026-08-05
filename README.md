@@ -39,6 +39,7 @@ Agent TaskGraph Protocol is not about opening more agents. It is about making co
 - [Install, Update, and Uninstall](#install-update-and-uninstall)
 - [Version and Update Notices](#version-and-update-notices)
 - [Distribution Channels](#distribution-channels)
+- [Public Beta Feedback](#public-beta-feedback)
 - [Helper Commands](#helper-commands)
 - [FAQ](#faq)
 - [License](#license)
@@ -423,6 +424,12 @@ claude plugin validate ./plugins/agent-taskgraph
 ```
 
 For a standalone install, use `./install.sh`. For a directory-based install, use `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`. Both paths resolve to the same Skill content and version.
+
+## Public Beta Feedback
+
+The repository's Issues are enabled for public feedback. Start with the pinned [Public Beta feedback thread](https://github.com/wu736139669/agent-taskgraph-protocol/issues/1), or choose the [Usage feedback](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=usage-feedback.md), [Bug report](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=bug-report.md), or [Feature/workflow proposal](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=feature-request.md) template.
+
+Please remove secrets, tokens, credentials, private paths, session IDs, customer data, and other personal information before posting. Public Beta feedback is most useful when it includes the runtime, protocol version, task shape, workflow stages used, expected result, and observed result.
 
 ## Helper Commands
 

@@ -39,6 +39,7 @@ Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而�
 - [安装、更新与卸载](#安装更新与卸载)
 - [版本与更新提示](#版本与更新提示)
 - [发布渠道](#发布渠道)
+- [Public Beta 反馈](#public-beta-反馈)
 - [辅助命令](#辅助命令)
 - [常见问题](#常见问题)
 - [许可证](#许可证)
@@ -418,6 +419,12 @@ claude plugin validate ./plugins/agent-taskgraph
 ```
 
 独立安装使用 `./install.sh`；目录安装使用 `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`。两种方式都指向同一份 Skill 内容和版本。
+
+## Public Beta 反馈
+
+仓库已经开启 GitHub Issues。可以从置顶的 [Public Beta 反馈入口](https://github.com/wu736139669/agent-taskgraph-protocol/issues/1) 开始，也可以直接使用 [使用反馈模板](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=usage-feedback.md)、[Bug 模板](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=bug-report.md) 或 [功能/流程建议模板](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=feature-request.md)。
+
+发布前请删除 Secret、Token、账号凭据、本机路径、会话 ID、客户数据和其他个人信息。反馈最好包含运行时、协议版本、任务类型、使用过的流程阶段、预期结果和实际结果。
 
 ## 辅助命令
 
