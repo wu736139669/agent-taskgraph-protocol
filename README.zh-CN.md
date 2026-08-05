@@ -395,11 +395,11 @@ GitHub 仓库应始终是唯一主源，其他目录或安装包只指向本仓�
 | 团队内部仓库 | 现在可用 | 在受控团队环境中放入或链接到 `.agents/skills/` |
 | [skills.sh](https://skills.sh) | CLI 已兼容；目录收录由第三方维护 | 使用 `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph` 安装；GitHub 仍是主源 |
 | OpenAI / Codex Plugin 目录 | 包已准备，等待平台提交 | 本地验证 `plugins/agent-taskgraph` 后，通过 [OpenAI Plugin Portal](https://developers.openai.com/plugins/deploy/submission) 提交 |
-| Claude Code Plugin Marketplace | 包和 catalog 已准备，等待平台提交 | 先运行 `claude plugin validate ./plugins/agent-taskgraph`，再通过 [Claude Plugin 提交页](https://platform.claude.com/plugins/submit) 提交 |
+| Claude Code Plugin Marketplace | 已提交，等待平台审核 | 包和 catalog 已通过本地验证；平台批准前不声称已经公开上架 |
 
 发布顺序是：公开 GitHub、发布带 tag 的 GitHub Release、提交 `skills.sh` 发现入口、提交 OpenAI/Codex 包、最后提交 Claude Code Marketplace。Beta 阶段继续使用当前独立 Skill 目录最简单。平台目录的审核和更新节奏各自独立；它们都不是第二个主仓库。
 
-Git 更新检查只适用于独立 Git clone 和软链安装。Plugin Marketplace 使用各自的包更新机制；版本主线仍以 GitHub 仓库和 Release tag 为准。
+Git 更新检查只适用于独立 Git clone 和软链安装。Plugin Marketplace 使用各自的包更新机制；版本主线仍以 GitHub 仓库和 Release tag 为准。Claude Code 包已经提交审核，但在平台批准前仍不视为公开上架；OpenAI/Codex 包已准备好，但尚未完成平台提交。
 
 ### 平台包
 

@@ -39,7 +39,7 @@ npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph
 
 ## Submission status
 
-The package is prepared for review but has not been accepted into the OpenAI/Codex Plugin Directory or the Claude Code community marketplace. Submit through the platform's current publisher workflow after reviewing the root [release notes](https://github.com/wu736139669/agent-taskgraph-protocol/releases).
+The Claude Code package has been submitted and is awaiting platform review. It has not been accepted into or listed in the public directory yet. The OpenAI/Codex package is prepared but has not completed platform submission. Use the platform's current publisher workflow and the root [release notes](https://github.com/wu736139669/agent-taskgraph-protocol/releases) for future submissions and updates.
 
 Do not create a second repository for a platform submission. Use this package as the submission artifact and keep GitHub tags as the version authority.
 

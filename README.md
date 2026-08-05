@@ -400,7 +400,7 @@ Keep GitHub as the canonical source and point every other listing to a tag or co
 | Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |
 | [skills.sh](https://skills.sh) | CLI-compatible; directory listing is third-party | Install with `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`; keep GitHub as the source of truth |
 | OpenAI / Codex plugin directory | Package ready; platform submission pending | Test `plugins/agent-taskgraph` locally, then submit through the [OpenAI plugin portal](https://developers.openai.com/plugins/deploy/submission) |
-| Claude Code plugin marketplace | Package and catalog ready; platform submission pending | Validate with `claude plugin validate ./plugins/agent-taskgraph`, then submit through the [Claude plugin submission page](https://platform.claude.com/plugins/submit) |
+| Claude Code plugin marketplace | Submitted; platform review pending | The package and catalog passed local validation; the public directory listing remains unavailable until platform approval |
 
 The release order is: public GitHub repository, tagged GitHub release, `skills.sh` discovery, OpenAI/Codex package submission, then Claude Code marketplace submission. The current standalone folder remains the simplest installation path for beta users. Platform directories may approve or update packages on their own schedule; none is a second canonical repository.
 
@@ -414,7 +414,7 @@ The repository includes a self-contained package at [`plugins/agent-taskgraph`](
 - Claude Code: [`plugins/agent-taskgraph/.claude-plugin/plugin.json`](plugins/agent-taskgraph/.claude-plugin/plugin.json)
 - Claude marketplace catalog: [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)
 
-The package is prepared for review but is not claimed to be listed in either platform directory yet. To test it locally, run:
+The Claude Code package has been submitted for review but is not claimed to be publicly listed yet. The OpenAI/Codex package is prepared but has not completed platform submission. To test either package locally, run:
 
 ```bash
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py" \
