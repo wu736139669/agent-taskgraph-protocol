@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation and Quick Start
+    url: https://github.com/wu736139669/agent-taskgraph-protocol#quick-start
+    about: Read the installation, project onboarding, and workflow documentation first.
+  - name: Latest Public Beta Release
+    url: https://github.com/wu736139669/agent-taskgraph-protocol/releases/latest
+    about: Check the current version and release notes before reporting version-specific behavior.
