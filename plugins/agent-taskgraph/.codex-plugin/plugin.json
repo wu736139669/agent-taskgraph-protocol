@@ -1,0 +1,28 @@
+{
+  "name": "agent-taskgraph",
+  "version": "0.8.0-beta.2",
+  "description": "Spec-first graph orchestration for complex AI coding work in Codex.",
+  "author": {
+    "name": "wu736139669"
+  },
+  "homepage": "https://github.com/wu736139669/agent-taskgraph-protocol",
+  "repository": "https://github.com/wu736139669/agent-taskgraph-protocol",
+  "license": "Apache-2.0",
+  "keywords": [
+    "ai-coding",
+    "agent-orchestration",
+    "task-graph",
+    "graph-engineering",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agent TaskGraph",
+    "shortDescription": "Plan and verify complex AI coding work.",
+    "longDescription": "Agent TaskGraph turns complex coding requests into a clarified specification, approved task graph, verified worker work, and human-owned gates.",
+    "developerName": "wu736139669",
+    "category": "Developer Tools",
+    "capabilities": [],
+    "defaultPrompt": "Use Agent TaskGraph to clarify and verify this coding task."
+  }
+}

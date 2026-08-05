@@ -1,0 +1,16 @@
+{
+  "name": "agent-taskgraph-marketplace",
+  "owner": {
+    "name": "wu736139669",
+    "url": "https://github.com/wu736139669"
+  },
+  "plugins": [
+    {
+      "name": "agent-taskgraph",
+      "source": "./plugins/agent-taskgraph",
+      "description": "Spec-first graph orchestration for complex AI coding work.",
+      "version": "0.8.0-beta.2",
+      "license": "Apache-2.0"
+    }
+  ]
+}

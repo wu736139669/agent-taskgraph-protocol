@@ -6,9 +6,9 @@
 
 **面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
-当前版本：[`v0.8.0-beta.1`](VERSION) | 许可证：[Apache-2.0](LICENSE)
+当前版本：[`v0.8.0-beta.2`](VERSION) | 许可证：[Apache-2.0](LICENSE)
 
-> **Private Beta**：面向已经使用 Claude Code 或 Codex 的邀请用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
+> **Public Beta**：面向已经使用 Claude Code 或 Codex 的用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
 Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而是“怎样让复杂 AI coding 可理解、可控制、可验收、可恢复”。
 
@@ -42,7 +42,7 @@ Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而�
 - [辅助命令](#辅助命令)
 - [常见问题](#常见问题)
 - [许可证](#许可证)
-- [Private Beta 边界](#private-beta-边界)
+- [Beta 边界](#beta-边界)
 
 ## 快速开始
 
@@ -389,17 +389,35 @@ GitHub 仓库应始终是唯一主源，其他目录或安装包只指向本仓�
 
 | 渠道 | 状态 | 推荐用途 |
 |---|---|---|
-| GitHub 仓库 | 现在已公开；产品仍是 Private Beta | 源码、Issue、评审和贡献历史 |
-| GitHub Releases | 仓库公开后添加 | 版本归档、CHANGELOG、校验和 |
+| GitHub 仓库 | Public Beta | 唯一主源、源码、Issue、评审和贡献历史 |
+| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | 已发布 `v0.8.0-beta.2` | 版本归档和发布说明 |
 | Codex / Claude Code 本地安装 | 现在可用 | `./install.sh` 将 checkout 链接到 `~/.codex/skills/agent-taskgraph` 和 `~/.claude/skills/agent-taskgraph` |
 | 团队内部仓库 | 现在可用 | 在受控团队环境中放入或链接到 `.agents/skills/` |
-| [skills.sh](https://skills.sh) | 第三方目录，主仓库公开后再提交 | 增加发现入口；不要把它当成第二个代码主源 |
-| OpenAI / Codex Plugin 目录 | 后续包装步骤 | 用 skills-only `.codex-plugin/plugin.json` 打包，再通过 [OpenAI Plugin Portal](https://developers.openai.com/plugins/deploy/submission) 提交审核 |
-| Claude Code Plugin Marketplace | 后续包装步骤 | 增加 Claude Plugin manifest 和 marketplace 条目，参考 [Claude Code Plugin 文档](https://code.claude.com/docs/en/plugins) |
+| [skills.sh](https://skills.sh) | CLI 已兼容；目录收录由第三方维护 | 使用 `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph` 安装；GitHub 仍是主源 |
+| OpenAI / Codex Plugin 目录 | 包已准备，等待平台提交 | 本地验证 `plugins/agent-taskgraph` 后，通过 [OpenAI Plugin Portal](https://developers.openai.com/plugins/deploy/submission) 提交 |
+| Claude Code Plugin Marketplace | 包和 catalog 已准备，等待平台提交 | 先运行 `claude plugin validate ./plugins/agent-taskgraph`，再通过 [Claude Plugin 提交页](https://platform.claude.com/plugins/submit) 提交 |
 
-建议顺序是：先公开 GitHub，再发布带 tag 的 GitHub Release，然后提交第三方目录，最后制作各平台 Plugin 包。Beta 阶段继续使用当前独立 Skill 目录最简单。
+发布顺序是：公开 GitHub、发布带 tag 的 GitHub Release、提交 `skills.sh` 发现入口、提交 OpenAI/Codex 包、最后提交 Claude Code Marketplace。Beta 阶段继续使用当前独立 Skill 目录最简单。平台目录的审核和更新节奏各自独立；它们都不是第二个主仓库。
 
 Git 更新检查只适用于独立 Git clone 和软链安装。Plugin Marketplace 使用各自的包更新机制；版本主线仍以 GitHub 仓库和 Release tag 为准。
+
+### 平台包
+
+仓库已包含自包含的平台包：[`plugins/agent-taskgraph`](plugins/agent-taskgraph)。根目录 Skill 仍是唯一 canonical source，平台包只是带清单的分发副本：
+
+- Codex：[`plugins/agent-taskgraph/.codex-plugin/plugin.json`](plugins/agent-taskgraph/.codex-plugin/plugin.json)
+- Claude Code：[`plugins/agent-taskgraph/.claude-plugin/plugin.json`](plugins/agent-taskgraph/.claude-plugin/plugin.json)
+- Claude Marketplace catalog： [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)
+
+当前包已经准备好本地验证，但不声称已经进入任何平台目录。发布前可运行：
+
+```bash
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py" \
+  plugins/agent-taskgraph
+claude plugin validate ./plugins/agent-taskgraph
+```
+
+独立安装使用 `./install.sh`；目录安装使用 `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`。两种方式都指向同一份 Skill 内容和版本。
 
 ## 辅助命令
 
@@ -453,7 +471,7 @@ spec 回答“做什么、做到什么算完成”；graph 回答“谁做、依
 
 Agent TaskGraph Protocol 使用 [Apache License 2.0](LICENSE) 发布。Copyright 2026 wu736139669。具体授权、专利许可、NOTICE 要求、免责声明和责任限制以许可证全文为准。
 
-## Private Beta 边界
+## Beta 边界
 
 已经具备：
 
@@ -485,6 +503,8 @@ agent-taskgraph-protocol/
 ├── queue/
 ├── workers/
 ├── tests/
+├── plugins/agent-taskgraph/  # 平台包；根目录仍是唯一主源
+├── .claude-plugin/marketplace.json
 └── .github/workflows/test.yml
 ```
 
@@ -497,4 +517,4 @@ agent-taskgraph-protocol/
 - Codex、HAPI、Claude runtime adapters
 - 重试、通过率、耗时和 token 成本指标
 - 一个非游戏项目和一个纯 Codex 环境的脱敏案例
-- OpenAI/Codex 与 Claude Code 的 skills-only Plugin 包
+- OpenAI/Codex 与 Claude Code 平台包的提交与审核

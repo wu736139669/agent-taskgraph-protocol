@@ -6,9 +6,9 @@
 
 **Spec-first graph orchestration for AI coding agents.**
 
-Current version: [`v0.8.0-beta.1`](VERSION) | License: [Apache-2.0](LICENSE)
+Current version: [`v0.8.0-beta.2`](VERSION) | License: [Apache-2.0](LICENSE)
 
-> **Private Beta** for invited users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
+> **Public Beta** for users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
 
 Agent TaskGraph Protocol is not about opening more agents. It is about making complex AI coding understandable, controlled, verifiable, and recoverable.
 
@@ -42,7 +42,7 @@ Agent TaskGraph Protocol is not about opening more agents. It is about making co
 - [Helper Commands](#helper-commands)
 - [FAQ](#faq)
 - [License](#license)
-- [Private Beta Boundaries](#private-beta-boundaries)
+- [Beta Boundaries](#beta-boundaries)
 
 ## Quick Start
 
@@ -394,17 +394,35 @@ Keep GitHub as the canonical source and point every other listing to a tag or co
 
 | Channel | Availability | Recommended use |
 |---|---|---|
-| GitHub repository | Public now; the product remains Private Beta | Source, issues, reviews, and contributor history |
-| GitHub Releases | Add after the repository is public | Versioned archives, release notes, and checksums |
+| GitHub repository | Public Beta | Canonical source, issues, reviews, and contributor history |
+| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | `v0.8.0-beta.2` published | Versioned archives and release notes |
 | Codex / Claude Code local install | Available now | `./install.sh` links this checkout into `~/.codex/skills/agent-taskgraph` and `~/.claude/skills/agent-taskgraph` |
 | Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |
-| [skills.sh](https://skills.sh) | Third-party directory; submit after the canonical repo is public | Discovery and install links; do not make it a second source of truth |
-| OpenAI / Codex plugin directory | Future packaging step | Wrap the skill in a skills-only `.codex-plugin/plugin.json` package and submit it for review through the [OpenAI plugin portal](https://developers.openai.com/plugins/deploy/submission) |
-| Claude Code plugin marketplace | Future packaging step | Add a Claude plugin manifest and marketplace entry; see the [Claude Code plugin docs](https://code.claude.com/docs/en/plugins) |
+| [skills.sh](https://skills.sh) | CLI-compatible; directory listing is third-party | Install with `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`; keep GitHub as the source of truth |
+| OpenAI / Codex plugin directory | Package ready; platform submission pending | Test `plugins/agent-taskgraph` locally, then submit through the [OpenAI plugin portal](https://developers.openai.com/plugins/deploy/submission) |
+| Claude Code plugin marketplace | Package and catalog ready; platform submission pending | Validate with `claude plugin validate ./plugins/agent-taskgraph`, then submit through the [Claude plugin submission page](https://platform.claude.com/plugins/submit) |
 
-The practical release order is: public GitHub repository, signed/tagged GitHub release, third-party directory listing, then platform-specific plugin packages. The current standalone folder remains the simplest installation path for beta users.
+The release order is: public GitHub repository, tagged GitHub release, `skills.sh` discovery, OpenAI/Codex package submission, then Claude Code marketplace submission. The current standalone folder remains the simplest installation path for beta users. Platform directories may approve or update packages on their own schedule; none is a second canonical repository.
 
 The Git-based checker applies to standalone clones and symlink installs. Plugin marketplaces have their own package update lifecycle; keep the GitHub repository and release tag as the canonical version reference.
+
+### Platform packages
+
+The repository includes a self-contained package at [`plugins/agent-taskgraph`](plugins/agent-taskgraph) with both platform manifests:
+
+- Codex: [`plugins/agent-taskgraph/.codex-plugin/plugin.json`](plugins/agent-taskgraph/.codex-plugin/plugin.json)
+- Claude Code: [`plugins/agent-taskgraph/.claude-plugin/plugin.json`](plugins/agent-taskgraph/.claude-plugin/plugin.json)
+- Claude marketplace catalog: [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)
+
+The package is prepared for review but is not claimed to be listed in either platform directory yet. To test it locally, run:
+
+```bash
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py" \
+  plugins/agent-taskgraph
+claude plugin validate ./plugins/agent-taskgraph
+```
+
+For a standalone install, use `./install.sh`. For a directory-based install, use `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`. Both paths resolve to the same Skill content and version.
 
 ## Helper Commands
 
@@ -458,7 +476,7 @@ Only when `PROJECT.md` or the frozen batch explicitly authorizes it and the revi
 
 Agent TaskGraph Protocol is released under the [Apache License 2.0](LICENSE). Copyright 2026 wu736139669. See the license text for the permissions, patent grant, notice requirements, warranty disclaimer, and liability limits.
 
-## Private Beta Boundaries
+## Beta Boundaries
 
 Ready now:
 
@@ -490,6 +508,8 @@ agent-taskgraph-protocol/
 ├── queue/
 ├── workers/
 ├── tests/
+├── plugins/agent-taskgraph/  # platform package; root remains canonical
+├── .claude-plugin/marketplace.json
 └── .github/workflows/test.yml
 ```
 
@@ -502,4 +522,4 @@ The repository ships the operating protocol, deterministic helpers, templates, a
 - Runtime adapters for Codex, HAPI, and Claude
 - Metrics for retry count, pass rate, latency, and token cost
 - Sanitized case studies from a non-game project and a Codex-only environment
-- Skills-only plugin packages for the OpenAI/Codex and Claude Code directories
+- Platform submission and review for the OpenAI/Codex and Claude Code packages

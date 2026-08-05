@@ -44,7 +44,7 @@ git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
 git -C "$TMP/update-local" push -u origin main >/dev/null
 
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
-grep -q 'version: 0.8.0-beta.1' "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.2' "$TMP/update-current.out"
 grep -q 'Update status: current' "$TMP/update-current.out"
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
 [ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
@@ -77,7 +77,7 @@ assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
-grep -q 'Version: 0.8.0-beta.1' "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.2' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -176,14 +176,14 @@ HOME="$TMP/home-logs" "$ROOT/workers/log-cleanup.sh" --days 1 --include-live --a
 [ ! -e "$TMP/home-logs/.codex/sessions/live.jsonl" ] || fail "explicit live cleanup missed Codex log"
 [ ! -e "$TMP/home-logs/.hapi/logs/live.log" ] || fail "explicit live cleanup missed HAPI log"
 
-echo "[7/7] skill metadata, templates, links, version, license, and graph YAML"
+echo "[7/8] skill metadata, templates, links, version, license, and graph YAML"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import re
 import sys
 
 root = Path(sys.argv[1])
-assert (root / "VERSION").read_text().strip() == "0.8.0-beta.1"
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.2"
 assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
@@ -206,5 +206,68 @@ fi
 if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git -C "$ROOT" diff --check
 fi
+
+echo "[8/8] platform plugin package and marketplace catalog"
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+root = Path(sys.argv[1])
+version = (root / "VERSION").read_text().strip()
+package = root / "plugins" / "agent-taskgraph"
+assert package.is_dir(), "missing plugin package"
+
+required = (
+    ".codex-plugin/plugin.json",
+    ".claude-plugin/plugin.json",
+    "LICENSE",
+    "README.md",
+    "skills/agent-taskgraph/SKILL.md",
+    "skills/agent-taskgraph/VERSION",
+    "skills/agent-taskgraph/agents/openai.yaml",
+    "skills/agent-taskgraph/init.sh",
+    "skills/agent-taskgraph/scripts/check-update.sh",
+    "skills/agent-taskgraph/templates/PROJECT.md",
+    "skills/agent-taskgraph/workers/parse-worker-log.py",
+)
+for relative in required:
+    assert (package / relative).is_file(), f"missing plugin file: {relative}"
+
+for manifest_name in (".codex-plugin/plugin.json", ".claude-plugin/plugin.json"):
+    manifest = json.loads((package / manifest_name).read_text())
+    assert manifest["name"] == "agent-taskgraph"
+    assert manifest["version"] == version, f"version drift in {manifest_name}"
+    assert manifest["license"] == "Apache-2.0"
+
+assert (package / "skills/agent-taskgraph/VERSION").read_text().strip() == version
+assert (package / "skills/agent-taskgraph/SKILL.md").read_text() == (root / "SKILL.md").read_text()
+assert (package / "LICENSE").read_text() == (root / "LICENSE").read_text()
+for relative in (
+    "init.sh",
+    "scripts/check-update.sh",
+    "agents/openai.yaml",
+    "templates/PROJECT.md",
+    "templates/STATUS.md",
+    "templates/DECISIONS.md",
+    "templates/spec.md",
+    "templates/graph.yaml",
+    "templates/goal.md",
+    "templates/ledger.md",
+    "templates/report.md",
+    "workers/log-cleanup.sh",
+    "workers/parse-worker-log.py",
+    "workers/watch-worker.sh",
+):
+    packaged = package / "skills/agent-taskgraph" / relative
+    canonical = root / relative
+    assert packaged.read_text() == canonical.read_text(), f"package drift: {relative}"
+
+catalog = json.loads((root / ".claude-plugin/marketplace.json").read_text())
+assert catalog["name"] == "agent-taskgraph-marketplace"
+assert catalog["plugins"][0]["name"] == "agent-taskgraph"
+assert catalog["plugins"][0]["source"] == "./plugins/agent-taskgraph"
+assert catalog["plugins"][0]["version"] == version
+PY
 
 echo "All smoke tests passed."
