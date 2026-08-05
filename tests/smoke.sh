@@ -14,8 +14,9 @@ assert_file() { [ -f "$1" ] || fail "missing file: $1"; }
 assert_dir() { [ -d "$1" ] || fail "missing directory: $1"; }
 assert_link_to() { [ -L "$1" ] && [ "$(readlink "$1")" = "$2" ] || fail "unexpected symlink: $1"; }
 
-echo "[1/6] shell and Python syntax"
-bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/workers/watch-worker.sh" "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
+echo "[1/7] shell and Python syntax"
+bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" \
+  "$ROOT/workers/watch-worker.sh" "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
 python3 - "$ROOT/workers/parse-worker-log.py" <<'PY'
 from pathlib import Path
 import sys
@@ -24,17 +25,59 @@ source = Path(sys.argv[1]).read_text()
 compile(source, sys.argv[1], "exec")
 PY
 
-echo "[2/6] Codex log parser fixtures"
+echo "[2/7] Codex log parser fixtures"
 python3 "$ROOT/workers/parse-worker-log.py" --format jsonl \
   < "$ROOT/tests/fixtures/codex-events.jsonl" > "$TMP/parser.out"
 diff -u "$ROOT/tests/fixtures/codex-events.expected" "$TMP/parser.out"
 
-echo "[3/6] install, status, conflict, force, and uninstall"
+echo "[3/7] update checker states"
+git init --bare "$TMP/update-remote.git" >/dev/null
+git init "$TMP/update-local" >/dev/null
+git -C "$TMP/update-local" checkout -b main >/dev/null
+git -C "$TMP/update-local" config user.name "Agent TaskGraph Tests"
+git -C "$TMP/update-local" config user.email "tests@example.invalid"
+cp "$ROOT/VERSION" "$TMP/update-local/VERSION"
+echo initial > "$TMP/update-local/tracked.txt"
+git -C "$TMP/update-local" add VERSION tracked.txt
+git -C "$TMP/update-local" commit -m initial >/dev/null
+git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
+git -C "$TMP/update-local" push -u origin main >/dev/null
+
+AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.1' "$TMP/update-current.out"
+grep -q 'Update status: current' "$TMP/update-current.out"
+AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
+[ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
+AGENT_TASKGRAPH_ROOT="$TMP/update-local" AGENT_TASKGRAPH_SKIP_UPDATE_CHECK=1 \
+  "$ROOT/scripts/check-update.sh" > "$TMP/update-disabled.out"
+grep -q 'disabled by AGENT_TASKGRAPH_SKIP_UPDATE_CHECK=1' "$TMP/update-disabled.out"
+
+git clone --quiet --branch main "$TMP/update-remote.git" "$TMP/update-publisher"
+git -C "$TMP/update-publisher" config user.name "Agent TaskGraph Tests"
+git -C "$TMP/update-publisher" config user.email "tests@example.invalid"
+echo remote-update >> "$TMP/update-publisher/tracked.txt"
+git -C "$TMP/update-publisher" add tracked.txt
+git -C "$TMP/update-publisher" commit -m update >/dev/null
+git -C "$TMP/update-publisher" push origin main >/dev/null
+AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-available.out"
+grep -q 'Update available:' "$TMP/update-available.out"
+grep -q 'pull --ff-only' "$TMP/update-available.out"
+git -C "$TMP/update-local" pull --ff-only >/dev/null
+AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-after-pull.out"
+grep -q 'Update status: current' "$TMP/update-after-pull.out"
+
+mkdir -p "$TMP/update-not-git"
+cp "$ROOT/VERSION" "$TMP/update-not-git/VERSION"
+AGENT_TASKGRAPH_ROOT="$TMP/update-not-git" "$ROOT/scripts/check-update.sh" > "$TMP/update-unavailable.out"
+grep -q 'Update status: unavailable' "$TMP/update-unavailable.out"
+
+echo "[4/7] install, status, conflict, force, and uninstall"
 HOME="$TMP/home-install" "$ROOT/install.sh" > "$TMP/install.out"
 assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.1' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -71,7 +114,7 @@ find "$TMP/home-conflict/.claude/skills" -maxdepth 1 -name 'agent-taskgraph.back
   > "$TMP/backups.out"
 [ -s "$TMP/backups.out" ] || fail "forced install did not create a backup"
 
-echo "[4/6] project initialization preserves existing files"
+echo "[5/7] project initialization preserves existing files"
 mkdir -p "$TMP/project"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/init.out"
 for state in inbox active review done failed; do
@@ -105,7 +148,7 @@ fi
 assert_dir "$TMP/project-both/.agent-queue"
 assert_dir "$TMP/project-both/.agent-taskgraph"
 
-echo "[5/6] cleanup is dry-run and archived-only by default"
+echo "[6/7] cleanup is dry-run and archived-only by default"
 mkdir -p "$TMP/home-logs/.codex/archived_sessions" "$TMP/home-logs/.codex/sessions" "$TMP/home-logs/.hapi/logs"
 touch "$TMP/home-logs/.codex/archived_sessions/old.jsonl" \
   "$TMP/home-logs/.codex/sessions/live.jsonl" "$TMP/home-logs/.hapi/logs/live.log"
@@ -133,13 +176,15 @@ HOME="$TMP/home-logs" "$ROOT/workers/log-cleanup.sh" --days 1 --include-live --a
 [ ! -e "$TMP/home-logs/.codex/sessions/live.jsonl" ] || fail "explicit live cleanup missed Codex log"
 [ ! -e "$TMP/home-logs/.hapi/logs/live.log" ] || fail "explicit live cleanup missed HAPI log"
 
-echo "[6/6] skill metadata, templates, links, and graph YAML"
+echo "[7/7] skill metadata, templates, links, version, license, and graph YAML"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import re
 import sys
 
 root = Path(sys.argv[1])
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.1"
+assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
 assert "description:" in skill.split("---", 2)[1]

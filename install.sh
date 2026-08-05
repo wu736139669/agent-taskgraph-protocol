@@ -7,16 +7,20 @@ CLAUDE_DEST="$HOME/.claude/skills/agent-taskgraph"
 CODEX_DEST="$HOME/.codex/skills/agent-taskgraph"
 LEGACY_CLAUDE_DEST="$HOME/.claude/skills/agent-queue"
 LEGACY_CODEX_DEST="$HOME/.codex/skills/agent-queue"
+VERSION_FILE="$SRC/VERSION"
+UPDATE_CHECKER="$SRC/scripts/check-update.sh"
 ACTION="install"
 FORCE=0
 ACTION_SET=0
 
 usage() {
   cat <<'EOF'
-Usage: ./install.sh [--force] | --status | --uninstall
+Usage: ./install.sh [--force] | --status | --check-update | --uninstall
 
   --force      Back up a conflicting install, then create the symlink.
-  --status     Show the current Claude Code and Codex skill targets.
+  --status     Show the version and current Claude Code/Codex skill targets.
+  --check-update
+               Fetch remote metadata and report whether an update is available.
   --uninstall  Remove only current or legacy symlinks pointing to this source.
 
 Owned legacy agent-queue symlinks are removed after a successful install.
@@ -26,7 +30,7 @@ EOF
 set_action() {
   local action="$1"
   if [ "$ACTION_SET" -eq 1 ]; then
-    echo "Choose only one of --status and --uninstall." >&2
+    echo "Choose only one action." >&2
     usage >&2
     exit 2
   fi
@@ -38,6 +42,7 @@ for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
     --status) set_action "status" ;;
+    --check-update) set_action "check-update" ;;
     --uninstall) set_action "uninstall" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
@@ -140,12 +145,28 @@ migrate_legacy_one() {
   fi
 }
 
+show_version() {
+  if [ -f "$VERSION_FILE" ]; then
+    printf 'Version: %s\n' "$(tr -d '\r\n' < "$VERSION_FILE")"
+  else
+    echo "Version: unknown"
+  fi
+}
+
 case "$ACTION" in
   status)
+    show_version
     describe "Claude Code" "$CLAUDE_DEST"
     describe "Codex" "$CODEX_DEST"
     describe_legacy "Claude Code" "$LEGACY_CLAUDE_DEST"
     describe_legacy "Codex" "$LEGACY_CODEX_DEST"
+    ;;
+  check-update)
+    if [ ! -x "$UPDATE_CHECKER" ]; then
+      echo "Update checker is missing or not executable: $UPDATE_CHECKER" >&2
+      exit 1
+    fi
+    "$UPDATE_CHECKER"
     ;;
   uninstall)
     uninstall_one "Claude Code" "$CLAUDE_DEST"
@@ -161,6 +182,8 @@ case "$ACTION" in
     migrate_legacy_one "Claude Code" "$LEGACY_CLAUDE_DEST"
     migrate_legacy_one "Codex" "$LEGACY_CODEX_DEST"
     echo
+    show_version
     echo "Installed. Start a new session and ask: use agent-taskgraph for this project."
+    echo "Update check: ./install.sh --check-update"
     ;;
 esac

@@ -6,6 +6,8 @@
 
 **面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
+当前版本：[`v0.8.0-beta.1`](VERSION) | 许可证：[Apache-2.0](LICENSE)
+
 > **Private Beta**：面向已经使用 Claude Code 或 Codex 的邀请用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
 Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而是“怎样让复杂 AI coding 可理解、可控制、可验收、可恢复”。
@@ -35,8 +37,11 @@ Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而�
 - [Graph Engineering](#graph-engineering-在这里是什么意思)
 - [怎样查看进度](#怎样查看进度)
 - [安装、更新与卸载](#安装更新与卸载)
+- [版本与更新提示](#版本与更新提示)
+- [发布渠道](#发布渠道)
 - [辅助命令](#辅助命令)
 - [常见问题](#常见问题)
+- [许可证](#许可证)
 - [Private Beta 边界](#private-beta-边界)
 
 ## 快速开始
@@ -66,6 +71,8 @@ cd agent-taskgraph-protocol
 - Codex：`~/.codex/skills/agent-taskgraph`
 
 正常的状态输出会显示两个目标都指向当前仓库。安装器默认拒绝覆盖已有同名路径；不要一上来使用 `--force`，先运行 `--status` 看清冲突来源。
+
+`--status` 只检查本地状态。需要检查远程是否有新版本时运行 `./install.sh --check-update`；它不会修改工作区、自动 pull 或合并代码。
 
 ### 2. 初始化目标项目
 
@@ -328,6 +335,23 @@ find .agent-taskgraph/queue -mindepth 2 -maxdepth 2 -type d | sort
 ./install.sh --status
 ```
 
+### 版本与更新提示
+
+当前协议版本记录在 [`VERSION`](VERSION)。检查配置的 Git 远程是否有新提交：
+
+```bash
+./install.sh --check-update
+```
+
+这个命令只抓取远程元数据（Git 可能刷新 `.git/FETCH_HEAD`），不会修改工作区或执行合并。状态含义：
+
+- `current`：本地 checkout 与配置的分支一致
+- `Update available`：存在可 fast-forward 的提交；确认后再运行 `git pull --ff-only`
+- `Update warning`：本地与远程历史分叉，需要手工对账
+- `unavailable`：无网络、不是 Git checkout 或没有远程权限；不阻塞当前工作
+
+Skill 被使用时，PMO 只在 Owner 入口会话开始时用 `--quiet` 检查一次。有更新只提示 Owner，不自动更新；Worker 和 Reviewer 不重复检查。一个已经冻结的批次继续使用 `PROJECT.md` 记录的协议版本，更新放到新批次前由 Owner 决定。离线环境可设置 `AGENT_TASKGRAPH_SKIP_UPDATE_CHECK=1`。
+
 ### 更新
 
 ```bash
@@ -358,6 +382,24 @@ git pull --ff-only
 ```
 
 卸载只删除指向当前 checkout 的现用 Skill 软链或旧版兼容软链，不删除 Agent TaskGraph Protocol 仓库，也不删除任何项目的 `.agent-taskgraph/`。
+
+## 发布渠道
+
+GitHub 仓库应始终是唯一主源，其他目录或安装包只指向本仓库的 tag 或 commit。
+
+| 渠道 | 状态 | 推荐用途 |
+|---|---|---|
+| GitHub 仓库 | 现在可用；最终发布前保持 Private | 源码、Issue、评审和贡献历史 |
+| GitHub Releases | 仓库公开后添加 | 版本归档、CHANGELOG、校验和 |
+| Codex / Claude Code 本地安装 | 现在可用 | `./install.sh` 将 checkout 链接到 `~/.codex/skills/agent-taskgraph` 和 `~/.claude/skills/agent-taskgraph` |
+| 团队内部仓库 | 现在可用 | 在受控团队环境中放入或链接到 `.agents/skills/` |
+| [skills.sh](https://skills.sh) | 第三方目录，主仓库公开后再提交 | 增加发现入口；不要把它当成第二个代码主源 |
+| OpenAI / Codex Plugin 目录 | 后续包装步骤 | 用 skills-only `.codex-plugin/plugin.json` 打包，再通过 [OpenAI Plugin Portal](https://developers.openai.com/plugins/deploy/submission) 提交审核 |
+| Claude Code Plugin Marketplace | 后续包装步骤 | 增加 Claude Plugin manifest 和 marketplace 条目，参考 [Claude Code Plugin 文档](https://code.claude.com/docs/en/plugins) |
+
+建议顺序是：先公开 GitHub，再发布带 tag 的 GitHub Release，然后提交第三方目录，最后制作各平台 Plugin 包。Beta 阶段继续使用当前独立 Skill 目录最简单。
+
+Git 更新检查只适用于独立 Git clone 和软链安装。Plugin Marketplace 使用各自的包更新机制；版本主线仍以 GitHub 仓库和 Release tag 为准。
 
 ## 辅助命令
 
@@ -407,6 +449,10 @@ spec 回答“做什么、做到什么算完成”；graph 回答“谁做、依
 
 只有 `PROJECT.md` 或当前冻结规格明确授权，且 Reviewer 和对应 Human Gate 已通过时才可以。Skill 文本本身不构成授权。
 
+## 许可证
+
+Agent TaskGraph Protocol 使用 [Apache License 2.0](LICENSE) 发布。Copyright 2026 wu736139669。具体授权、专利许可、NOTICE 要求、免责声明和责任限制以许可证全文为准。
+
 ## Private Beta 边界
 
 已经具备：
@@ -422,16 +468,19 @@ spec 回答“做什么、做到什么算完成”；graph 回答“谁做、依
 - 没有 `dispatch.sh` 和 `run-worker.sh`；派发仍由运行中的 Agent 调用平台工具
 - 没有确定性的 graph validator、ready-node 计算器和状态迁移 CLI
 - 跨运行时效果仍取决于实际工具能力和 Agent 是否正确遵循 `SKILL.md`
-- 当前没有公共 LICENSE 和稳定版本保证；公开发布前需要选择许可证并建立版本说明
+- 当前没有稳定版本保证；公开发布前仍需完成版本策略、公开历史审查和平台 Plugin 包决策
 
 ## 仓库结构
 
 ```text
 agent-taskgraph-protocol/
 ├── SKILL.md
+├── VERSION
+├── LICENSE
 ├── agents/openai.yaml
 ├── install.sh
 ├── init.sh
+├── scripts/
 ├── templates/
 ├── queue/
 ├── workers/
@@ -448,3 +497,4 @@ agent-taskgraph-protocol/
 - Codex、HAPI、Claude runtime adapters
 - 重试、通过率、耗时和 token 成本指标
 - 一个非游戏项目和一个纯 Codex 环境的脱敏案例
+- OpenAI/Codex 与 Claude Code 的 skills-only Plugin 包

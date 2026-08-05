@@ -10,6 +10,8 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **实例根目录**：本文中的 `PROJECT.md`、`STATUS.md`、`DECISIONS.md`、`spec.md`、`graph.yaml`、`queue/` 和 `archive/` 都相对于目标项目的 `.agent-taskgraph/`。首次使用若该目录不存在，运行本 Skill 自带的 `init.sh <目标项目>`；旧版 `.agent-queue/` 必须由 Owner 审阅后显式运行 `init.sh --migrate <目标项目>`。不得把真实项目状态写进 Skill 安装目录自带的空队列。
 
+**版本与更新提示**：只在 Owner 入口会话首次启用本 Skill 时，从本 Skill 目录运行一次 `scripts/check-update.sh --quiet`；worker、reviewer 和同会话后续轮次不重复检查。输出为空或联网失败时继续当前任务；出现 `Update available:` 或 `Update warning:` 时，先用一句话告知 Owner 和建议命令，**不得自动 pull、切换版本或重启会话**。活跃批次继续使用 `PROJECT.md` 记录的协议版本，更新放到新批次前由 Owner 决定。
+
 ## 第 0 节：团队结构与职责边界
 
 | 角色 | 形态 | 职责 | 边界 |
@@ -26,7 +28,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 2. 分析技术栈与模块划分 → **推断岗位配置**（如 UI/数据/后端/测试 worker，无需用户预先指定）
 3. 分析测试与构建命令 → 定各岗位验收命令
 4. 识别硬性规范与共享文件锁
-5. 写入 `PROJECT.md`，请 Owner 确认
+5. 从本 Skill 的 `VERSION` 写入当前协议版本，并把接入结果写入 `PROJECT.md`，请 Owner 确认
 
 ## 第 1 节：接入、上下文发现与分诊（必做）
 

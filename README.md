@@ -6,6 +6,8 @@
 
 **Spec-first graph orchestration for AI coding agents.**
 
+Current version: [`v0.8.0-beta.1`](VERSION) | License: [Apache-2.0](LICENSE)
+
 > **Private Beta** for invited users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
 
 Agent TaskGraph Protocol is not about opening more agents. It is about making complex AI coding understandable, controlled, verifiable, and recoverable.
@@ -35,8 +37,11 @@ Agent TaskGraph Protocol is not about opening more agents. It is about making co
 - [Graph Engineering](#graph-engineering-for-ai-coding)
 - [Checking Progress](#checking-progress)
 - [Install, Update, and Uninstall](#install-update-and-uninstall)
+- [Version and Update Notices](#version-and-update-notices)
+- [Distribution Channels](#distribution-channels)
 - [Helper Commands](#helper-commands)
 - [FAQ](#faq)
+- [License](#license)
 - [Private Beta Boundaries](#private-beta-boundaries)
 
 ## Quick Start
@@ -64,6 +69,8 @@ The installer safely links the same checkout into:
 - Codex: `~/.codex/skills/agent-taskgraph`
 
 Existing paths are refused by default. Do not begin with `--force`; inspect the conflict with `--status` first.
+
+`--status` is local-only. Run `./install.sh --check-update` when you want to check the configured Git remote; the check never changes the working tree, pulls, or merges code.
 
 ### 2. Initialize the target project
 
@@ -333,6 +340,23 @@ Never store API keys, account credentials, private keys, or user data in these f
 ./install.sh --status
 ```
 
+### Version and Update Notices
+
+The current protocol version is stored in [`VERSION`](VERSION). Check for a newer commit without changing the checkout:
+
+```bash
+./install.sh --check-update
+```
+
+The command fetches remote metadata only (Git may refresh `.git/FETCH_HEAD`). It reports one of these states:
+
+- `current`: local checkout matches the configured branch
+- `Update available`: fast-forwardable commits exist; review, then run `git pull --ff-only`
+- `Update warning`: local and remote history diverged; reconcile manually
+- `unavailable`: no network, Git checkout, or remote access; continue without blocking work
+
+When the Skill is used, the PMO checks once at the start of the Owner's entry session with `--quiet`. An available update is shown to the Owner, never applied automatically. Worker and reviewer sessions do not repeat the check, and an active frozen batch stays on the protocol version recorded in its `PROJECT.md`. Set `AGENT_TASKGRAPH_SKIP_UPDATE_CHECK=1` for an offline environment.
+
 ### Update
 
 ```bash
@@ -363,6 +387,24 @@ For the Agent Queue → Agent TaskGraph rename, run `./install.sh` once after up
 ```
 
 Uninstall removes only current or legacy skill links that point to this checkout. It does not remove the checkout or any project's `.agent-taskgraph/`.
+
+## Distribution Channels
+
+Keep GitHub as the canonical source and point every other listing to a tag or commit from this repository.
+
+| Channel | Availability | Recommended use |
+|---|---|---|
+| GitHub repository | Available now; private until the final release decision | Source, issues, reviews, and contributor history |
+| GitHub Releases | Add after the repository is public | Versioned archives, release notes, and checksums |
+| Codex / Claude Code local install | Available now | `./install.sh` links this checkout into `~/.codex/skills/agent-taskgraph` and `~/.claude/skills/agent-taskgraph` |
+| Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |
+| [skills.sh](https://skills.sh) | Third-party directory; submit after the canonical repo is public | Discovery and install links; do not make it a second source of truth |
+| OpenAI / Codex plugin directory | Future packaging step | Wrap the skill in a skills-only `.codex-plugin/plugin.json` package and submit it for review through the [OpenAI plugin portal](https://developers.openai.com/plugins/deploy/submission) |
+| Claude Code plugin marketplace | Future packaging step | Add a Claude plugin manifest and marketplace entry; see the [Claude Code plugin docs](https://code.claude.com/docs/en/plugins) |
+
+The practical release order is: public GitHub repository, signed/tagged GitHub release, third-party directory listing, then platform-specific plugin packages. The current standalone folder remains the simplest installation path for beta users.
+
+The Git-based checker applies to standalone clones and symlink installs. Plugin marketplaces have their own package update lifecycle; keep the GitHub repository and release tag as the canonical version reference.
 
 ## Helper Commands
 
@@ -412,6 +454,10 @@ Use the resume prompt above. The PMO reconciles file state, branches, worktrees,
 
 Only when `PROJECT.md` or the frozen batch explicitly authorizes it and the reviewer plus corresponding Human Gate have passed. The skill text itself is not authorization.
 
+## License
+
+Agent TaskGraph Protocol is released under the [Apache License 2.0](LICENSE). Copyright 2026 wu736139669. See the license text for the permissions, patent grant, notice requirements, warranty disclaimer, and liability limits.
+
 ## Private Beta Boundaries
 
 Ready now:
@@ -427,16 +473,19 @@ Not yet implemented or guaranteed:
 - No `dispatch.sh` or `run-worker.sh`; the active agent still invokes runtime tools
 - No deterministic graph validator, ready-node calculator, or queue-transition CLI
 - Cross-runtime quality still depends on actual tool capabilities and adherence to `SKILL.md`
-- No public license or stable-version guarantee; public release needs a license and release policy
+- No stable-version guarantee; public release still needs a release policy, public-history review, and platform-specific packaging decisions
 
 ## Repository Layout
 
 ```text
 agent-taskgraph-protocol/
 ├── SKILL.md
+├── VERSION
+├── LICENSE
 ├── agents/openai.yaml
 ├── install.sh
 ├── init.sh
+├── scripts/
 ├── templates/
 ├── queue/
 ├── workers/
@@ -453,3 +502,4 @@ The repository ships the operating protocol, deterministic helpers, templates, a
 - Runtime adapters for Codex, HAPI, and Claude
 - Metrics for retry count, pass rate, latency, and token cost
 - Sanitized case studies from a non-game project and a Codex-only environment
+- Skills-only plugin packages for the OpenAI/Codex and Claude Code directories
