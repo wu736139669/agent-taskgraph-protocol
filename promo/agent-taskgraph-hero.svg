@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="700" viewBox="0 0 1600 700" role="img" aria-labelledby="title desc">
+  <title id="title">Agent TaskGraph Protocol</title>
+  <desc id="desc">A graph-engineered delivery path from context to verified release.</desc>
+  <rect width="1600" height="700" fill="#111827"/>
+  <path d="M0 560H1600" stroke="#263449" stroke-width="2"/>
+  <path d="M0 130H1600" stroke="#263449" stroke-width="2"/>
+
+  <text x="110" y="150" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="700">AGENT TASKGRAPH</text>
+  <text x="114" y="205" fill="#a7f3d0" font-family="Arial, Helvetica, sans-serif" font-size="25" letter-spacing="0">GRAPH-ENGINEERED DELIVERY FOR AI CODING AGENTS</text>
+  <text x="114" y="265" fill="#cbd5e1" font-family="Arial, Helvetica, sans-serif" font-size="24">Context first. Frozen scope. Verified work. Human-owned gates.</text>
+
+  <g fill="none" stroke="#64748b" stroke-width="5" stroke-linecap="round">
+    <path d="M210 430H430"/>
+    <path d="M510 430H730"/>
+    <path d="M810 430H1030"/>
+    <path d="M1110 430H1330"/>
+  </g>
+  <g fill="#64748b">
+    <path d="M430 430l-20-14v28z"/>
+    <path d="M730 430l-20-14v28z"/>
+    <path d="M1030 430l-20-14v28z"/>
+    <path d="M1330 430l-20-14v28z"/>
+  </g>
+
+  <g font-family="Arial, Helvetica, sans-serif" text-anchor="middle">
+    <g>
+      <rect x="100" y="370" width="190" height="120" rx="8" fill="#fef3c7"/>
+      <circle cx="145" cy="410" r="14" fill="#f59e0b"/>
+      <text x="195" y="425" fill="#422006" font-size="24" font-weight="700">CONTEXT</text>
+      <text x="195" y="460" fill="#78350f" font-size="18">discover</text>
+    </g>
+    <g>
+      <rect x="400" y="370" width="190" height="120" rx="8" fill="#dbeafe"/>
+      <circle cx="445" cy="410" r="14" fill="#2563eb"/>
+      <text x="495" y="425" fill="#172554" font-size="24" font-weight="700">SPEC</text>
+      <text x="495" y="460" fill="#1e3a8a" font-size="18">freeze</text>
+    </g>
+    <g>
+      <rect x="700" y="370" width="190" height="120" rx="8" fill="#dcfce7"/>
+      <circle cx="745" cy="410" r="14" fill="#16a34a"/>
+      <text x="795" y="425" fill="#052e16" font-size="24" font-weight="700">WORKERS</text>
+      <text x="795" y="460" fill="#166534" font-size="18">execute</text>
+    </g>
+    <g>
+      <rect x="1000" y="370" width="190" height="120" rx="8" fill="#fce7f3"/>
+      <circle cx="1045" cy="410" r="14" fill="#db2777"/>
+      <text x="1095" y="425" fill="#500724" font-size="24" font-weight="700">VERIFY</text>
+      <text x="1095" y="460" fill="#9d174d" font-size="18">review</text>
+    </g>
+    <g>
+      <rect x="1300" y="370" width="190" height="120" rx="8" fill="#ede9fe"/>
+      <circle cx="1345" cy="410" r="14" fill="#7c3aed"/>
+      <text x="1395" y="425" fill="#2e1065" font-size="24" font-weight="700">DELIVER</text>
+      <text x="1395" y="460" fill="#5b21b6" font-size="18">human gate</text>
+    </g>
+  </g>
+
+  <text x="114" y="625" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="20">AGENT TASKGRAPH PROTOCOL  /  SPEC → GRAPH → WORK → EVIDENCE</text>
+</svg>

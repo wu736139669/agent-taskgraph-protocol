@@ -1,12 +1,14 @@
-![Agent Queue](promo/agent-queue-hero-title.png)
+![Agent TaskGraph Protocol](promo/agent-taskgraph-hero.svg)
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-# Agent Queue
+# Agent TaskGraph Protocol
 
-> **Private Beta** for invited users who already work with Claude Code or Codex. Agent Queue is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
+**Spec-first graph orchestration for AI coding agents.**
 
-Agent Queue is not about opening more agents. It is about making complex AI coding understandable, controlled, verifiable, and recoverable.
+> **Private Beta** for invited users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
+
+Agent TaskGraph Protocol is not about opening more agents. It is about making complex AI coding understandable, controlled, verifiable, and recoverable.
 
 - Clear, low-risk work keeps the single-agent fast path.
 - Complex, vague, or high-impact work starts with repository discovery and owner clarification, then freezes a specification and task graph.
@@ -50,22 +52,22 @@ Agent Queue is not about opening more agents. It is about making complex AI codi
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/wu736139669/agent-queue.git
-cd agent-queue
+git clone https://github.com/wu736139669/agent-taskgraph-protocol.git
+cd agent-taskgraph-protocol
 ./install.sh
 ./install.sh --status
 ```
 
 The installer safely links the same checkout into:
 
-- Claude Code: `~/.claude/skills/agent-queue`
-- Codex: `~/.codex/skills/agent-queue`
+- Claude Code: `~/.claude/skills/agent-taskgraph`
+- Codex: `~/.codex/skills/agent-taskgraph`
 
 Existing paths are refused by default. Do not begin with `--force`; inspect the conflict with `--status` first.
 
 ### 2. Initialize the target project
 
-From the Agent Queue checkout:
+From the Agent TaskGraph Protocol checkout:
 
 ```bash
 ./init.sh /path/to/your-project
@@ -75,7 +77,7 @@ Or from the target project through the installed Codex link:
 
 ```bash
 cd /path/to/your-project
-~/.codex/skills/agent-queue/init.sh .
+~/.codex/skills/agent-taskgraph/init.sh .
 ```
 
 Use `.claude` instead of `.codex` for the Claude Code link.
@@ -83,7 +85,7 @@ Use `.claude` instead of `.codex` for the Claude Code link.
 Initialization creates:
 
 ```text
-your-project/.agent-queue/
+your-project/.agent-taskgraph/
 ├── PROJECT.md
 ├── STATUS.md
 ├── DECISIONS.md
@@ -94,25 +96,31 @@ your-project/.agent-queue/
 
 Running it again preserves existing files.
 
+Existing Agent Queue beta projects are never moved implicitly. Review their state, then migrate explicitly:
+
+```bash
+./init.sh --migrate /path/to/your-project
+```
+
 ### 3. Start a session in the target project
 
-Open a new Claude Code or Codex session. Use `$agent-queue` where a skill picker is available, or say:
+Open a new Claude Code or Codex session. Use `$agent-taskgraph` where a skill picker is available, or say:
 
 ```text
-Use agent-queue for this project.
+Use agent-taskgraph for this project.
 First inspect the repository read-only and complete project onboarding.
 Report confirmed facts, explicit inferences, and decisions only I can make.
 Do not dispatch work until I approve PROJECT.md.
 ```
 
-On first use, the agent inspects the stack, directories, build and test commands, shared files, and runtime capabilities. You then confirm permissions, session visibility, model preferences, and Human Gates in `.agent-queue/PROJECT.md`.
+On first use, the agent inspects the stack, directories, build and test commands, shared files, and runtime capabilities. You then confirm permissions, session visibility, model preferences, and Human Gates in `.agent-taskgraph/PROJECT.md`.
 
 ## Five Common Workflows
 
 ### 1. Small task: use the fast path
 
 ```text
-Use agent-queue to fix the disabled state of the login button and add a regression test.
+Use agent-taskgraph to fix the disabled state of the login button and add a regression test.
 Acceptance: submission is blocked while required fields are empty, enabled when valid,
 and the existing login flow must still pass.
 ```
@@ -122,7 +130,7 @@ Expected behavior: after a read-only check, a local, clear, low-risk, indivisibl
 ### 2. Complex feature: clarify before implementation
 
 ```text
-Use agent-queue to add team member management.
+Use agent-taskgraph to add team member management.
 First inspect current users, roles, permissions, data models, and related UI.
 Clarify invitations, removal, role changes, and permission boundaries with me.
 Do not implement until I approve the frozen spec and task graph.
@@ -170,7 +178,7 @@ The point is not to ask exactly three questions. The PMO first uses repository e
 ### 3. Multiple requirements: model before parallelizing
 
 ```text
-Use agent-queue for these five requirements:
+Use agent-taskgraph for these five requirements:
 1. ...
 2. ...
 3. ...
@@ -186,8 +194,8 @@ The PMO must not reduce this to “one requirement, one agent.” An edge exists
 ### 4. Resume after interruption
 
 ```text
-Use agent-queue to resume the current batch.
-Read .agent-queue/PROJECT.md, STATUS.md, the frozen spec and graph,
+Use agent-taskgraph to resume the current batch.
+Read .agent-taskgraph/PROJECT.md, STATUS.md, the frozen spec and graph,
 and active/review ledgers. Reconcile them with current sessions, branches,
 and worktrees. Report differences before dispatching, and do not duplicate finished or running nodes.
 ```
@@ -288,8 +296,8 @@ do not ping every worker just to answer.
 Or inspect project files directly:
 
 ```bash
-cat .agent-queue/STATUS.md
-find .agent-queue/queue -mindepth 2 -maxdepth 2 -type d | sort
+cat .agent-taskgraph/STATUS.md
+find .agent-taskgraph/queue -mindepth 2 -maxdepth 2 -type d | sort
 ```
 
 States:
@@ -306,16 +314,16 @@ An `idle` thread or a chat message saying “done” cannot by itself move work 
 
 | File | Purpose | Primary maintainer |
 |---|---|---|
-| `.agent-queue/PROJECT.md` | Facts, rules, shared files, permissions, runtime policy | PMO; owner confirms |
-| `.agent-queue/STATUS.md` | Lightweight active-task view | PMO derives it from queue/ledgers |
-| `.agent-queue/DECISIONS.md` | Append-only decision history | PMO |
+| `.agent-taskgraph/PROJECT.md` | Facts, rules, shared files, permissions, runtime policy | PMO; owner confirms |
+| `.agent-taskgraph/STATUS.md` | Lightweight active-task view | PMO derives it from queue/ledgers |
+| `.agent-taskgraph/DECISIONS.md` | Append-only decision history | PMO |
 | `spec.md` | Owner-approved outcome, scope, edges, and acceptance | PMO and owner |
 | `graph.yaml` | Approved static nodes, dependencies, routes, and gates | PMO and owner |
 | `goal.md` | Execution contract for one node | PMO creates; worker returns evidence |
 | `ledger.md` | Dynamic status, owner, attempt, and evidence pointers | PMO alone transitions state |
 | `report.md` | Accepted completion report | PMO |
 
-Never store API keys, account credentials, private keys, or user data in these files. Whether `.agent-queue/` is committed is a team decision; review machine-local log paths, session IDs, and privacy fields before committing.
+Never store API keys, account credentials, private keys, or user data in these files. Whether `.agent-taskgraph/` is committed is a team decision; review machine-local log paths, session IDs, and privacy fields before committing.
 
 ## Install, Update, and Uninstall
 
@@ -328,13 +336,16 @@ Never store API keys, account credentials, private keys, or user data in these f
 ### Update
 
 ```bash
-cd /path/to/agent-queue
+cd /path/to/agent-taskgraph-protocol
+git remote set-url origin https://github.com/wu736139669/agent-taskgraph-protocol.git
 git pull --ff-only
 ./install.sh --status
 ./tests/smoke.sh
 ```
 
 Normal updates require no reinstall because the skill directories are symlinks.
+
+For the Agent Queue → Agent TaskGraph rename, run `./install.sh` once after updating. It creates the new `agent-taskgraph` links and removes old `agent-queue` links only when they point to this checkout. Migrate each project's state separately with `./init.sh --migrate <project>`.
 
 ### Resolve a name conflict
 
@@ -351,13 +362,14 @@ Normal updates require no reinstall because the skill directories are symlinks.
 ./install.sh --uninstall
 ```
 
-Uninstall removes only the two links that point to this checkout. It does not remove the checkout or any project's `.agent-queue/`.
+Uninstall removes only current or legacy skill links that point to this checkout. It does not remove the checkout or any project's `.agent-taskgraph/`.
 
 ## Helper Commands
 
 | Command | Purpose |
 |---|---|
 | `./init.sh <project>` | Initialize project state while preserving existing files |
+| `./init.sh --migrate <project>` | Explicitly rename legacy `.agent-queue/` state and add missing current templates |
 | `./workers/watch-worker.sh <log>` | Compact Codex JSONL or HAPI text logs into progress events |
 | `./workers/log-cleanup.sh` | Dry-run archived Codex logs older than 30 days |
 | `./workers/log-cleanup.sh --apply` | Delete the archived candidates just listed |
@@ -420,7 +432,7 @@ Not yet implemented or guaranteed:
 ## Repository Layout
 
 ```text
-agent-queue/
+agent-taskgraph-protocol/
 ├── SKILL.md
 ├── agents/openai.yaml
 ├── install.sh
@@ -432,7 +444,7 @@ agent-queue/
 └── .github/workflows/test.yml
 ```
 
-The repository ships the operating protocol, deterministic helpers, templates, and an empty example queue. Real project state lives in that project's `.agent-queue/`.
+The repository ships the operating protocol, deterministic helpers, templates, and an empty example queue. Real project state lives in that project's `.agent-taskgraph/`.
 
 ## Roadmap
 

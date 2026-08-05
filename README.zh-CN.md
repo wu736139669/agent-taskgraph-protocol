@@ -1,12 +1,14 @@
-![Agent Queue](promo/agent-queue-hero-title.png)
+![Agent TaskGraph Protocol](promo/agent-taskgraph-hero.svg)
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-# Agent Queue
+# Agent TaskGraph Protocol
+
+**面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
 > **Private Beta**：面向已经使用 Claude Code 或 Codex 的邀请用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
-Agent Queue 解决的不是“怎样同时开更多 Agent”，而是“怎样让复杂 AI coding 可理解、可控制、可验收、可恢复”。
+Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而是“怎样让复杂 AI coding 可理解、可控制、可验收、可恢复”。
 
 - 清晰、低风险的小任务走单 Agent 快速路径。
 - 复杂、模糊或高影响任务先读项目、与用户澄清、冻结规格，再建立任务图。
@@ -52,22 +54,22 @@ Agent Queue 解决的不是“怎样同时开更多 Agent”，而是“怎样�
 ### 1. 克隆并安装
 
 ```bash
-git clone https://github.com/wu736139669/agent-queue.git
-cd agent-queue
+git clone https://github.com/wu736139669/agent-taskgraph-protocol.git
+cd agent-taskgraph-protocol
 ./install.sh
 ./install.sh --status
 ```
 
 安装器会把同一份 Skill 安全链接到：
 
-- Claude Code：`~/.claude/skills/agent-queue`
-- Codex：`~/.codex/skills/agent-queue`
+- Claude Code：`~/.claude/skills/agent-taskgraph`
+- Codex：`~/.codex/skills/agent-taskgraph`
 
 正常的状态输出会显示两个目标都指向当前仓库。安装器默认拒绝覆盖已有同名路径；不要一上来使用 `--force`，先运行 `--status` 看清冲突来源。
 
 ### 2. 初始化目标项目
 
-在 Agent Queue 仓库中运行：
+在 Agent TaskGraph Protocol 仓库中运行：
 
 ```bash
 ./init.sh /path/to/your-project
@@ -77,7 +79,7 @@ cd agent-queue
 
 ```bash
 cd /path/to/your-project
-~/.codex/skills/agent-queue/init.sh .
+~/.codex/skills/agent-taskgraph/init.sh .
 ```
 
 使用 Claude Code 安装路径时，将上面的 `.codex` 换成 `.claude`。
@@ -85,7 +87,7 @@ cd /path/to/your-project
 初始化会创建：
 
 ```text
-your-project/.agent-queue/
+your-project/.agent-taskgraph/
 ├── PROJECT.md
 ├── STATUS.md
 ├── DECISIONS.md
@@ -96,24 +98,30 @@ your-project/.agent-queue/
 
 重复运行不会覆盖已有文件。
 
+旧版 Agent Queue 项目不会被隐式移动。确认旧状态内容后，再显式迁移：
+
+```bash
+./init.sh --migrate /path/to/your-project
+```
+
 ### 3. 在目标项目启动会话
 
-进入目标项目，新开 Claude Code 或 Codex 会话。支持 Skill 选择器时可使用 `$agent-queue`；也可以直接说：
+进入目标项目，新开 Claude Code 或 Codex 会话。支持 Skill 选择器时可使用 `$agent-taskgraph`；也可以直接说：
 
 ```text
-使用 agent-queue 管理这个项目。
+使用 agent-taskgraph 管理这个项目。
 先只读分析项目并完成项目接入，告诉我已确认事实、合理推断和需要我决定的事项。
 在我确认 PROJECT.md 前不要派发任务。
 ```
 
-第一次接入时，Agent 会分析技术栈、目录、构建测试命令、共享文件和运行时能力，然后请你确认 `.agent-queue/PROJECT.md` 中的权限、会话可见性、模型偏好和 Human Gates。
+第一次接入时，Agent 会分析技术栈、目录、构建测试命令、共享文件和运行时能力，然后请你确认 `.agent-taskgraph/PROJECT.md` 中的权限、会话可见性、模型偏好和 Human Gates。
 
 ## 最常用的五种用法
 
 ### 1. 小任务：直接给结果
 
 ```text
-使用 agent-queue 修复登录按钮的禁用状态，并补一个回归测试。
+使用 agent-taskgraph 修复登录按钮的禁用状态，并补一个回归测试。
 验收标准是：未填写必填项时不可提交，填写后可提交，现有登录流程不能回归。
 ```
 
@@ -122,7 +130,7 @@ your-project/.agent-queue/
 ### 2. 复杂功能：先聊清楚再做
 
 ```text
-使用 agent-queue 给这个产品增加团队成员管理。
+使用 agent-taskgraph 给这个产品增加团队成员管理。
 先检查现有用户、角色、权限、数据模型和相关 UI，再跟我澄清邀请、移除、角色变更和权限边界。
 在我确认冻结 spec 和任务图前不要写实现代码。
 ```
@@ -167,7 +175,7 @@ Owner：批准 graph revision 1，开始执行；合并仍需找我确认。
 ### 3. 多个需求：先分析关系再并行
 
 ```text
-使用 agent-queue 处理下面 5 个需求：
+使用 agent-taskgraph 处理下面 5 个需求：
 1. ...
 2. ...
 3. ...
@@ -183,12 +191,12 @@ Agent 不应简单地“一需求一 Agent”。只有下游真实消费上游�
 ### 4. 中断后恢复：从文件状态继续
 
 ```text
-使用 agent-queue 恢复这个项目的当前批次。
-先读取 .agent-queue/PROJECT.md、STATUS.md、冻结 spec、graph 和 active/review ledger，
+使用 agent-taskgraph 恢复这个项目的当前批次。
+先读取 .agent-taskgraph/PROJECT.md、STATUS.md、冻结 spec、graph 和 active/review ledger，
 再对照当前会话、分支和 worktree 状态。先汇报差异，不要重复派发已经完成或仍在运行的节点。
 ```
 
-恢复时以 `.agent-queue/queue/` 和 ledger 为动态事实源，以冻结 spec/graph 为静态事实源。聊天记录和线程状态只能作为观察信号。
+恢复时以 `.agent-taskgraph/queue/` 和 ledger 为动态事实源，以冻结 spec/graph 为静态事实源。聊天记录和线程状态只能作为观察信号。
 
 ### 5. 执行中改需求：先看影响
 
@@ -283,8 +291,8 @@ flowchart LR
 也可以直接查看项目文件：
 
 ```bash
-cat .agent-queue/STATUS.md
-find .agent-queue/queue -mindepth 2 -maxdepth 2 -type d | sort
+cat .agent-taskgraph/STATUS.md
+find .agent-taskgraph/queue -mindepth 2 -maxdepth 2 -type d | sort
 ```
 
 状态含义：
@@ -301,16 +309,16 @@ find .agent-queue/queue -mindepth 2 -maxdepth 2 -type d | sort
 
 | 文件 | 用途 | 主要维护者 |
 |---|---|---|
-| `.agent-queue/PROJECT.md` | 项目事实、规范、共享文件、权限和运行时策略 | PMO，Owner 确认 |
-| `.agent-queue/STATUS.md` | 当前活跃任务的轻量视图 | PMO 从队列/ledger 派生 |
-| `.agent-queue/DECISIONS.md` | 关键决策的追加式历史 | PMO |
+| `.agent-taskgraph/PROJECT.md` | 项目事实、规范、共享文件、权限和运行时策略 | PMO，Owner 确认 |
+| `.agent-taskgraph/STATUS.md` | 当前活跃任务的轻量视图 | PMO 从队列/ledger 派生 |
+| `.agent-taskgraph/DECISIONS.md` | 关键决策的追加式历史 | PMO |
 | `spec.md` | 用户已确认的目标、范围、边界和验收合同 | PMO 与 Owner |
 | `graph.yaml` | 获批的静态节点、依赖、路由和 Human Gates | PMO 与 Owner |
 | `goal.md` | 一个节点的执行合同 | PMO 创建，Worker 回填证据 |
 | `ledger.md` | 动态状态、负责人、轮次和证据指针 | 仅 PMO 迁移状态 |
 | `report.md` | Reviewer 通过后的完成汇报 | PMO |
 
-不要把 API Key、账号凭据、私钥或用户数据写进这些文件。是否把 `.agent-queue/` 提交到产品仓库由团队决定；提交前应检查本机日志路径、会话 ID 和其他隐私字段。
+不要把 API Key、账号凭据、私钥或用户数据写进这些文件。是否把 `.agent-taskgraph/` 提交到产品仓库由团队决定；提交前应检查本机日志路径、会话 ID 和其他隐私字段。
 
 ## 安装、更新与卸载
 
@@ -323,13 +331,16 @@ find .agent-queue/queue -mindepth 2 -maxdepth 2 -type d | sort
 ### 更新
 
 ```bash
-cd /path/to/agent-queue
+cd /path/to/agent-taskgraph-protocol
+git remote set-url origin https://github.com/wu736139669/agent-taskgraph-protocol.git
 git pull --ff-only
 ./install.sh --status
 ./tests/smoke.sh
 ```
 
 安装使用软链，正常更新后不需要重复安装。
+
+从 Agent Queue 升级到 Agent TaskGraph 时，更新仓库后运行一次 `./install.sh`。它会创建新的 `agent-taskgraph` 软链；只有旧 `agent-queue` 软链确实指向当前 checkout 时才删除。每个项目的状态目录需要另行运行 `./init.sh --migrate <project>`。
 
 ### 处理同名冲突
 
@@ -346,13 +357,14 @@ git pull --ff-only
 ./install.sh --uninstall
 ```
 
-卸载只删除指向当前 checkout 的两个 Skill 软链，不删除 Agent Queue 仓库，也不删除任何项目的 `.agent-queue/`。
+卸载只删除指向当前 checkout 的现用 Skill 软链或旧版兼容软链，不删除 Agent TaskGraph Protocol 仓库，也不删除任何项目的 `.agent-taskgraph/`。
 
 ## 辅助命令
 
 | 命令 | 用途 |
 |---|---|
 | `./init.sh <project>` | 初始化项目实例，保留已有文件 |
+| `./init.sh --migrate <project>` | 显式迁移旧 `.agent-queue/` 状态目录，并补齐缺失的新模板 |
 | `./workers/watch-worker.sh <log>` | 把 Codex JSONL 或 HAPI 文本日志压缩成进展事件流 |
 | `./workers/log-cleanup.sh` | dry-run 列出 30 天前的 Codex 已归档日志 |
 | `./workers/log-cleanup.sh --apply` | 删除刚才列出的已归档候选 |
@@ -415,7 +427,7 @@ spec 回答“做什么、做到什么算完成”；graph 回答“谁做、依
 ## 仓库结构
 
 ```text
-agent-queue/
+agent-taskgraph-protocol/
 ├── SKILL.md
 ├── agents/openai.yaml
 ├── install.sh
@@ -427,7 +439,7 @@ agent-queue/
 └── .github/workflows/test.yml
 ```
 
-仓库分发的是运营协议、确定性辅助脚本、模板和空示例队列。每个产品项目的真实状态保存在该项目自己的 `.agent-queue/` 中。
+仓库分发的是运营协议、确定性辅助脚本、模板和空示例队列。每个产品项目的真实状态保存在该项目自己的 `.agent-taskgraph/` 中。
 
 ## Roadmap
 

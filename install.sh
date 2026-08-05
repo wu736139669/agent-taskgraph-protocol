@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Install this source tree as the Claude Code and Codex agent-queue skill.
+# Install this source tree as the Claude Code and Codex agent-taskgraph skill.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
-CLAUDE_DEST="$HOME/.claude/skills/agent-queue"
-CODEX_DEST="$HOME/.codex/skills/agent-queue"
+CLAUDE_DEST="$HOME/.claude/skills/agent-taskgraph"
+CODEX_DEST="$HOME/.codex/skills/agent-taskgraph"
+LEGACY_CLAUDE_DEST="$HOME/.claude/skills/agent-queue"
+LEGACY_CODEX_DEST="$HOME/.codex/skills/agent-queue"
 ACTION="install"
 FORCE=0
 ACTION_SET=0
@@ -15,7 +17,9 @@ Usage: ./install.sh [--force] | --status | --uninstall
 
   --force      Back up a conflicting install, then create the symlink.
   --status     Show the current Claude Code and Codex skill targets.
-  --uninstall  Remove only symlinks that point to this source tree.
+  --uninstall  Remove only current or legacy symlinks pointing to this source.
+
+Owned legacy agent-queue symlinks are removed after a successful install.
 EOF
 }
 
@@ -58,6 +62,20 @@ describe() {
     printf '%s: conflict (not a symlink): %s\n' "$label" "$dest"
   else
     printf '%s: not installed\n' "$label"
+  fi
+}
+
+describe_legacy() {
+  local label="$1" dest="$2" target
+  if [ -L "$dest" ]; then
+    target="$(readlink "$dest")"
+    if [ "$target" = "$SRC" ]; then
+      printf '%s legacy: migration pending (%s -> %s)\n' "$label" "$dest" "$target"
+    else
+      printf '%s legacy: unrelated symlink left untouched (%s -> %s)\n' "$label" "$dest" "$target"
+    fi
+  elif [ -e "$dest" ]; then
+    printf '%s legacy: unrelated path left untouched (%s)\n' "$label" "$dest"
   fi
 }
 
@@ -112,21 +130,37 @@ uninstall_one() {
   fi
 }
 
+migrate_legacy_one() {
+  local label="$1" dest="$2"
+  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$SRC" ]; then
+    unlink "$dest"
+    printf '%s: removed owned legacy link %s\n' "$label" "$dest"
+  elif [ -e "$dest" ] || [ -L "$dest" ]; then
+    printf '%s: left unrelated legacy path untouched %s\n' "$label" "$dest"
+  fi
+}
+
 case "$ACTION" in
   status)
     describe "Claude Code" "$CLAUDE_DEST"
     describe "Codex" "$CODEX_DEST"
+    describe_legacy "Claude Code" "$LEGACY_CLAUDE_DEST"
+    describe_legacy "Codex" "$LEGACY_CODEX_DEST"
     ;;
   uninstall)
     uninstall_one "Claude Code" "$CLAUDE_DEST"
     uninstall_one "Codex" "$CODEX_DEST"
+    uninstall_one "Claude Code legacy" "$LEGACY_CLAUDE_DEST"
+    uninstall_one "Codex legacy" "$LEGACY_CODEX_DEST"
     ;;
   install)
     preflight "$CLAUDE_DEST"
     preflight "$CODEX_DEST"
     install_one "Claude Code" "$CLAUDE_DEST"
     install_one "Codex" "$CODEX_DEST"
+    migrate_legacy_one "Claude Code" "$LEGACY_CLAUDE_DEST"
+    migrate_legacy_one "Codex" "$LEGACY_CODEX_DEST"
     echo
-    echo "Installed. Start a new session and ask: use agent-queue for this project."
+    echo "Installed. Start a new session and ask: use agent-taskgraph for this project."
     ;;
 esac

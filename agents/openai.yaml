@@ -1,7 +1,7 @@
 interface:
-  display_name: "Agent Queue"
+  display_name: "Agent TaskGraph Protocol"
   short_description: "Clarify coding work, then execute a verified task graph"
-  default_prompt: "Use $agent-queue to inspect this project, clarify my request, and orchestrate execution only when the work is ready."
+  default_prompt: "Use $agent-taskgraph to inspect this project, clarify my request, and orchestrate execution only when the work is ready."
 
 policy:
   allow_implicit_invocation: true

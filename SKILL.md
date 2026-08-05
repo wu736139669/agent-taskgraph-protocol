@@ -1,14 +1,14 @@
 ---
-name: agent-queue
+name: agent-taskgraph
 description: "多 agent AI coding 团队协作编排。先分诊并只读理解项目；清晰低风险任务走单 agent 快速路径，复杂、模糊或高影响任务先与用户澄清并冻结规格，再把工作建模为带真实依赖、验证节点、失败路由和人工闸的任务图，由 PMO 派发 worker、独立 reviewer 验收并用文件台账保存状态。Triggers: 派活, 任务队列, 多agent写代码, 团队协作, 并行开发, 多个需求, graph engineering, task graph, orchestrate, dispatch, 拆任务, 编排, 派任务"
 ---
 
-# Agent Queue 使用指南 —— 团队运营模型
+# Agent TaskGraph Protocol 使用指南 —— 团队运营模型
 
 你先做分诊。清晰、低风险且不可有效拆分的单任务退出编排，由当前会话按普通 coding agent 快速执行；只有进入多 agent 编排后，你才成为**秘书/PMO**和唯一对外接口，并且**永远不写代码**。
 你的工作循环：分诊 → 装配团队 → 拆/编 → 派 → 跟 → 验 → 归 → 报。
 
-**实例根目录**：本文中的 `PROJECT.md`、`STATUS.md`、`DECISIONS.md`、`spec.md`、`graph.yaml`、`queue/` 和 `archive/` 都相对于目标项目的 `.agent-queue/`。首次使用若该目录不存在，运行本 Skill 自带的 `init.sh <目标项目>`；不得把真实项目状态写进 Skill 安装目录自带的空队列。
+**实例根目录**：本文中的 `PROJECT.md`、`STATUS.md`、`DECISIONS.md`、`spec.md`、`graph.yaml`、`queue/` 和 `archive/` 都相对于目标项目的 `.agent-taskgraph/`。首次使用若该目录不存在，运行本 Skill 自带的 `init.sh <目标项目>`；旧版 `.agent-queue/` 必须由 Owner 审阅后显式运行 `init.sh --migrate <目标项目>`。不得把真实项目状态写进 Skill 安装目录自带的空队列。
 
 ## 第 0 节：团队结构与职责边界
 
@@ -138,7 +138,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 **Goal/会话交互协议（强制）**：
 - **Goal 是指令源**：首次派发必须把 Goal 文件路径（或完整内容）发给 worker，并要求先读 `PROJECT.md`、冻结规格、图中本节点及直接依赖、Goal、contract 和 ledger；只在聊天里发一段模糊任务不算派发。
 - **聊天是控制通道**：HAPI/Codex 消息用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收、依赖或资源顺序的消息都触发 graph diff，并同步到 spec/graph/Goal/DECISIONS/ledger。
-- **状态分工**：worker 负责实现 worktree、Goal 约定的 produces、Goal 完成区和任务证据；PMO 负责 `.agent-queue/queue/*/ledger.md`、目录状态、`STATUS.md`、reviewer 身份/验收报告和 Owner 汇报。两边只通过 revision、证据路径和 legal terminal 对账，不互相覆盖。
+- **状态分工**：worker 负责实现 worktree、Goal 约定的 produces、Goal 完成区和任务证据；PMO 负责 `.agent-taskgraph/queue/*/ledger.md`、目录状态、`STATUS.md`、reviewer 身份/验收报告和 Owner 汇报。两边只通过 revision、证据路径和 legal terminal 对账，不互相覆盖。
 - **完成协议**：worker 必须在 Goal 完成区或 Goal 指定的 evidence artifact 写明 legal terminal、source/closure revision、测试/证据路径、clean/upstream、owned-process 清理，并通过当前运行时的消息/ping 通知 PMO；PMO 不因“完成了”聊天直接验收。
 - **指导协议**：PMO 的补充指令必须是“当前状态/动作/原因/禁止项/下一终点”五段式，发出后在 PMO ledger 记录；正常进展不发询问式 ping。
 
@@ -292,7 +292,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 只有当前 Codex 系统提示或工具列表**真实暴露**下列线程能力时，才使用本节映射；不得因为 Skill 写了工具名就假定环境支持。工具缺失或命名不同时，按语义做能力探测并走 PROJECT.md 记录的 fallback。
 
-| agent-queue 动作 | codex 原生工具 | 说明 |
+| agent-taskgraph 动作 | codex 原生工具 | 说明 |
 |---|---|---|
 | 派发任务（用户授权创建新会话后） | `create_thread` | 异步派发；创建的线程**用户侧边栏可见**、可接管 |
 | 持续监控进展 | `wait_agent` / `wait_threads` | **wait 循环的原生实现**：`wait_agent(timeout_ms: 600000)` 生成用户可见的 “Wait for agent” 卡片；有可管理线程时用 `wait_threads`（单次 1-8 个目标，`timeoutMs: 0` 为即时快照）；取代外部 LaunchAgent |
