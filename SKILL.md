@@ -171,13 +171,31 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 7. 诊断闭环：可疑模式 → 读日志上下文（`tail -60`）→ 判断正常/异常 → **误报也要记录**（下次不重复误判）
 8. 经验：Codex 的 `wait_agent`/`wait_threads` 是可见原生等待；`functions.wait` 带 `cell_id`/`yield_time_ms` 是无卡片的 notebook 分片降级实现（正常）；**静默才是卡死信号**
 
+**Codex 可见 wait 防混淆硬门（强制）**：
+
+1. 老板要求“可见 wait / 等待卡片 / 原生 wait”时，唯一合法入口是
+   `wait_agent(timeout_ms: N)`（有原生线程目标时也可使用
+   `wait_threads`）。禁止调用 `functions.wait` 试探或冒充可见等待。
+2. `functions.wait` 只允许恢复一个**刚由本会话实际启动且返回了真实
+   `cell_id`** 的后台 exec cell。没有真实 `cell_id` 时不得调用；禁止用
+   `placeholder`、猜测字符串或任意值。它永远不会产生用户可见等待卡片。
+3. 一旦 `functions.wait` 返回 `cell not found`，立即分类为
+   `WAIT_TOOL_MISROUTE`：本轮永久停止调用 `functions.wait`，记录一次误用，
+   直接切换到 `wait_agent`。**禁止更换假 cell_id 连续重试**。
+4. 可见 wait 只有在原生工具调用实际返回 `Wait timed out`、
+   `Wait interrupted by new input` 或等价成功等待结果后，才能声称“已启动/
+   已完成等待”。口头说“现在进入 wait”、计划调用或失败 tool call 都不算。
+5. 每次调用前做一行自检：`需要卡片？是 -> wait_agent；已有真实 cell_id？
+   是且不需要卡片 -> functions.wait；其余 -> wait_agent`。工具名选择完成后
+   不得在同一轮临时换成另一个近似名字。
+
 **PMO 每轮执行清单（强制闭环）**：`wait` 只是调度器，不是监督本身。每次唤醒必须按以下顺序完成，缺一步就不能重新进入 wait：
 1. **监督（Observe）**：读取所有活跃 worker/reviewer 的 HAPI 状态、最新消息/日志尾部和最后更新时间；读取 `STATUS.md`、对应 `ledger.md`、Goal/contract 的 Legal Terminal；检查目标仓库 `HEAD == upstream`、dirty 文件归属和 owned Godot/build 进程。
 2. **判断（Classify）**：把每个任务归类为 `进展`、`等待/资源占用`、`候选 ready`、`review terminal`、`失败/INVALID`、`阻塞` 或 `owner decision`。HAPI `active/idle` 本身不是进度证据，聊天里的“完成”也不是验收证据。
 3. **指导（Guide）**：只有在任务到达 legal terminal、遇到阻塞/资源冲突、等待归属不清、静默超过阈值或需要决策时，向原 worker 发送一条有边界的指令（做什么、为什么、禁止什么、下一终点）。正常进展不频繁打扰；不得替 worker 改产品代码或擅自扩大 Goal。
 4. **验收（Accept）**：`candidate ready` 立即创建真实、可见、独立 reviewer；对 reviewer 的 PASS/FAIL/INVALID 逐项核对源版本、证据清单、测试/运行输出、清理和身份路径。PASS 才能本地接受，FAIL/INVALID 必须保留不可变历史并派发最小修复或恢复，不得复用旧证据。
 5. **记录（Record）**：将本轮观察、决策、指导、reviewer 身份/日志路径、状态转换和唯一下一步追加到任务 ledger；同步 `STATUS.md` 的卡点/归属/待决策项；关键节点一句话汇报老板。没有文件台账记录，不算 PMO 已处理。
-6. **再等待（Wait）**：确认没有遗留 owned 进程、候选未被误改、台账和线程状态一致后，启动下一次 `wait_agent(timeout_ms: 600000)` 可见等待。老板消息、legal terminal、失败、阻塞或队列完成会提前打断等待并回到第 1 步。
+6. **再等待（Wait）**：确认没有遗留 owned 进程、候选未被误改、台账和线程状态一致后，按上面的“可见 wait 防混淆硬门”启动下一次 `wait_agent(timeout_ms: 600000)` 可见等待。必须等工具返回实际等待结果后才能记为已执行。老板消息、legal terminal、失败、阻塞或队列完成会提前打断等待并回到第 1 步。
 
 **可选增强（不是默认）**：实时性要求高（分钟级进展都要立即知道）时才挂外部事件流——`workers/watch-worker.sh`（tail -F + 过滤）。大多数场景下 agent 原生循环足够。
 
