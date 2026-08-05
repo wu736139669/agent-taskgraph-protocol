@@ -124,6 +124,19 @@ your-project/.agent-taskgraph/
 
 第一次接入时，Agent 会分析技术栈、目录、构建测试命令、共享文件和运行时能力，然后请你确认 `.agent-taskgraph/PROJECT.md` 中的权限、会话可见性、模型偏好和 Human Gates。
 
+### 4. 在 macOS 要求可见 Worker 终端
+
+确认 `PROJECT.md` 前，在 Owner 会话里说明 Worker 的运行方式：
+
+```text
+本批次使用 Claude 原生 CLI，不使用 HAPI。
+每个 Worker 和 Reviewer 都必须在独立、可见的 Terminal.app 窗口运行。
+派发前先展示每个角色、职责、依赖、模型、推理强度、权限模式、Goal 路径和 dry-run 命令。
+等我确认后才能打开窗口。
+```
+
+PMO 会先运行 `scripts/open-worker-terminal.sh ... --dry-run`，预演阶段不会打开任何窗口。Owner 批准任务图和运行参数后，PMO 去掉 `--dry-run`；每个 Worker 会在带名称的独立 Terminal 窗口中启动，并且只有 PID 验证成功后才能登记为 active。只读探索使用 `plan`，已获批的实现 Goal 才使用 `acceptEdits`。`bypassPermissions` 除了项目明确授权，还必须附带 `--allow-dangerous`。
+
 ## 最常用的五种用法
 
 ### 1. 小任务：直接给结果

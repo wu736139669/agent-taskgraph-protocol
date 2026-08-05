@@ -123,6 +123,19 @@ Do not dispatch work until I approve PROJECT.md.
 
 On first use, the agent inspects the stack, directories, build and test commands, shared files, and runtime capabilities. You then confirm permissions, session visibility, model preferences, and Human Gates in `.agent-taskgraph/PROJECT.md`.
 
+### 4. Require visible worker terminals on macOS
+
+Tell the owner session how workers must run before approving `PROJECT.md`:
+
+```text
+Use native Claude CLI for this batch; do not use HAPI.
+Every worker and reviewer must open in a separate visible Terminal.app window.
+Before dispatch, show each role, responsibility, dependency, model, effort,
+permission mode, Goal path, and dry-run command. Wait for my approval before opening any window.
+```
+
+The PMO first runs `scripts/open-worker-terminal.sh ... --dry-run`. Nothing opens during this preview. After the owner approves the graph and runtime parameters, the PMO removes `--dry-run`; each worker opens in its own named Terminal window and is registered only after PID verification. Use `plan` for read-only exploration and `acceptEdits` only for an approved implementation Goal. `bypassPermissions` requires both explicit project authorization and `--allow-dangerous`.
+
 ## Five Common Workflows
 
 ### 1. Small task: use the fast path
