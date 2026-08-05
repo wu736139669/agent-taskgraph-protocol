@@ -114,6 +114,13 @@ description: 多 agent 团队协作编排 —— 秘书/PMO 分诊需求形态�
 
 派发动作：写 Goal（含分配记录）→ 建 worktree → spawn worker → 台账登记，Goal 移入 `active/`。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
 
+**Goal/会话交互协议（强制）**：
+- **Goal 是指令源**：首次派发必须把 Goal 文件路径（或完整内容）发给 worker，并要求先读 `PROJECT.md`、目标游戏规则、Goal、checkpoint、contract 和 ledger；只在聊天里发一段模糊任务不算派发。
+- **聊天是控制通道**：HAPI/Codex 消息用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收或资源顺序的消息必须同步追加到 Goal/DECISIONS/ledger。
+- **状态分工**：worker 负责产品仓库的 Goal、`CURRENT_CHECKPOINT.md`、产品 contract 和 evidence ledger；PMO 负责 `.agent-queue/queue/*/ledger.md`、`STATUS.md`、reviewer 身份/验收报告和 Owner 汇报。两边只通过 revision、证据路径和 legal terminal 对账，不互相覆盖。
+- **完成协议**：worker 必须在 Goal/产品 ledger 写明 legal terminal、source/closure revision、测试/证据路径、clean/upstream、owned-process 清理，并通过 HAPI 消息通知 PMO；PMO 不因“完成了”聊天直接验收。
+- **指导协议**：PMO 的补充指令必须是“当前状态/动作/原因/禁止项/下一终点”五段式，发出后在 PMO ledger 记录；正常进展不发询问式 ping。
+
 ## 第 8 节：会话与中间状态管理
 
 **两类会话**：
