@@ -6,7 +6,7 @@
 
 **面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
-当前版本：[`v0.8.0-beta.2`](VERSION) | 许可证：[Apache-2.0](LICENSE)
+当前版本：[`v0.8.0-beta.3`](VERSION) | 许可证：[Apache-2.0](LICENSE)
 
 > **Public Beta**：面向已经使用 Claude Code 或 Codex 的用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
@@ -419,7 +419,7 @@ GitHub 仓库应始终是唯一主源，其他目录或安装包只指向本仓�
 | 渠道 | 状态 | 推荐用途 |
 |---|---|---|
 | GitHub 仓库 | Public Beta | 唯一主源、源码、Issue、评审和贡献历史 |
-| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | 已发布 `v0.8.0-beta.2` | 版本归档和发布说明 |
+| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | 已发布 `v0.8.0-beta.3` | 版本归档和发布说明 |
 | Codex / Claude Code 本地安装 | 现在可用 | `./install.sh` 将 checkout 链接到 `~/.codex/skills/agent-taskgraph` 和 `~/.claude/skills/agent-taskgraph` |
 | 团队内部仓库 | 现在可用 | 在受控团队环境中放入或链接到 `.agents/skills/` |
 | [skills.sh](https://skills.sh) | CLI 已兼容；目录收录由第三方维护 | 使用 `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph` 安装；GitHub 仍是主源 |
