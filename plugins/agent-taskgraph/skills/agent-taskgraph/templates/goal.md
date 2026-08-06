@@ -8,6 +8,8 @@
 > Frozen spec: `<spec.md 路径 + revision>`（只有低风险 A 类快速任务可写“内嵌本 Goal”）
 > Graph node: `<graph.yaml 路径#node-id>`（低风险 A 类快速任务写“不适用”）
 > Independent contract: `<CONTRACT 路径>`（额外技术合同；无则写“不适用”）
+> Context manifest: `<任务目录内 context.md>`（只列引用和 revision，不复制原文）
+> Context revision: `<与 context.md 一致>`
 > Legal terminal: **<项目> <目标> candidate ready** 或 **<项目> <目标> redesign required: <最早失败边界>**
 
 ## Objective

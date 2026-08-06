@@ -6,7 +6,7 @@
 
 **面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
-源码版本：[`v0.8.0-beta.6`](VERSION) | 最新已发布版本：`v0.8.0-beta.4` | 许可证：[Apache-2.0](LICENSE)
+源码版本：[`v0.8.0-beta.7`](VERSION) | 最新已发布版本：`v0.8.0-beta.6` | 许可证：[Apache-2.0](LICENSE)
 
 > **Public Beta**：面向已经使用 Claude Code 或 Codex 的用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
@@ -36,6 +36,7 @@ Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而�
 - [Agent 会怎样判断任务](#agent-会怎样判断任务)
 - [Graph Engineering](#graph-engineering-在这里是什么意思)
 - [怎样查看进度](#怎样查看进度)
+- [多轮对话怎样节省上下文](#多轮对话怎样节省上下文)
 - [安装、更新与卸载](#安装更新与卸载)
 - [版本与更新提示](#版本与更新提示)
 - [发布渠道](#发布渠道)
@@ -101,6 +102,7 @@ your-project/.agent-taskgraph/
 ├── STATUS.md
 ├── DECISIONS.md
 ├── roles/<role-id>/ROLE.md
+├── staffing/<change-id>.md
 ├── templates/
 ├── queue/{inbox,active,review,done,failed}/
 └── archive/
@@ -313,6 +315,10 @@ Agent TaskGraph 把长期 **Role** 与单次 **Goal** 分开。Role 在 `roles/<
 
 持久角色在 `available`、`assigned`、`paused`、`retired` 之间迁移，同一时间不能占用两个 active/review Goal。相关的串行工作应复用角色，并在会话健康时复用会话；并行工作必须建立职责和写入范围明确分开的角色。Reviewer 默认是 task-scoped 独立角色，不能复用作者角色。
 
+初始团队只在 spec 和 graph 已经暴露真实职责之后推荐。PMO 会展示 Role ID、长期边界、本次 Goal、会话复用、模型/effort、权限、可见性和并发数；Owner 可以合并、拆分或修改配置，批准最小可行团队后才会启动会话。
+
+后续加人属于带版本的编制变更，不是临时多开一个 Agent。PMO 必须展示职责缺口或关键路径阻塞证据、不加人的串行方案、graph/写入变化、新增会话与成本、handoff 和回滚方法。`ADD`、`SPLIT`、`TEMP_AUGMENT`、`REPLACE`、`PAUSE`、`RETIRE` 默认都由 Owner 确认，除非 `PROJECT.md` 存在精确匹配的预授权。临时增援默认 task-scoped，Goal 完成后退役。“多开可能更快”不能单独作为扩编理由。
+
 | 角色 | 做什么 | 不做什么 |
 |---|---|---|
 | PMO / 秘书 | 接入、澄清、spec/graph、派发、监督、路由、收口 | 进入多 Agent 模式后不写实现代码 |
@@ -354,15 +360,30 @@ find .agent-taskgraph/queue -mindepth 2 -maxdepth 2 -type d | sort
 | `.agent-taskgraph/PROJECT.md` | 项目事实、规范、共享文件、权限和运行时策略 | PMO，Owner 确认 |
 | `.agent-taskgraph/ROLES.md` | 长期与临时角色注册表 | PMO |
 | `.agent-taskgraph/roles/<role-id>/ROLE.md` | 职责、边界、占用状态、会话和 handoff 历史 | PMO |
+| `.agent-taskgraph/staffing/<change-id>.md` | 团队 revision、职责转移、成本、handoff 和回滚记录 | PMO，Owner 批准 |
 | `.agent-taskgraph/STATUS.md` | 当前活跃任务的轻量视图 | PMO 从队列/ledger 派生 |
 | `.agent-taskgraph/DECISIONS.md` | 关键决策的追加式历史 | PMO |
 | `spec.md` | 用户已确认的目标、范围、边界和验收合同 | PMO 与 Owner |
 | `graph.yaml` | 获批的静态节点、依赖、路由和 Human Gates | PMO 与 Owner |
 | `goal.md` | 一个节点的执行合同 | PMO 创建，Worker 回填证据 |
+| `context.md` | 最小路径/revision 清单、按需检索范围和最近 delta | PMO 维护，Worker 开工先读 |
 | `ledger.md` | 动态状态、负责人、轮次和证据指针 | 仅 PMO 迁移状态 |
 | `report.md` | Reviewer 通过后的完成汇报 | PMO |
 
 不要把 API Key、账号凭据、私钥或用户数据写进这些文件。是否把 `.agent-taskgraph/` 提交到产品仓库由团队决定；提交前应检查本机日志路径、会话 ID 和其他隐私字段。
+
+## 多轮对话怎样节省上下文
+
+当运行时不提供准确 token 指标时，Agent TaskGraph 不能承诺一个固定 token 数，但会强制执行可审计的上下文行为：
+
+- 每个 active/review Goal 都有 `context.md`，只引用源文件和 revision，不复制整份内容。
+- 默认必读项最多 8 个；超过时必须写明例外理由，或者继续拆小 Goal。
+- Worker 只加载相关的 PROJECT 章节、Role、冻结 spec、当前 graph 节点、Goal、ledger 和直接依赖。其他内容先搜索，再局部读取。
+- Owner 与 Worker 之间只传本轮变化、稳定引用和证据路径，不反复发送完整历史、其他会话、archive 或长日志。
+- 用户的新决定和纠正只落盘一次到 spec/Goal/DECISIONS/ledger；已经回答的问题不会重复询问，除非原决定发生变化。
+- 派发、候选完成、Reviewer 终态、失败和换会话前更新 checkpoint；新会话从文件恢复，不需要重放完整聊天。
+
+这些规则减少的是重复上下文和无效对话，不会降低测试、独立 Reviewer 或验收标准。
 
 ## 安装、更新与卸载
 

@@ -12,6 +12,8 @@ VISIBLE_STATES = {"active", "review"}
 FIELD_ROW = re.compile(r'^\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|\s*$')
 GOAL_TASK_ID = re.compile(r'^>\s*Task ID:\s*`?([^`]+?)`?\s*$')
 GOAL_BASELINE = re.compile(r'^>\s*Baseline:\s*(.+?)\s*$')
+GOAL_CONTEXT = re.compile(r'^>\s*Context manifest:\s*`?([^`]+?)`?\s*$')
+GOAL_CONTEXT_REVISION = re.compile(r'^>\s*Context revision:\s*`?([^`]+?)`?\s*$')
 GOAL_ASSIGNMENT = re.compile(
     r'^-\s*(Role ref|角色职责|角色生命周期|连续性|Runtime requested|Runtime observed|Runtime verification|Session evidence|Dispatch message)[：:]\s*(.*?)\s*$'
 )
@@ -46,7 +48,13 @@ def ledger_fields(path):
 
 
 def goal_metadata(path):
-    metadata = {"task_id": "", "baseline": "", "assignments": {}}
+    metadata = {
+        "task_id": "",
+        "baseline": "",
+        "context_manifest": "",
+        "context_revision": "",
+        "assignments": {},
+    }
     for raw in path.read_text(encoding="utf-8").splitlines():
         match = GOAL_TASK_ID.match(raw)
         if match:
@@ -54,10 +62,72 @@ def goal_metadata(path):
         match = GOAL_BASELINE.match(raw)
         if match:
             metadata["baseline"] = match.group(1).strip().strip("`")
+        match = GOAL_CONTEXT.match(raw)
+        if match:
+            metadata["context_manifest"] = match.group(1).strip()
+        match = GOAL_CONTEXT_REVISION.match(raw)
+        if match:
+            metadata["context_revision"] = match.group(1).strip()
         match = GOAL_ASSIGNMENT.match(raw)
         if match:
             metadata["assignments"][match.group(1)] = match.group(2).strip().strip("`")
     return metadata
+
+
+def context_metadata(path):
+    metadata = {"task_id": "", "revision": "", "mode": "", "exception": "", "required": []}
+    in_required = False
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        if raw.startswith("> Task ID:"):
+            metadata["task_id"] = raw.split(":", 1)[1].strip().strip("`")
+        elif raw.startswith("> Revision:"):
+            metadata["revision"] = raw.split(":", 1)[1].strip().strip("`")
+        elif raw.startswith("> Mode:"):
+            metadata["mode"] = raw.split(":", 1)[1].strip().strip("`")
+        elif raw.startswith("> Budget exception:"):
+            metadata["exception"] = raw.split(":", 1)[1].strip().strip("`")
+        elif raw.startswith("## "):
+            in_required = raw.startswith("## 必须读取")
+        elif in_required and raw.startswith("|"):
+            cells = [cell.strip() for cell in raw.strip().strip("|").split("|")]
+            if len(cells) == 3 and cells[0] not in {"路径或稳定引用", "---"}:
+                metadata["required"].append(cells)
+    return metadata
+
+
+def validate_context(task_id, task_dir, fields, goal_data):
+    errors = []
+    manifest_ref = fields.get("Context manifest", "")
+    if manifest_ref != "context.md":
+        return ["{}: Context manifest must be context.md".format(task_id)]
+    if goal_data.get("context_manifest") != manifest_ref:
+        errors.append("{}: Goal and ledger Context manifest differ".format(task_id))
+    revision = fields.get("Context revision", "")
+    if is_placeholder(revision):
+        errors.append("{}: Context revision must be concrete".format(task_id))
+    if goal_data.get("context_revision") != revision:
+        errors.append("{}: Goal and ledger Context revision differ".format(task_id))
+
+    manifest_path = task_dir / manifest_ref
+    if not manifest_path.is_file():
+        errors.append("{}: missing context.md".format(task_id))
+        return errors
+    metadata = context_metadata(manifest_path)
+    if metadata["task_id"] != task_id:
+        errors.append("{}: context Task ID must match the queue directory".format(task_id))
+    if metadata["revision"] != revision:
+        errors.append("{}: context revision differs from ledger".format(task_id))
+    if metadata["mode"] not in {"lean", "balanced", "deep"}:
+        errors.append("{}: context Mode must be lean, balanced, or deep".format(task_id))
+    if not metadata["required"]:
+        errors.append("{}: context must list at least one required item".format(task_id))
+    if len(metadata["required"]) > 8 and metadata["exception"].lower() in {"", "none", "无"}:
+        errors.append("{}: context has more than 8 required items without Budget exception".format(task_id))
+    for path_ref, revision_ref, reason in metadata["required"]:
+        if is_placeholder(path_ref) or is_placeholder(revision_ref) or is_placeholder(reason):
+            errors.append("{}: context required items must use concrete path, revision, and reason".format(task_id))
+            break
+    return errors
 
 
 def is_placeholder(value):
@@ -89,7 +159,9 @@ def runtime_config(value):
     return config
 
 
-def validate_role(task_id, state, instance, fields, goal_assignments, registered_roles):
+def validate_role(
+    task_id, state, instance, fields, goal_assignments, registered_roles, team_revision
+):
     errors = []
     role_ref = fields.get("Role ref", "")
     match = ROLE_REF.fullmatch(role_ref)
@@ -121,6 +193,30 @@ def validate_role(task_id, state, instance, fields, goal_assignments, registered
             )
         if profile.get("Role ID", "") != role_id:
             errors.append("{}: role profile Role ID must be {}".format(task_id, role_id))
+        if state in VISIBLE_STATES:
+            if is_placeholder(team_revision):
+                errors.append("{}: ROLES.md requires a concrete Team revision".format(task_id))
+            if profile.get("Team revision", "") != team_revision:
+                errors.append("{}: role profile Team revision differs from ROLES.md".format(task_id))
+            origin = profile.get("Origin", "")
+            if is_placeholder(origin) or not origin.startswith(("initial:", "staffing:")):
+                errors.append("{}: role profile Origin must be initial:<ref> or staffing:<change-id>".format(task_id))
+            elif origin.startswith("staffing:"):
+                change_id = origin.split(":", 1)[1]
+                change_path = instance / "staffing" / "{}.md".format(change_id)
+                if not change_path.is_file():
+                    errors.append("{}: missing staffing change record for {}".format(task_id, origin))
+                else:
+                    change_text = change_path.read_text(encoding="utf-8")
+                    if "> Status: `APPLIED`" not in change_text:
+                        errors.append("{}: staffing change {} must be APPLIED".format(task_id, change_id))
+                    approved = ""
+                    for raw in change_text.splitlines():
+                        if raw.startswith("> Approved by:"):
+                            approved = raw.split(":", 1)[1].strip().strip("`")
+                            break
+                    if is_placeholder(approved):
+                        errors.append("{}: staffing change {} requires approval evidence".format(task_id, change_id))
         if profile.get("生命周期", "") != lifecycle:
             errors.append("{}: role profile lifecycle differs from ledger".format(task_id))
         role_state = profile.get("状态", "")
@@ -161,6 +257,15 @@ def role_registry(path):
         if re.fullmatch(r"[a-z0-9][a-z0-9-]*", cells[0]):
             roles.add(cells[0])
     return roles
+
+
+def role_team_revision(path):
+    if not path.is_file():
+        return ""
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        if raw.startswith("> Team revision:"):
+            return raw.split(":", 1)[1].strip().strip("`")
+    return ""
 
 
 def validate_reviewer_role(task_id, state, instance, fields, registered_roles):
@@ -312,6 +417,7 @@ def validate(project):
     tasks = {}
     persistent_assignments = {}
     registered_roles = role_registry(instance / "ROLES.md")
+    team_revision = role_team_revision(instance / "ROLES.md")
     active_or_review = False
     for state in STATES:
         state_dir = queue / state
@@ -332,7 +438,13 @@ def validate(project):
                 active_or_review = True
             goal = child / "goal.md"
             ledger = child / "ledger.md"
-            goal_data = {"task_id": "", "baseline": "", "assignments": {}}
+            goal_data = {
+                "task_id": "",
+                "baseline": "",
+                "context_manifest": "",
+                "context_revision": "",
+                "assignments": {},
+            }
             if not goal.is_file():
                 errors.append("{}: missing goal.md".format(child.name))
             else:
@@ -348,6 +460,9 @@ def validate(project):
             )
             role_required = state in VISIBLE_STATES or (
                 state == "done" and "Role ref" in fields
+            )
+            context_required = state in VISIBLE_STATES or (
+                state == "done" and "Context manifest" in fields
             )
             if runtime_evidence_required and is_placeholder(goal_data["baseline"]):
                 errors.append("{}: evidence-bearing Goal requires a concrete baseline".format(child.name))
@@ -374,7 +489,13 @@ def validate(project):
                 goal_assignments = goal_data["assignments"]
                 errors.extend(
                     validate_role(
-                        child.name, state, instance, fields, goal_assignments, registered_roles
+                        child.name,
+                        state,
+                        instance,
+                        fields,
+                        goal_assignments,
+                        registered_roles,
+                        team_revision,
                     )
                 )
                 errors.extend(
@@ -385,6 +506,9 @@ def validate(project):
                 role_ref = fields.get("Role ref", "")
                 if state in VISIBLE_STATES and fields.get("Role lifecycle", "") == "persistent":
                     persistent_assignments.setdefault(role_ref, []).append(child.name)
+
+            if context_required:
+                errors.extend(validate_context(child.name, child, fields, goal_data))
 
             if runtime_evidence_required:
                 requested_raw = fields.get("Runtime requested", "")

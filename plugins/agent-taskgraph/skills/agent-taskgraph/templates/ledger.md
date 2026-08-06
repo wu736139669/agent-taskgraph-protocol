@@ -7,6 +7,8 @@
 | 任务 ID | <与 queue 目录名、graph goal_ref、STATUS 完全一致> |
 | Goal ref | task:<task-id> |
 | Goal current path | queue/<当前 state>/<task-id>/goal.md |
+| Context manifest | context.md |
+| Context revision | <与 context.md 一致的递增整数或内容 hash> |
 | Role ref | role:<role-id> |
 | Role lifecycle | <persistent / task-scoped> |
 | Role profile | roles/<role-id>/ROLE.md |

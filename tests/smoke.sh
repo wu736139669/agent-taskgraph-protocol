@@ -48,7 +48,7 @@ git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
 git -C "$TMP/update-local" push -u origin main >/dev/null
 
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
-grep -q 'version: 0.8.0-beta.6' "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.7' "$TMP/update-current.out"
 grep -q 'Update status: current' "$TMP/update-current.out"
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
 [ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
@@ -81,7 +81,7 @@ assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
-grep -q 'Version: 0.8.0-beta.6' "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.7' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -130,6 +130,9 @@ assert_file "$TMP/project/.agent-taskgraph/templates/role.md"
 assert_dir "$TMP/project/.agent-taskgraph/roles"
 assert_file "$TMP/project/.agent-taskgraph/templates/spec.md"
 assert_file "$TMP/project/.agent-taskgraph/templates/graph.yaml"
+assert_file "$TMP/project/.agent-taskgraph/templates/context.md"
+assert_file "$TMP/project/.agent-taskgraph/templates/staffing-change.md"
+assert_dir "$TMP/project/.agent-taskgraph/staffing"
 echo sentinel > "$TMP/project/.agent-taskgraph/PROJECT.md"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/reinit.out"
 grep -qx sentinel "$TMP/project/.agent-taskgraph/PROJECT.md" || fail "init overwrote PROJECT.md"
@@ -367,6 +370,8 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/goal.md" <<'MD'
 
 > Task ID: `P5-ui`
 > Baseline: `abc1234 main clean`
+> Context manifest: `context.md`
+> Context revision: `ctx-1`
 
 ## 分配记录
 
@@ -388,6 +393,8 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/ledger.md" <<'MD'
 | 任务 ID | P5-ui |
 | Goal ref | task:P5-ui |
 | Goal current path | queue/active/P5-ui/goal.md |
+| Context manifest | context.md |
+| Context revision | ctx-1 |
 | Role ref | role:frontend-ui |
 | Role lifecycle | persistent |
 | Role profile | roles/frontend-ui/ROLE.md |
@@ -402,6 +409,31 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/ledger.md" <<'MD'
 | Runtime evidence | runtime-evidence.json |
 | Dispatch message | SENT: 2026-08-06 via ping_peer |
 MD
+cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/context.md" <<'MD'
+# Context Manifest: P5-ui
+
+> Task ID: `P5-ui`
+> Revision: `ctx-1`
+> Mode: `lean`
+> Budget exception: `none`
+
+## 必须读取（默认不超过 8 项）
+
+| 路径或稳定引用 | Revision / 范围 | 为什么本 Goal 必须读 |
+|---|---|---|
+| `.agent-taskgraph/PROJECT.md` | relevant-sections | 项目硬约束 |
+| `task:P5-ui` | current | 单次执行合同 |
+
+## 按需检索（先搜索，再局部读取）
+
+| 路径/范围 | 触发条件 | 检索提示 |
+|---|---|---|
+| `src/ui` | 确认实现细节 | `rg P5` |
+
+## 明确不加载
+
+- 无关历史与长日志
+MD
 mkdir -p "$TMP/state-valid/.agent-taskgraph/roles/frontend-ui"
 cat > "$TMP/state-valid/.agent-taskgraph/roles/frontend-ui/ROLE.md" <<'MD'
 # Role: Frontend UI
@@ -409,6 +441,8 @@ cat > "$TMP/state-valid/.agent-taskgraph/roles/frontend-ui/ROLE.md" <<'MD'
 | 字段 | 值 |
 |---|---|
 | Role ID | frontend-ui |
+| Team revision | rev-1 |
+| Origin | initial:spec-rev-1 |
 | 生命周期 | persistent |
 | 状态 | assigned |
 | 当前 Goal | task:P5-ui |
@@ -416,6 +450,8 @@ cat > "$TMP/state-valid/.agent-taskgraph/roles/frontend-ui/ROLE.md" <<'MD'
 MD
 cat > "$TMP/state-valid/.agent-taskgraph/ROLES.md" <<'MD'
 # Roles
+
+> Team revision: `rev-1`
 
 | Role ID | 名称 | 生命周期 | 状态 | 核心职责 | 当前 Goal | Session ID | 最后更新 |
 |---|---|---|---|---|---|---|---|
@@ -452,6 +488,59 @@ cat > "$TMP/state-valid/.agent-taskgraph/STATUS.md" <<'MD'
 MD
 "$ROOT/scripts/validate-state.py" "$TMP/state-valid" > "$TMP/state-valid.out"
 grep -q 'State validation passed' "$TMP/state-valid.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-missing-context"
+rm "$TMP/state-missing-context/.agent-taskgraph/queue/active/P5-ui/context.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-missing-context" \
+  > "$TMP/state-missing-context.out" 2>&1; then
+  fail "state validator accepted an active task without context.md"
+fi
+grep -q 'missing context.md' "$TMP/state-missing-context.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-context-drift"
+sed -i.bak 's/Revision: `ctx-1`/Revision: `ctx-2`/' \
+  "$TMP/state-context-drift/.agent-taskgraph/queue/active/P5-ui/context.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-context-drift" \
+  > "$TMP/state-context-drift.out" 2>&1; then
+  fail "state validator accepted context revision drift"
+fi
+grep -q 'context revision differs from ledger' "$TMP/state-context-drift.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-context-over-budget"
+cat > "$TMP/state-context-over-budget/.agent-taskgraph/queue/active/P5-ui/context.md" <<'MD'
+# Context Manifest: P5-ui
+
+> Task ID: `P5-ui`
+> Revision: `ctx-1`
+> Mode: `lean`
+> Budget exception: `none`
+
+## 必须读取（默认不超过 8 项）
+
+| 路径或稳定引用 | Revision / 范围 | 为什么本 Goal 必须读 |
+|---|---|---|
+| `context-1.md` | rev-1 | required-1 |
+| `context-2.md` | rev-2 | required-2 |
+| `context-3.md` | rev-3 | required-3 |
+| `context-4.md` | rev-4 | required-4 |
+| `context-5.md` | rev-5 | required-5 |
+| `context-6.md` | rev-6 | required-6 |
+| `context-7.md` | rev-7 | required-7 |
+| `context-8.md` | rev-8 | required-8 |
+| `context-9.md` | rev-9 | required-9 |
+
+## 按需检索（先搜索，再局部读取）
+
+| 路径/范围 | 触发条件 | 检索提示 |
+|---|---|---|
+| `src/ui` | 确认实现细节 | `rg P5` |
+MD
+if "$ROOT/scripts/validate-state.py" "$TMP/state-context-over-budget" \
+  > "$TMP/state-context-over-budget.out" 2>&1; then
+  fail "state validator accepted an oversized context without exception"
+fi
+grep -q 'more than 8 required items without Budget exception' \
+  "$TMP/state-context-over-budget.out"
 
 cp -R "$TMP/state-valid" "$TMP/state-missing-role"
 sed -i.bak '/frontend-ui | Frontend UI/d' "$TMP/state-missing-role/.agent-taskgraph/ROLES.md"
@@ -496,6 +585,8 @@ cat > "$TMP/state-review-role/.agent-taskgraph/roles/review-p5-ui/ROLE.md" <<'MD
 | 字段 | 值 |
 |---|---|
 | Role ID | review-p5-ui |
+| Team revision | rev-1 |
+| Origin | initial:graph-rev-1 |
 | 生命周期 | task-scoped |
 | 状态 | assigned |
 | 当前 Goal | task:P5-ui |
@@ -518,6 +609,31 @@ if "$ROOT/scripts/validate-state.py" "$TMP/state-review-not-independent" \
 fi
 grep -q 'reviewer role must differ from worker role' \
   "$TMP/state-review-not-independent.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-staffing-missing"
+sed -i.bak 's/Origin | initial:spec-rev-1/Origin | staffing:add-frontend-ui/' \
+  "$TMP/state-staffing-missing/.agent-taskgraph/roles/frontend-ui/ROLE.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-staffing-missing" \
+  > "$TMP/state-staffing-missing.out" 2>&1; then
+  fail "state validator accepted a dynamic role without staffing record"
+fi
+grep -q 'missing staffing change record for staffing:add-frontend-ui' \
+  "$TMP/state-staffing-missing.out"
+
+cp -R "$TMP/state-staffing-missing" "$TMP/state-staffing-applied"
+mkdir -p "$TMP/state-staffing-applied/.agent-taskgraph/staffing"
+cat > "$TMP/state-staffing-applied/.agent-taskgraph/staffing/add-frontend-ui.md" <<'MD'
+# Staffing Change: add-frontend-ui
+
+> Team revision: `rev-0 → rev-1`
+> Status: `APPLIED`
+> Type: `ADD`
+> Proposed by: `PMO / 2026-08-06`
+> Approved by: `Owner / 2026-08-06`
+MD
+"$ROOT/scripts/validate-state.py" "$TMP/state-staffing-applied" \
+  > "$TMP/state-staffing-applied.out"
+grep -q 'State validation passed' "$TMP/state-staffing-applied.out"
 
 cp -R "$TMP/state-valid" "$TMP/state-stale"
 printf '%s\n' '| stale-task | Stale | active | worker | 1 | now | none |' \
@@ -659,7 +775,7 @@ import re
 import sys
 
 root = Path(sys.argv[1])
-assert (root / "VERSION").read_text().strip() == "0.8.0-beta.6"
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.7"
 assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
@@ -677,9 +793,9 @@ for phrase in ("verify-hapi-session.py", "RUNTIME_CONFIG_MISMATCH", "先不要 `
 project_template = (root / "templates/PROJECT.md").read_text()
 for phrase in ("Runtime preference", "原生运行时优先", "已启用可选适配器", "Runtime fallback"):
     assert phrase in project_template, phrase
-for path in ("templates/ROLES.md", "templates/role.md"):
+for path in ("templates/ROLES.md", "templates/role.md", "templates/context.md", "templates/staffing-change.md"):
     assert (root / path).is_file(), path
-for phrase in ("Role 与 Goal 分离", "persistent", "task-scoped"):
+for phrase in ("Role 与 Goal 分离", "初始组队协议", "动态编制协议", "persistent", "task-scoped", "上下文预算合同"):
     assert phrase in skill, phrase
 
 for readme_name in ("README.md", "README.zh-CN.md"):
@@ -726,7 +842,9 @@ required = (
     "skills/agent-taskgraph/scripts/verify-hapi-session.py",
     "skills/agent-taskgraph/templates/PROJECT.md",
     "skills/agent-taskgraph/templates/ROLES.md",
+    "skills/agent-taskgraph/templates/context.md",
     "skills/agent-taskgraph/templates/role.md",
+    "skills/agent-taskgraph/templates/staffing-change.md",
     "skills/agent-taskgraph/workers/parse-worker-log.py",
 )
 for relative in required:
@@ -752,6 +870,7 @@ for relative in (
     "agents/openai.yaml",
     "templates/PROJECT.md",
     "templates/ROLES.md",
+    "templates/context.md",
     "templates/STATUS.md",
     "templates/DECISIONS.md",
     "templates/spec.md",
@@ -760,6 +879,7 @@ for relative in (
     "templates/ledger.md",
     "templates/report.md",
     "templates/role.md",
+    "templates/staffing-change.md",
     "workers/log-cleanup.sh",
     "workers/parse-worker-log.py",
     "workers/watch-worker.sh",

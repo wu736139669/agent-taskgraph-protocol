@@ -6,7 +6,7 @@
 
 **Spec-first graph orchestration for AI coding agents.**
 
-Source version: [`v0.8.0-beta.6`](VERSION) | Latest published release: `v0.8.0-beta.4` | License: [Apache-2.0](LICENSE)
+Source version: [`v0.8.0-beta.7`](VERSION) | Latest published release: `v0.8.0-beta.6` | License: [Apache-2.0](LICENSE)
 
 > **Public Beta** for users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
 
@@ -36,6 +36,7 @@ Agent TaskGraph Protocol is not about opening more agents. It is about making co
 - [How Tasks Are Triaged](#how-tasks-are-triaged)
 - [Graph Engineering](#graph-engineering-for-ai-coding)
 - [Checking Progress](#checking-progress)
+- [Context Efficiency](#context-efficiency)
 - [Install, Update, and Uninstall](#install-update-and-uninstall)
 - [Version and Update Notices](#version-and-update-notices)
 - [Distribution Channels](#distribution-channels)
@@ -99,6 +100,7 @@ your-project/.agent-taskgraph/
 ├── STATUS.md
 ├── DECISIONS.md
 ├── roles/<role-id>/ROLE.md
+├── staffing/<change-id>.md
 ├── templates/
 ├── queue/{inbox,active,review,done,failed}/
 └── archive/
@@ -319,6 +321,10 @@ Agent TaskGraph separates a durable **Role** from a one-off **Goal**. A Role rec
 
 Persistent roles move between `available`, `assigned`, `paused`, and `retired`; one persistent role cannot own two active/review Goals concurrently. Related sequential work should reuse the role and, when healthy, its session. Parallel work needs separate roles with non-overlapping writes. Reviewers are normally task-scoped independent roles and never reuse the author role.
 
+The initial team is proposed only after the spec and graph expose real responsibilities. The PMO shows Role IDs, durable boundaries, current Goals, session reuse, model/effort, permissions, visibility, and concurrency; the owner approves or changes that smallest viable team before any session starts.
+
+Adding people later is a versioned staffing change, not an informal extra agent. The PMO must show evidence of a responsibility gap or critical-path bottleneck, the serial alternative, graph/write-scope changes, added sessions and cost, handoff, and rollback. The owner approves `ADD`, `SPLIT`, `TEMP_AUGMENT`, `REPLACE`, `PAUSE`, or `RETIRE` unless `PROJECT.md` contains an exact applicable pre-authorization. Temporary help is task-scoped by default and retires after its Goal. “More agents might be faster” is not sufficient evidence.
+
 | Role | Does | Does not |
 |---|---|---|
 | PMO / Secretary | Onboarding, clarification, spec/graph, dispatch, monitoring, routing, closeout | Write implementation code after multi-agent mode starts |
@@ -361,15 +367,30 @@ An `idle` thread or a chat message saying “done” cannot by itself move work 
 | `.agent-taskgraph/PROJECT.md` | Facts, rules, shared files, permissions, runtime policy | PMO; owner confirms |
 | `.agent-taskgraph/ROLES.md` | Registry of durable and task-scoped roles | PMO |
 | `.agent-taskgraph/roles/<role-id>/ROLE.md` | Responsibility, boundaries, occupancy, session, and handoff history | PMO |
+| `.agent-taskgraph/staffing/<change-id>.md` | Approved team revision, responsibility transfer, cost, handoff, and rollback | PMO; owner approves |
 | `.agent-taskgraph/STATUS.md` | Lightweight active-task view | PMO derives it from queue/ledgers |
 | `.agent-taskgraph/DECISIONS.md` | Append-only decision history | PMO |
 | `spec.md` | Owner-approved outcome, scope, edges, and acceptance | PMO and owner |
 | `graph.yaml` | Approved static nodes, dependencies, routes, and gates | PMO and owner |
 | `goal.md` | Execution contract for one node | PMO creates; worker returns evidence |
+| `context.md` | Minimal path/revision manifest, on-demand search scope, and latest deltas | PMO; worker reads it first |
 | `ledger.md` | Dynamic status, owner, attempt, and evidence pointers | PMO alone transitions state |
 | `report.md` | Accepted completion report | PMO |
 
 Never store API keys, account credentials, private keys, or user data in these files. Whether `.agent-taskgraph/` is committed is a team decision; review machine-local log paths, session IDs, and privacy fields before committing.
+
+## Context Efficiency
+
+Agent TaskGraph cannot promise an exact token count when a runtime does not expose one. It does enforce auditable context behavior:
+
+- Every active/review Goal has a `context.md` that references source files and revisions instead of copying them.
+- The default required-reading set is at most eight items. Larger sets require a documented exception or a smaller Goal.
+- Workers load the project sections, Role, frozen spec, current graph node, Goal, ledger, and direct dependencies they actually need. Everything else is searched first and read in a narrow range.
+- Owner and worker messages carry deltas, stable references, and evidence paths. Full history, unrelated chats, archives, and long logs are not retransmitted.
+- Decisions and corrections are written once to spec/Goal/DECISIONS/ledger; answered questions are not asked again unless the underlying decision changes.
+- Checkpoints are updated before dispatch, review, failure, and session handoff, so a new session resumes from files instead of replaying the conversation.
+
+This reduces repeated context and makes recovery deterministic, but it does not weaken tests, reviewer independence, or acceptance criteria.
 
 ## Install, Update, and Uninstall
 

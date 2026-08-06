@@ -32,12 +32,15 @@
 | Worker 运行方式（Owner 语言） | <原生可见终端 / 宿主可见线程 / 已启用 adapter / 无头后台> |
 | 模型选择策略 | <AI 推荐并在派发预览确认（推荐） / 每个 worker 确认 / 固定模型+effort> |
 | 派发预览授权 | <每批次确认（默认） / 已预授权的精确条件> |
+| 编制变更授权 | <每次确认（默认） / 精确预授权条件；新增成本、权限或可见性变化始终重新确认> |
 | 默认 Human Gates | <依赖安装 / 迁移 / 删除 / 权限 / 合并 / 发布等> |
 | Runtime preference | <auto / claude-native / codex-native / adapter:<name>> |
 | 原生运行时优先 | <是（公开默认） / 否> |
 | 已启用可选适配器 | <无（公开默认） / hapi / 其他名称> |
 | Runtime fallback 顺序 | <例如：claude-native → codex-native；不允许则写“无”> |
 | Runtime 证据策略 | spawn 后、首条 Goal 前验证 session/cwd/flavor/model/effort/permission；不匹配保持 inbox 并 fallback |
+| 上下文模式 | <lean（默认） / balanced / deep>；只影响读取广度，不降低验收标准 |
+| Context 必读项上限 | <默认 8；超过必须在 context.md 写 Budget exception，必要时拆 Goal> |
 
 ## 共享文件锁
 
