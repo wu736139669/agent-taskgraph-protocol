@@ -20,13 +20,30 @@
 
 命令存在不等于能远程创建会话；`runner list` 只能证明观察能力，不能证明 spawn 能力。不得自动启动、重启或重配 runner/hub，也不得修改认证设置，除非 Owner 对该动作单独授权。
 
+`hapi runner start --help` 不是只读探测：部分版本会忽略 `--help` 并直接重启 runner。只允许读取父命令 `hapi runner --help`，再调用其中明确列出的只读 `status/list`；未经单独授权不得调用任何 `start/stop/restart` 变体。
+
 ## 派发硬门
 
 - 不得在 Claude worker/PMO 的普通 Bash 中执行 `hapi claude ...` 或 `hapi codex ...`，再把这个短暂子进程登记成 runner 创建的可见会话。必须使用宿主真实暴露的 HAPI runner 控制面/API，或请 Owner 从 HAPI 界面创建。
 - 不得把 HAPI 启动命令接到 `head`、`tail`、`grep` 等会提前关闭 stdin 的管道；wrapper 必须保持 stdin，直到注册完成。
 - 模型标识作为一个完整参数传递并正确引用。包含方括号等 shell 元字符的模型名必须加引号，避免被 zsh 展开。
-- 只有控制面返回真实会话 ID，并且 runner list 与 inspect/peer 等价能力同时确认 `active/running`、目标 cwd、正确 flavor 和启动参数后，才能登记为 active。shell 退出码 0 不构成 spawn 成功证据。
-- 每个 Goal/ledger 记录 runtime=`hapi`、完整创建方式、会话 ID、runner/peer 观察证据、日志路径和 fallback。不得记录认证 token、完整 settings 或未脱敏诊断输出。
+- `/spawn-session` 等非稳定内部接口即使接受 `model`、`effort`、`permissionMode` 字段，也可能只创建默认配置的会话。请求 JSON、HTTP 2xx、返回的 session ID 和 ledger 中的计划值都不能证明参数已生效。
+- spawn 后保持任务在 `inbox`，且**先不要 `ping_peer`**。从 runner list/inspect 和该会话日志取得真实 session ID、PID、cwd、flavor、model、effort、permission；使用 `scripts/verify-hapi-session.py` 做 pre-dispatch 校验。该脚本还会拒绝已经收到消息的会话，防止事后把手动改成 yolo 冒充派发前已生效。
+- 把校验器的 JSON 输出保存为当前 inbox 任务目录的 `runtime-evidence.json`。只有输出为 `VERIFIED`，同时 runner list 与 inspect/peer 等价能力确认 `active/running` 后，才能把验证结果写入 Goal/ledger、发送第一条 Goal，再迁移到 `active`。`validate-state.py` 会核对该证据文件并随任务目录保留到 done；shell 退出码 0、API 返回成功或人工推断都不构成 spawn 成功证据。
+- 配置不匹配时标记 `RUNTIME_CONFIG_MISMATCH`：不要发 Goal，不要让 Owner 逐次批准工具；停止本批次刚创建且尚未派发的会话，改由 HAPI UI 按获批参数创建/配置，或走 PROJECT.md 已确认 fallback。若 Goal 已经发送，保留失败证据并按失败重试处理；事后配置变更只能用 `--phase audit` 记录恢复，不能把原派发改写为合格。
+- 每个 Goal/ledger 记录 runtime=`hapi`、`Runtime requested`、`Runtime observed`、`Runtime verification`、完整创建方式、会话 ID、PID、runner/peer 观察证据、日志路径、首条消息送达证据和 fallback。不得记录认证 token、完整 settings 或未脱敏诊断输出。
+
+示例（Skill 根目录执行；普通 Owner 无需手写）：
+
+```bash
+scripts/verify-hapi-session.py \
+  --log "$HOME/.hapi/logs/<session-log>.log" \
+  --session-id '<hapi-session-id>' --pid '<pid>' \
+  --cwd '<worktree>' --flavor claude \
+  --model '<approved-model>' --effort '<approved-effort>' \
+  --permission '<approved-permission>' --json \
+  > '<project>/.agent-taskgraph/queue/inbox/<task-id>/runtime-evidence.json'
+```
 
 ## 会话与消息
 

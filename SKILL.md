@@ -20,14 +20,14 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 |---|---|---|---|
 | 秘书/PMO（你） | 常驻 | 接需求、分诊、拆解、写 Goal、分配、派发、跟进、安排验收、汇报 | 不写代码；唯一对外接口 |
 | 专家岗（按需装配） | 按需启用 | 基于项目证据与用户决策，把模糊输入加工成可执行规格；**具体角色由 PMO 按项目定义**，可写入 PROJECT.md | 管内容不管进度；不写代码 |
-| Worker（分岗） | 独立会话 ×N | 按 Goal 执行；岗位由项目定义（如 UI/数据/后端/测试…） | 只管执行，不改方案 |
-| Reviewer | 验收时启用 | 审 diff、重跑验收命令 | 只验收不修复 |
+| Worker（分岗） | 持久角色 + 可恢复会话 ×N | 按 Goal 执行；岗位由项目定义（如 UI/数据/后端/测试…） | 只管执行，不改方案；不得并发占用同一持久角色 |
+| Reviewer | task-scoped 独立角色 | 审 diff、重跑验收命令 | 只验收不修复；不继承被审 worker 身份 |
 
 **职责边界纪律**：PMO 对上下文完整性、决策归属和流程负责；专家对规格/方案内容负责；worker 只管执行不擅自改方案。
 
 **项目接入（PMO 自动完成，Owner 只需确认）**：PMO 第一次接手某项目时做一次——
 1. 读项目：README / AGENTS.md / 目录结构 / 构建与测试配置
-2. 分析技术栈与模块划分 → **推断岗位配置**（如 UI/数据/后端/测试 worker，无需用户预先指定）
+2. 分析技术栈与模块划分 → **推断岗位配置**（如 UI/数据/后端/测试 worker，无需用户预先指定），建立 `ROLES.md` 和 `roles/<role-id>/ROLE.md`
 3. 分析测试与构建命令 → 定各岗位验收命令
 4. 识别硬性规范与共享文件锁
 5. 探测 Git/source baseline：仓库根、HEAD、分支/upstream、clean/dirty ownership；无 Git 或无法得到可复现 baseline 时标记 `BLOCKED`，只允许继续澄清/建图，不得派实现 worker
@@ -122,6 +122,13 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 ## 第 7 节：任务分配与派发
 
+**Role 与 Goal 分离（强制）**：Role 是可跨任务复用的长期职责身份，Goal 是一次性工作授权。PMO 在 `.agent-taskgraph/ROLES.md` 注册角色，并在 `roles/<role-id>/ROLE.md` 落盘核心职责、负责范围、明确不负责、能力、生命周期、当前 Goal、会话和 handoff。不得只在聊天中称呼“前端 worker”而没有角色档案；也不得把某次 Goal 的临时范围永久写成岗位职责。
+
+**角色生命周期**：
+- `persistent`：稳定模块/领域的长期岗位；状态为 `available → assigned → available`，暂停时 `paused`，明确废止才 `retired`。同一角色同一时间最多绑定一个 active/review Goal，串行相关 Goal 优先复用角色与可恢复会话。
+- `task-scoped`：一次性探索、迁移或独立 reviewer；状态为 `available → assigned → retired`。Reviewer 默认使用此类型，并与被审 worker 分离。
+- 需要并行处理同一职责时，创建两个明确区分写入范围的 Role ID，不能把一个 persistent 角色同时派给两个 Goal。换 session 不等于换角色；必须把旧 session 的结论、未决项和证据写进 ROLE.md 连续性历史。
+
 **分配三优先级**（PMO 独家决策，写入 Goal）：
 1. **相关性**：同一模块之前的活是谁干的 → 还给谁（上下文延续，省得重述背景）
 2. **职责匹配**：任务类型 → 对应岗位（UI 活给 UI worker）
@@ -132,7 +139,8 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - 面向 Owner 只问一个简短选择题，选项只显示本机真实可用路径，例如“1. Claude 原生可见终端（推荐）/ 2. HAPI / 3. 无头后台”；AI 把答案映射到内部 runtime 字段。不得要求普通用户输入 `adapter:hapi`、命令行 flags、PID 或 Goal 路径。
 - `auto` 优先当前宿主真实提供的 Claude/Codex 原生命令或可见线程。Owner 明确选择已启用的可选 adapter 后，才加载对应 reference；选择 HAPI 时读取 [`references/hapi-runtime.md`](references/hapi-runtime.md)，未选择时不要加载其细节。
 - 任何运行时必须按语义提供本 Goal 所需的 `spawn / resume / send / observe-wait / stop / identity-evidence` 能力；命令存在不等于控制面可创建会话。缺少必需能力时该运行时不合格，按已确认 fallback 降级；若降级改变成本、权限或可见性，先请 Owner 决定。
-- 每个 Goal 都记录实际 runtime、模型、effort、权限、完整启动方式、会话标识和证据路径。不得把计划中的 runtime、短暂子进程或仅有退出码 0 的命令登记为已创建会话。
+- 每个 Goal/ledger 分开记录 `Runtime requested` 与 `Runtime observed`，并记录会话标识、进程/线程标识、证据路径和派发消息状态。请求参数、API 返回值、短暂子进程或仅有退出码 0 都不是实际配置证据。
+- **运行时证据闸**：spawn 后任务仍在 `inbox`，且不得发送 Goal。先从运行时真实日志/线程设置验证 session、cwd/worktree、flavor、model、effort、permission 和存活状态全部等于派发预览；记录 `Runtime verification: VERIFIED` 后才允许发第一条 Goal。事后改配置只能记为恢复审计，不能倒推派发合格。
 
 **worker 形态**（按需选）：
 - **独立可见会话（默认）**：由当前平台真实提供的线程控制面或用户打开的终端会话——可见、可插手、可续接。
@@ -142,15 +150,16 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - **权限**：按 PROJECT.md 的一次性授权执行。默认使用平台标准权限；只有用户对当前项目明确授权 `yolo` 时才可用 `--dangerously-skip-permissions`。Frozen + worktree + reviewer 是质量边界，不能替代操作系统/平台权限边界。
 - **工具与模型**：优先使用 PROJECT.md 已确认配置；模型策略默认“AI 推荐并在派发预览确认”，机械/简单任务用轻量模型 + 低思考等级，复杂/风险任务用强模型 + 高思考等级。`待确认`、模板占位符或仅写“默认”都不算已确认，不得据此 spawn。
 
-**会话生命周期**（按任务相关性，不是每次任务都开新会话）：
-- **复用**（运行时真实提供的 resume/handoff）：串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动
-- **新开**：并行组任务（隔离需要）、首次开工、失败重试、上下文快耗尽（先归档总结再新开）
+**会话生命周期**（服从角色连续性，不是每次任务都开新会话）：
+- **复用**（运行时真实提供的 resume/handoff）：同一 persistent 角色的串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动
+- **新开但保留角色**：首次开工、失败污染、上下文确实耗尽或运行时无法 resume；先把 handoff 落到 ROLE.md
+- **新建角色与会话**：并行隔离、职责边界不同或独立 reviewer
 
 **派发用 Goal 方式**（格式见 `templates/goal.md`）：每个任务是一份 Goal——引用冻结的 `spec.md` 与 `graph.yaml` 节点，带 **Legal terminal**（"candidate ready" 或 "redesign required: <最早失败边界>" 的二元终态判定）、**Baseline/证据链**、**输入/输出与写入范围**、**Frozen**、**Estimate**。只有低风险 A 类快速任务可把最小规格和验收直接内嵌 Goal且不建图。
 
-**派发预览闸（每批次强制）**：图批准不等于会话授权。PMO 必须先展示一张短表：`worker/reviewer | 职责 | needs | writes | runtime/可见性 | model/effort | 权限 | worktree | Goal ref | 完整启动方式`，并给出自己的职责（监督、验收、状态记录，不写实现）。Owner 明确批准该预览后才可 spawn；“批准 graph”不能被解释成批准未展示的后台子 agent。若 PROJECT 已记录完全相同的批次级预授权，也仍要展示表，但可按预授权继续。
+**派发预览闸（每批次强制）**：图批准不等于会话授权。PMO 必须先展示一张短表：`Role ID | worker/reviewer | 长期职责 | 本次 Goal | 生命周期/复用方式 | needs | writes | runtime/可见性 | model/effort | 权限 | worktree | Goal ref | 完整启动方式`，并给出自己的职责（监督、验收、状态记录，不写实现）。Owner 可调整角色、模型与推理强度；明确批准该预览后才可 spawn。“批准 graph”不能被解释成批准未展示的后台子 agent。若 PROJECT 已记录完全相同的批次级预授权，也仍要展示表，但可按预授权继续。
 
-派发动作：图校验通过并获批 → 写 Goal 到 `queue/inbox/<task-id>/` → 建隔离 worktree → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn worker → 记录真实会话证据 → 目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
+派发动作：图校验通过并获批 → 创建/确认 Role 档案并绑定 Goal → 写 Goal 到 `queue/inbox/<task-id>/` → 建隔离 worktree → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn/resume worker（仍为 inbox）→ **验证实际运行配置** → 写入真实会话与角色连续性证据 → 发送第一条 Goal → 记录消息送达证据 → 角色标记 assigned、目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；配置不匹配时不得靠 Owner 逐次点允许继续，先停止/重配未派发会话或按已确认 fallback 重建。spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
 
 **默认原生命令适配**：
 - **Claude Code**：Owner 入口先 `cd <project>`，再使用 `claude --plugin-dir <plugin-dir>`（或已安装 Skill）；需要后台任务时，仅在 Claude 原生支持 `claude --bg`/`claude agents` 的环境使用这组命令，并记录返回的任务标识。`claude -p` 是无头 fallback。普通 Skill Bash 不得把 `claude ...` 子进程冒充成用户可见独立会话。
@@ -188,6 +197,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 项目级（常驻，PMO 维护）：
 - `PROJECT.md`：项目恒定信息（技术栈/硬性规范/共享文件锁/岗位工作区映射）——所有 worker 与专家的"先读"文件
+- `ROLES.md` + `roles/<role-id>/ROLE.md`：长期职责注册、边界、占用状态、会话与 handoff；角色身份不依赖聊天记忆
 - `STATUS.md`：任务总览板（**轻量视图**，格式见 `templates/STATUS.md`）——从队列目录 + ledger 派生，线程状态只作观察信号；**只含活跃任务**，done 即移除
 - `DECISIONS.md`：团队决策记录（格式见 `templates/DECISIONS.md`，追加式只增不改）——分配决策、方案关键决定、Owner 指示。防"换会话就忘"。**按主题分区（标题带模块名）**，PMO 开工扫标题选读
 
@@ -356,6 +366,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - worker 不临场改方案，发现方案问题上报 PMO（由 PMO 决定退回专家或现场授权）
 - 专家产出物不合格（spec 缺不做清单/用户冻结、技术方案缺风险清单）→ 退回重写，不进派发
 - 一任务一 worktree；台账在文件系统，只有 PMO 能改状态
+- 一任务绑定一个 Role；一个 persistent Role 同时最多绑定一个 active/review Goal；换会话必须记录 handoff
 - worker 说完成不算，验收命令输出才算
 - 冲突由 PMO 派发前分析解决，不在 worker 间现场解决
 - 自动 merge 前保留 reviewer gate

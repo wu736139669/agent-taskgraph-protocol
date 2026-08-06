@@ -94,6 +94,7 @@ touch_if_missing() {
 
 mkdir -p \
   "$INSTANCE/templates" \
+  "$INSTANCE/roles" \
   "$INSTANCE/queue/inbox" \
   "$INSTANCE/queue/active" \
   "$INSTANCE/queue/review" \
@@ -104,8 +105,9 @@ mkdir -p \
 install_if_missing "$SRC/templates/PROJECT.md" "$INSTANCE/PROJECT.md"
 install_if_missing "$SRC/templates/STATUS.md" "$INSTANCE/STATUS.md"
 install_if_missing "$SRC/templates/DECISIONS.md" "$INSTANCE/DECISIONS.md"
+install_if_missing "$SRC/templates/ROLES.md" "$INSTANCE/ROLES.md"
 
-for name in spec.md graph.yaml goal.md ledger.md report.md; do
+for name in spec.md graph.yaml goal.md ledger.md report.md role.md; do
   install_if_missing "$SRC/templates/$name" "$INSTANCE/templates/$name"
 done
 

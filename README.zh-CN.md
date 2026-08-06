@@ -6,7 +6,7 @@
 
 **面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
-当前版本：[`v0.8.0-beta.4`](VERSION) | 许可证：[Apache-2.0](LICENSE)
+源码版本：[`v0.8.0-beta.6`](VERSION) | 最新已发布版本：`v0.8.0-beta.4` | 许可证：[Apache-2.0](LICENSE)
 
 > **Public Beta**：面向已经使用 Claude Code 或 Codex 的用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
@@ -97,8 +97,10 @@ cd /path/to/your-project
 ```text
 your-project/.agent-taskgraph/
 ├── PROJECT.md
+├── ROLES.md
 ├── STATUS.md
 ├── DECISIONS.md
+├── roles/<role-id>/ROLE.md
 ├── templates/
 ├── queue/{inbox,active,review,done,failed}/
 └── archive/
@@ -198,10 +200,10 @@ PMO：graph revision 1 有 5 个节点：数据合同 → 后端与 UI 并行 �
 Owner：批准 graph revision 1。先给我派发预览。
 
 PMO：graph validator 已通过。计划派发：
-后端 Worker | 依赖 data-contract | 写 server/team | Claude 可见终端 | Sonnet/high
-UI Worker | 依赖 data-contract | 写 app/team | Claude 可见终端 | Sonnet/high
-Reviewer | 依赖后端+UI | 只读 | 独立可见终端 | 当前最强模型/high
-我负责监督、状态对账和最终验收，不写实现。全部使用隔离 worktree 和标准权限。批准启动吗？
+backend-team | persistent 后端职责 | 本次 Goal：团队 API | 新建 Claude 可见会话 | Sonnet/high
+frontend-team | persistent UI 职责 | 本次 Goal：团队设置页 | 新建 Claude 可见会话 | Sonnet/high
+review-team-batch-1 | task-scoped 独立验收 | 本次 Goal：验证后端+UI | 独立可见会话 | 当前最强模型/high
+我负责监督、状态对账和最终验收，不写实现。预览同时记录依赖、互斥写入、隔离 worktree、标准权限和完整启动命令。批准启动吗？
 
 Owner：批准这次派发；合并仍需找我确认。
 ```
@@ -307,12 +309,16 @@ flowchart LR
 
 ## 角色与责任
 
+Agent TaskGraph 把长期 **Role** 与单次 **Goal** 分开。Role 在 `roles/<role-id>/ROLE.md` 中保存一个 worker 的长期职责、边界、能力、当前会话和 handoff 历史；Goal 只保存这一次任务的范围与验收合同。这样前端、后端、数据、研究或报告 worker 可以连续负责相关任务，而不依赖某个聊天窗口的记忆。
+
+持久角色在 `available`、`assigned`、`paused`、`retired` 之间迁移，同一时间不能占用两个 active/review Goal。相关的串行工作应复用角色，并在会话健康时复用会话；并行工作必须建立职责和写入范围明确分开的角色。Reviewer 默认是 task-scoped 独立角色，不能复用作者角色。
+
 | 角色 | 做什么 | 不做什么 |
 |---|---|---|
 | PMO / 秘书 | 接入、澄清、spec/graph、派发、监督、路由、收口 | 进入多 Agent 模式后不写实现代码 |
 | 专家岗（按需） | 产出产品、技术、设计、数据或领域合同 | 不替 Owner 静默决定范围 |
-| Worker | 在一个隔离 worktree 执行一个 Goal | 不改计划，不迁移队列状态 |
-| Reviewer | 独立检查 diff 并重跑验收 | 不边审边修 |
+| Worker | 持有长期职责，在隔离 worktree 执行当前一个 Goal | 不改计划、不越过 Goal，也不让一个持久角色并发占用多个 Goal |
+| Reviewer | 作为 task-scoped 独立角色检查 diff 并重跑验收 | 不复用作者角色，不边审边修 |
 | Owner | 冻结范围、处理 Human Gates、最终验收 | 不需要手工维护日常台账 |
 
 ## 怎样查看进度
@@ -346,6 +352,8 @@ find .agent-taskgraph/queue -mindepth 2 -maxdepth 2 -type d | sort
 | 文件 | 用途 | 主要维护者 |
 |---|---|---|
 | `.agent-taskgraph/PROJECT.md` | 项目事实、规范、共享文件、权限和运行时策略 | PMO，Owner 确认 |
+| `.agent-taskgraph/ROLES.md` | 长期与临时角色注册表 | PMO |
+| `.agent-taskgraph/roles/<role-id>/ROLE.md` | 职责、边界、占用状态、会话和 handoff 历史 | PMO |
 | `.agent-taskgraph/STATUS.md` | 当前活跃任务的轻量视图 | PMO 从队列/ledger 派生 |
 | `.agent-taskgraph/DECISIONS.md` | 关键决策的追加式历史 | PMO |
 | `spec.md` | 用户已确认的目标、范围、边界和验收合同 | PMO 与 Owner |
@@ -464,8 +472,9 @@ claude plugin validate ./plugins/agent-taskgraph
 | `./init.sh --migrate <project>` | 显式迁移旧 `.agent-queue/` 状态目录，并补齐缺失的新模板 |
 | `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | 用稳定队列 Goal ref 预览 Claude/Codex 原生 worker 命令 |
 | `./scripts/open-worker-terminal.sh ...` | 在 macOS Terminal.app 打开并验证一个可见 worker |
+| `./scripts/verify-hapi-session.py ... --json` | 在发送 Goal 前验证 HAPI 会话、PID、工作区、模型、effort 和权限的实际值 |
 | `./scripts/validate-graph.py <graph.yaml>` | 拒绝未知依赖、动态 Goal 路径、缺失生产者祖先、环和并行写冲突 |
-| `./scripts/validate-state.py <project>` | 校验队列目录、Goal、ledger 与 active/review STATUS 行一致 |
+| `./scripts/validate-state.py <project>` | 校验队列、baseline、Frozen 开放问题、请求/实际运行配置、证据和 STATUS 一致 |
 | `./workers/watch-worker.sh <log>` | 把 Codex JSONL 或 HAPI 文本日志压缩成进展事件流 |
 | `./workers/log-cleanup.sh` | dry-run 列出 30 天前的 Codex 已归档日志 |
 | `./workers/log-cleanup.sh --apply` | 删除刚才列出的已归档候选 |
@@ -479,7 +488,8 @@ claude plugin validate ./plugins/agent-taskgraph
 - Skill 会探测当前环境，不假设每个 Codex 都有 `create_thread`、`wait_threads` 等工具。
 - 可用时优先用户可见、可接管的独立会话。Claude Code 优先使用 `claude`、`claude --bg`、`claude agents` 或 `claude -p`；Codex 优先使用 `codex`、`codex exec` 或 `codex resume`。能力不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
 - 公开默认是 `auto + native-first`，不启用任何可选 adapter。HAPI 作为[按需启用的运行时适配器](references/hapi-runtime.md)随仓库提供：接入时可以报告已检测到，但只有 Owner 在 `PROJECT.md` 选择后才加载和启用。
-- 每个批次派发前，Owner 都会看到实际 Worker/Reviewer、职责、依赖、写入、运行时可见性、模型/effort、权限、worktree 和启动命令。批准 graph 本身不等于授权开启会话。
+- 每个批次派发前，Owner 都会看到 Role ID、长期职责、本次 Goal、复用方案、依赖、写入、运行时可见性、模型/effort、权限、worktree 和启动命令。Owner 可以调整角色、模型和推理强度；批准 graph 本身不等于授权开启会话。
+- spawn 后任务仍停留在 `inbox`；只有实际模型、effort、权限、工作区、会话身份和进程证据全部匹配派发预览，才发送第一条 Goal。API 请求字段和返回的 session ID 不能证明配置已生效。
 - 在 macOS 上，如果 Owner 要求每个 worker/reviewer 都显示独立 CLI，可使用 `scripts/open-worker-terminal.sh`。队列任务传 `--goal task:<id>`，避免 inbox/active 迁移让命令失效。必须先 `--dry-run` 预览并批准图和运行参数，再实际打开；PID 验证成功后才能把任务登记为 active。
 - 默认使用平台标准权限。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。
 - Frozen、worktree 和 Reviewer 是质量控制，不是安全沙箱。

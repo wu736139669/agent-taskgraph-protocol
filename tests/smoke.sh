@@ -14,12 +14,13 @@ assert_file() { [ -f "$1" ] || fail "missing file: $1"; }
 assert_dir() { [ -d "$1" ] || fail "missing directory: $1"; }
 assert_link_to() { [ -L "$1" ] && [ "$(readlink "$1")" = "$2" ] || fail "unexpected symlink: $1"; }
 
-echo "[1/11] shell and Python syntax"
+echo "[1/12] shell and Python syntax"
 bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" \
   "$ROOT/scripts/open-worker-terminal.sh" "$ROOT/workers/watch-worker.sh" \
   "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
 python3 - "$ROOT/workers/parse-worker-log.py" \
-  "$ROOT/scripts/validate-graph.py" "$ROOT/scripts/validate-state.py" <<'PY'
+  "$ROOT/scripts/validate-graph.py" "$ROOT/scripts/validate-state.py" \
+  "$ROOT/scripts/verify-hapi-session.py" <<'PY'
 from pathlib import Path
 import sys
 
@@ -28,12 +29,12 @@ for filename in sys.argv[1:]:
     compile(source, filename, "exec")
 PY
 
-echo "[2/11] Codex log parser fixtures"
+echo "[2/12] Codex log parser fixtures"
 python3 "$ROOT/workers/parse-worker-log.py" --format jsonl \
   < "$ROOT/tests/fixtures/codex-events.jsonl" > "$TMP/parser.out"
 diff -u "$ROOT/tests/fixtures/codex-events.expected" "$TMP/parser.out"
 
-echo "[3/11] update checker states"
+echo "[3/12] update checker states"
 git init --bare "$TMP/update-remote.git" >/dev/null
 git init "$TMP/update-local" >/dev/null
 git -C "$TMP/update-local" checkout -b main >/dev/null
@@ -47,7 +48,7 @@ git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
 git -C "$TMP/update-local" push -u origin main >/dev/null
 
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
-grep -q 'version: 0.8.0-beta.4' "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.6' "$TMP/update-current.out"
 grep -q 'Update status: current' "$TMP/update-current.out"
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
 [ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
@@ -74,13 +75,13 @@ cp "$ROOT/VERSION" "$TMP/update-not-git/VERSION"
 AGENT_TASKGRAPH_ROOT="$TMP/update-not-git" "$ROOT/scripts/check-update.sh" > "$TMP/update-unavailable.out"
 grep -q 'Update status: unavailable' "$TMP/update-unavailable.out"
 
-echo "[4/11] install, status, conflict, force, and uninstall"
+echo "[4/12] install, status, conflict, force, and uninstall"
 HOME="$TMP/home-install" "$ROOT/install.sh" > "$TMP/install.out"
 assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
-grep -q 'Version: 0.8.0-beta.4' "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.6' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -117,13 +118,16 @@ find "$TMP/home-conflict/.claude/skills" -maxdepth 1 -name 'agent-taskgraph.back
   > "$TMP/backups.out"
 [ -s "$TMP/backups.out" ] || fail "forced install did not create a backup"
 
-echo "[5/11] project initialization preserves existing files"
+echo "[5/12] project initialization preserves existing files"
 mkdir -p "$TMP/project"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/init.out"
 for state in inbox active review done failed; do
   assert_dir "$TMP/project/.agent-taskgraph/queue/$state"
 done
 assert_file "$TMP/project/.agent-taskgraph/PROJECT.md"
+assert_file "$TMP/project/.agent-taskgraph/ROLES.md"
+assert_file "$TMP/project/.agent-taskgraph/templates/role.md"
+assert_dir "$TMP/project/.agent-taskgraph/roles"
 assert_file "$TMP/project/.agent-taskgraph/templates/spec.md"
 assert_file "$TMP/project/.agent-taskgraph/templates/graph.yaml"
 echo sentinel > "$TMP/project/.agent-taskgraph/PROJECT.md"
@@ -151,7 +155,7 @@ fi
 assert_dir "$TMP/project-both/.agent-queue"
 assert_dir "$TMP/project-both/.agent-taskgraph"
 
-echo "[6/11] visible Terminal launcher dry-run and permission gates"
+echo "[6/12] visible Terminal launcher dry-run and permission gates"
 mkdir -p "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test"
 echo '# Goal: launcher test' > "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/goal.md"
 AGENT_TASKGRAPH_TERMINAL_DIR="$TMP/terminal-runtime" \
@@ -223,7 +227,60 @@ if kill -0 "$VISIBLE_PID" 2>/dev/null; then
   fail "launcher test worker was not cleaned up"
 fi
 
-echo "[7/11] graph validator rejects broken dependencies and write conflicts"
+echo "[7/12] HAPI runtime evidence must match before dispatch"
+mkdir -p "$TMP/hapi-worktree"
+cat > "$TMP/hapi-verified.log" <<LOG
+[10:00:00.000] Starting hapi CLI with args:  ["bun","/hapi","claude","--started-by","runner"]
+  "workingDirectory": "$TMP/hapi-worktree",
+  "processPid": $$,
+[10:00:00.100] [START] Reporting session 11111111-2222-4333-8444-555555555555 to runner
+[10:00:00.200] Session: 11111111-2222-4333-8444-555555555555
+[10:00:00.300] [loop] Synced session config for keepalive: permissionMode=bypassPermissions, model=deepseek-v4-flash[1m], effort=max
+LOG
+"$ROOT/scripts/verify-hapi-session.py" \
+  --log "$TMP/hapi-verified.log" \
+  --session-id 11111111-2222-4333-8444-555555555555 --pid $$ \
+  --cwd "$TMP/hapi-worktree" --flavor claude \
+  --model 'deepseek-v4-flash[1m]' --effort max --permission yolo \
+  --json > "$TMP/hapi-verified.out"
+grep -q '"status": "VERIFIED"' "$TMP/hapi-verified.out"
+grep -q '"permission": "bypassPermissions"' "$TMP/hapi-verified.out"
+
+cp "$TMP/hapi-verified.log" "$TMP/hapi-default.log"
+sed -i.bak 's/permissionMode=bypassPermissions/permissionMode=default/' \
+  "$TMP/hapi-default.log"
+if "$ROOT/scripts/verify-hapi-session.py" \
+  --log "$TMP/hapi-default.log" \
+  --session-id 11111111-2222-4333-8444-555555555555 --pid $$ \
+  --cwd "$TMP/hapi-worktree" --flavor claude \
+  --model 'deepseek-v4-flash[1m]' --effort max --permission yolo \
+  > "$TMP/hapi-default.out" 2>&1; then
+  fail "HAPI verifier accepted default permission when yolo was approved"
+fi
+grep -q "permission mismatch" "$TMP/hapi-default.out"
+
+cp "$TMP/hapi-verified.log" "$TMP/hapi-dispatched.log"
+echo '[10:00:01.000] [loop] User message received with permission mode: bypassPermissions, model: deepseek-v4-flash[1m], effort: max' \
+  >> "$TMP/hapi-dispatched.log"
+if "$ROOT/scripts/verify-hapi-session.py" \
+  --log "$TMP/hapi-dispatched.log" \
+  --session-id 11111111-2222-4333-8444-555555555555 --pid $$ \
+  --cwd "$TMP/hapi-worktree" --flavor claude \
+  --model 'deepseek-v4-flash[1m]' --effort max --permission yolo \
+  > "$TMP/hapi-dispatched.out" 2>&1; then
+  fail "HAPI verifier authorized a session after its first Goal message"
+fi
+grep -q 'pre-dispatch verification must pass before the first Goal message' \
+  "$TMP/hapi-dispatched.out"
+"$ROOT/scripts/verify-hapi-session.py" \
+  --log "$TMP/hapi-dispatched.log" \
+  --session-id 11111111-2222-4333-8444-555555555555 --pid $$ \
+  --cwd "$TMP/hapi-worktree" --flavor claude \
+  --model 'deepseek-v4-flash[1m]' --effort max --permission yolo \
+  --phase audit > "$TMP/hapi-audit.out"
+grep -q 'HAPI runtime verification passed' "$TMP/hapi-audit.out"
+
+echo "[8/12] graph validator rejects broken dependencies and write conflicts"
 cat > "$TMP/graph-valid.yaml" <<'YAML'
 version: 1
 nodes:
@@ -301,7 +358,7 @@ if "$ROOT/scripts/validate-graph.py" "$TMP/graph-write-overlap.yaml" \
 fi
 grep -q 'parallel write overlap' "$TMP/graph-write-overlap.out"
 
-echo "[8/11] state validator keeps queue, ledger, Goal, and STATUS atomic"
+echo "[9/12] state validator keeps queue, ledger, Goal, and STATUS atomic"
 mkdir -p "$TMP/state-valid"
 "$ROOT/init.sh" "$TMP/state-valid" > "$TMP/state-init.out"
 mkdir -p "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui"
@@ -309,6 +366,19 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/goal.md" <<'MD'
 # Goal: Build UI
 
 > Task ID: `P5-ui`
+> Baseline: `abc1234 main clean`
+
+## 分配记录
+
+- Role ref：`role:frontend-ui`
+- 角色职责：负责前端界面实现；本 Goal 属于 UI 模块
+- 角色生命周期：persistent
+- 连续性：新角色 + session-123
+- Runtime requested：`runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions; visibility=visible`
+- Runtime observed：`runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions; visibility=visible`
+- Runtime verification：VERIFIED: pre-dispatch check
+- Session evidence：session-123 + pid 456 + /tmp/session.log
+- Dispatch message：SENT: 2026-08-06 via ping_peer
 MD
 cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/ledger.md" <<'MD'
 # Ledger
@@ -318,7 +388,60 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/ledger.md" <<'MD'
 | 任务 ID | P5-ui |
 | Goal ref | task:P5-ui |
 | Goal current path | queue/active/P5-ui/goal.md |
+| Role ref | role:frontend-ui |
+| Role lifecycle | persistent |
+| Role profile | roles/frontend-ui/ROLE.md |
+| Role continuity | 新角色 + session-123 |
+| Reviewer Role ref | PENDING |
+| Reviewer Role profile | PENDING |
 | 状态 | active |
+| Runtime requested | runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions; visibility=visible |
+| Runtime observed | runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions; visibility=visible |
+| Runtime verification | VERIFIED |
+| Session ID | session-123 |
+| Runtime evidence | runtime-evidence.json |
+| Dispatch message | SENT: 2026-08-06 via ping_peer |
+MD
+mkdir -p "$TMP/state-valid/.agent-taskgraph/roles/frontend-ui"
+cat > "$TMP/state-valid/.agent-taskgraph/roles/frontend-ui/ROLE.md" <<'MD'
+# Role: Frontend UI
+
+| 字段 | 值 |
+|---|---|
+| Role ID | frontend-ui |
+| 生命周期 | persistent |
+| 状态 | assigned |
+| 当前 Goal | task:P5-ui |
+| 当前 Session ID | session-123 |
+MD
+cat > "$TMP/state-valid/.agent-taskgraph/ROLES.md" <<'MD'
+# Roles
+
+| Role ID | 名称 | 生命周期 | 状态 | 核心职责 | 当前 Goal | Session ID | 最后更新 |
+|---|---|---|---|---|---|---|---|
+| frontend-ui | Frontend UI | persistent | assigned | UI | task:P5-ui | session-123 | now |
+MD
+cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.json" <<'JSON'
+{
+  "status": "VERIFIED",
+  "phase": "pre-dispatch",
+  "session_id": "session-123",
+  "pid": "456",
+  "flavor": "claude",
+  "cwd": "/tmp/project-worktree",
+  "model": "sonnet",
+  "effort": "high",
+  "permission": "bypassPermissions",
+  "messages_received": 0,
+  "evidence": "/tmp/session.log"
+}
+JSON
+cat > "$TMP/state-valid/.agent-taskgraph/PROJECT.md" <<'MD'
+# Project
+
+| 配置 | 项目选择 |
+|---|---|
+| Source baseline | READY: repo=/tmp/project; HEAD=abc1234; branch=main; clean |
 MD
 cat > "$TMP/state-valid/.agent-taskgraph/STATUS.md" <<'MD'
 # Status
@@ -329,6 +452,72 @@ cat > "$TMP/state-valid/.agent-taskgraph/STATUS.md" <<'MD'
 MD
 "$ROOT/scripts/validate-state.py" "$TMP/state-valid" > "$TMP/state-valid.out"
 grep -q 'State validation passed' "$TMP/state-valid.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-missing-role"
+sed -i.bak '/frontend-ui | Frontend UI/d' "$TMP/state-missing-role/.agent-taskgraph/ROLES.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-missing-role" \
+  > "$TMP/state-missing-role.out" 2>&1; then
+  fail "state validator accepted a role absent from ROLES.md"
+fi
+grep -q 'role frontend-ui is missing from ROLES.md' "$TMP/state-missing-role.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-role-concurrent"
+cp -R "$TMP/state-role-concurrent/.agent-taskgraph/queue/active/P5-ui" \
+  "$TMP/state-role-concurrent/.agent-taskgraph/queue/active/P6-ui"
+sed -i.bak 's/P5-ui/P6-ui/g' \
+  "$TMP/state-role-concurrent/.agent-taskgraph/queue/active/P6-ui/goal.md" \
+  "$TMP/state-role-concurrent/.agent-taskgraph/queue/active/P6-ui/ledger.md"
+printf '%s\n' '| P6-ui | Build more UI | active | worker | 1 | now | none |' \
+  >> "$TMP/state-role-concurrent/.agent-taskgraph/STATUS.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-role-concurrent" \
+  > "$TMP/state-role-concurrent.out" 2>&1; then
+  fail "state validator allowed one persistent role on concurrent Goals"
+fi
+grep -q 'persistent role assigned to concurrent tasks: P5-ui, P6-ui' \
+  "$TMP/state-role-concurrent.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-review-role"
+mv "$TMP/state-review-role/.agent-taskgraph/queue/active/P5-ui" \
+  "$TMP/state-review-role/.agent-taskgraph/queue/review/P5-ui"
+sed -i.bak 's|queue/active/P5-ui/goal.md|queue/review/P5-ui/goal.md|' \
+  "$TMP/state-review-role/.agent-taskgraph/queue/review/P5-ui/ledger.md"
+sed -i.bak 's/| 状态 | active |/| 状态 | review |/' \
+  "$TMP/state-review-role/.agent-taskgraph/queue/review/P5-ui/ledger.md"
+sed -i.bak 's/| Reviewer Role ref | PENDING |/| Reviewer Role ref | role:review-p5-ui |/' \
+  "$TMP/state-review-role/.agent-taskgraph/queue/review/P5-ui/ledger.md"
+sed -i.bak 's@Reviewer Role profile | PENDING@Reviewer Role profile | roles/review-p5-ui/ROLE.md@' \
+  "$TMP/state-review-role/.agent-taskgraph/queue/review/P5-ui/ledger.md"
+sed -i.bak 's/| P5-ui | Build UI | active |/| P5-ui | Build UI | review |/' \
+  "$TMP/state-review-role/.agent-taskgraph/STATUS.md"
+mkdir -p "$TMP/state-review-role/.agent-taskgraph/roles/review-p5-ui"
+cat > "$TMP/state-review-role/.agent-taskgraph/roles/review-p5-ui/ROLE.md" <<'MD'
+# Role: P5 UI Reviewer
+
+| 字段 | 值 |
+|---|---|
+| Role ID | review-p5-ui |
+| 生命周期 | task-scoped |
+| 状态 | assigned |
+| 当前 Goal | task:P5-ui |
+| 当前 Session ID | reviewer-session-456 |
+MD
+printf '%s\n' '| review-p5-ui | P5 UI Reviewer | task-scoped | assigned | Review P5 | task:P5-ui | reviewer-session-456 | now |' \
+  >> "$TMP/state-review-role/.agent-taskgraph/ROLES.md"
+"$ROOT/scripts/validate-state.py" "$TMP/state-review-role" \
+  > "$TMP/state-review-role.out"
+grep -q 'State validation passed' "$TMP/state-review-role.out"
+
+cp -R "$TMP/state-review-role" "$TMP/state-review-not-independent"
+sed -i.bak 's/Reviewer Role ref | role:review-p5-ui/Reviewer Role ref | role:frontend-ui/' \
+  "$TMP/state-review-not-independent/.agent-taskgraph/queue/review/P5-ui/ledger.md"
+sed -i.bak 's@Reviewer Role profile | roles/review-p5-ui/ROLE.md@Reviewer Role profile | roles/frontend-ui/ROLE.md@' \
+  "$TMP/state-review-not-independent/.agent-taskgraph/queue/review/P5-ui/ledger.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-review-not-independent" \
+  > "$TMP/state-review-not-independent.out" 2>&1; then
+  fail "state validator allowed the worker role to review its own task"
+fi
+grep -q 'reviewer role must differ from worker role' \
+  "$TMP/state-review-not-independent.out"
 
 cp -R "$TMP/state-valid" "$TMP/state-stale"
 printf '%s\n' '| stale-task | Stale | active | worker | 1 | now | none |' \
@@ -358,7 +547,84 @@ fi
 grep -q "ledger state 'inbox' != directory state 'active'" "$TMP/state-wrong-ledger.out"
 grep -q 'Goal current path must be queue/active/P5-ui/goal.md' "$TMP/state-wrong-ledger.out"
 
-echo "[9/11] cleanup is dry-run and archived-only by default"
+cp -R "$TMP/state-valid" "$TMP/state-runtime-mismatch"
+sed -i.bak 's/Runtime observed | runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions/Runtime observed | runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=default/' \
+  "$TMP/state-runtime-mismatch/.agent-taskgraph/queue/active/P5-ui/ledger.md"
+sed -i.bak 's/Runtime observed：`runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions/Runtime observed：`runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=default/' \
+  "$TMP/state-runtime-mismatch/.agent-taskgraph/queue/active/P5-ui/goal.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-runtime-mismatch" \
+  > "$TMP/state-runtime-mismatch.out" 2>&1; then
+  fail "state validator accepted requested yolo with observed default permission"
+fi
+grep -q "runtime permission mismatch" "$TMP/state-runtime-mismatch.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-missing-runtime-evidence"
+rm "$TMP/state-missing-runtime-evidence/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.json"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-missing-runtime-evidence" \
+  > "$TMP/state-missing-runtime-evidence.out" 2>&1; then
+  fail "state validator accepted a HAPI task without verifier JSON"
+fi
+grep -q 'HAPI Runtime evidence file is missing' "$TMP/state-missing-runtime-evidence.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-late-runtime-evidence"
+sed -i.bak 's/"messages_received": 0/"messages_received": 1/' \
+  "$TMP/state-late-runtime-evidence/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.json"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-late-runtime-evidence" \
+  > "$TMP/state-late-runtime-evidence.out" 2>&1; then
+  fail "state validator accepted HAPI evidence captured after dispatch"
+fi
+grep -q 'HAPI evidence must precede the first Goal message' \
+  "$TMP/state-late-runtime-evidence.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-done-runtime-mismatch"
+mv "$TMP/state-done-runtime-mismatch/.agent-taskgraph/queue/active/P5-ui" \
+  "$TMP/state-done-runtime-mismatch/.agent-taskgraph/queue/done/P5-ui"
+sed -i.bak 's/| 状态 | active |/| 状态 | done |/' \
+  "$TMP/state-done-runtime-mismatch/.agent-taskgraph/queue/done/P5-ui/ledger.md"
+sed -i.bak 's|queue/active/P5-ui/goal.md|queue/done/P5-ui/goal.md|' \
+  "$TMP/state-done-runtime-mismatch/.agent-taskgraph/queue/done/P5-ui/ledger.md"
+sed -i.bak 's/Runtime observed | runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions/Runtime observed | runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=default/' \
+  "$TMP/state-done-runtime-mismatch/.agent-taskgraph/queue/done/P5-ui/ledger.md"
+sed -i.bak 's/Runtime observed：`runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions/Runtime observed：`runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=default/' \
+  "$TMP/state-done-runtime-mismatch/.agent-taskgraph/queue/done/P5-ui/goal.md"
+cat > "$TMP/state-done-runtime-mismatch/.agent-taskgraph/STATUS.md" <<'MD'
+# Status
+
+| 任务 ID | 标题 | 状态 | 负责人 | 轮次 | 最后更新 | 卡点 |
+|---|---|---|---|---|---|---|
+MD
+if "$ROOT/scripts/validate-state.py" "$TMP/state-done-runtime-mismatch" \
+  > "$TMP/state-done-runtime-mismatch.out" 2>&1; then
+  fail "state validator forgot runtime drift after a task moved to done"
+fi
+grep -q "runtime permission mismatch" "$TMP/state-done-runtime-mismatch.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-stale-baseline"
+sed -i.bak 's/READY: repo=\/tmp\/project; HEAD=abc1234; branch=main; clean/待确认：尚未初始化 Git/' \
+  "$TMP/state-stale-baseline/.agent-taskgraph/PROJECT.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-stale-baseline" \
+  > "$TMP/state-stale-baseline.out" 2>&1; then
+  fail "state validator accepted a stale project baseline"
+fi
+grep -q 'Source baseline must start with READY:' "$TMP/state-stale-baseline.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-frozen-open"
+cat > "$TMP/state-frozen-open/.agent-taskgraph/spec.md" <<'MD'
+# Spec
+> Status: FROZEN
+> Frozen by: Owner / 2026-08-06
+
+## 开放问题
+
+- Git baseline 仍待确认
+MD
+if "$ROOT/scripts/validate-state.py" "$TMP/state-frozen-open" \
+  > "$TMP/state-frozen-open.out" 2>&1; then
+  fail "state validator accepted unresolved questions in a Frozen spec"
+fi
+grep -q 'FROZEN requires 开放问题 to be exactly 无' "$TMP/state-frozen-open.out"
+
+echo "[10/12] cleanup is dry-run and archived-only by default"
 mkdir -p "$TMP/home-logs/.codex/archived_sessions" "$TMP/home-logs/.codex/sessions" "$TMP/home-logs/.hapi/logs"
 touch "$TMP/home-logs/.codex/archived_sessions/old.jsonl" \
   "$TMP/home-logs/.codex/sessions/live.jsonl" "$TMP/home-logs/.hapi/logs/live.log"
@@ -386,14 +652,14 @@ HOME="$TMP/home-logs" "$ROOT/workers/log-cleanup.sh" --days 1 --include-live --a
 [ ! -e "$TMP/home-logs/.codex/sessions/live.jsonl" ] || fail "explicit live cleanup missed Codex log"
 [ ! -e "$TMP/home-logs/.hapi/logs/live.log" ] || fail "explicit live cleanup missed HAPI log"
 
-echo "[10/11] skill metadata, templates, links, version, license, and graph YAML"
+echo "[11/12] skill metadata, templates, links, version, license, and graph YAML"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import re
 import sys
 
 root = Path(sys.argv[1])
-assert (root / "VERSION").read_text().strip() == "0.8.0-beta.4"
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.6"
 assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
@@ -406,9 +672,15 @@ for adapter_detail in ("HAPI 派发硬门", "hapi runner list", "hapi resume <id
 hapi_reference = (root / "references/hapi-runtime.md").read_text()
 for phrase in ("只在", "native-first", "派发硬门", "不得自动启用", "fallback"):
     assert phrase in hapi_reference, phrase
+for phrase in ("verify-hapi-session.py", "RUNTIME_CONFIG_MISMATCH", "先不要 `ping_peer`"):
+    assert phrase in hapi_reference, phrase
 project_template = (root / "templates/PROJECT.md").read_text()
 for phrase in ("Runtime preference", "原生运行时优先", "已启用可选适配器", "Runtime fallback"):
     assert phrase in project_template, phrase
+for path in ("templates/ROLES.md", "templates/role.md"):
+    assert (root / path).is_file(), path
+for phrase in ("Role 与 Goal 分离", "persistent", "task-scoped"):
+    assert phrase in skill, phrase
 
 for readme_name in ("README.md", "README.zh-CN.md"):
     readme = (root / readme_name).read_text()
@@ -426,7 +698,7 @@ if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git -C "$ROOT" diff --check
 fi
 
-echo "[11/11] platform plugin package and marketplace catalog"
+echo "[12/12] platform plugin package and marketplace catalog"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import json
@@ -451,7 +723,10 @@ required = (
     "skills/agent-taskgraph/scripts/open-worker-terminal.sh",
     "skills/agent-taskgraph/scripts/validate-graph.py",
     "skills/agent-taskgraph/scripts/validate-state.py",
+    "skills/agent-taskgraph/scripts/verify-hapi-session.py",
     "skills/agent-taskgraph/templates/PROJECT.md",
+    "skills/agent-taskgraph/templates/ROLES.md",
+    "skills/agent-taskgraph/templates/role.md",
     "skills/agent-taskgraph/workers/parse-worker-log.py",
 )
 for relative in required:
@@ -473,8 +748,10 @@ for relative in (
     "scripts/open-worker-terminal.sh",
     "scripts/validate-graph.py",
     "scripts/validate-state.py",
+    "scripts/verify-hapi-session.py",
     "agents/openai.yaml",
     "templates/PROJECT.md",
+    "templates/ROLES.md",
     "templates/STATUS.md",
     "templates/DECISIONS.md",
     "templates/spec.md",
@@ -482,6 +759,7 @@ for relative in (
     "templates/goal.md",
     "templates/ledger.md",
     "templates/report.md",
+    "templates/role.md",
     "workers/log-cleanup.sh",
     "workers/parse-worker-log.py",
     "workers/watch-worker.sh",

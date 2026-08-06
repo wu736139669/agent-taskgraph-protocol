@@ -24,10 +24,19 @@
 
 ## 分配记录
 
+- Role ref：`role:<role-id>`
+- 角色职责：<引用 ROLE.md 的核心职责 + 本 Goal 为什么属于该职责>
+- 角色生命周期：<persistent / task-scoped>
 - 派给：<会话 ID / 岗位名>
 - 分配理由：相关性（同模块历史） / 职责匹配（岗位） / 负载均衡
+- 连续性：<新角色 / 复用 session-id / 新会话 + handoff 路径>
 - 工作区：<worktree 路径>（分支：<branch>）
-- Runtime：<runtime / visibility / model / effort / permission / 完整启动方式>
+- Runtime requested：`runtime=<name>; flavor=<claude|codex|native>; model=<id>; effort=<level>; permission=<mode>; visibility=<visible|headless>`
+- Runtime observed：<spawn 后由 PMO 填；必须与 requested 一致，未验证写 `PENDING`>
+- Runtime verification：<`PENDING` / `VERIFIED`；验证命令摘要 + 时间>
+- Session evidence：<真实会话 ID + PID/线程 ID + 日志/metadata 路径；HAPI 还要引用 runtime-evidence.json>
+- Dispatch message：<`NOT_SENT` / `SENT: <时间 + 通道 + 送达证据>`；VERIFIED 前必须为 NOT_SENT>
+- 完整启动方式：<可复现命令或控制面动作；不得把请求值写成实际值>
 
 ## 报告协议
 

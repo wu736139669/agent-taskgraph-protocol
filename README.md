@@ -6,7 +6,7 @@
 
 **Spec-first graph orchestration for AI coding agents.**
 
-Current version: [`v0.8.0-beta.4`](VERSION) | License: [Apache-2.0](LICENSE)
+Source version: [`v0.8.0-beta.6`](VERSION) | Latest published release: `v0.8.0-beta.4` | License: [Apache-2.0](LICENSE)
 
 > **Public Beta** for users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
 
@@ -95,8 +95,10 @@ Initialization creates:
 ```text
 your-project/.agent-taskgraph/
 ├── PROJECT.md
+├── ROLES.md
 ├── STATUS.md
 ├── DECISIONS.md
+├── roles/<role-id>/ROLE.md
 ├── templates/
 ├── queue/{inbox,active,review,done,failed}/
 └── archive/
@@ -201,11 +203,12 @@ failures return to the backend or UI repair node. Approve?
 Owner: Approve graph revision 1. Show the dispatch preview.
 
 PMO: The graph validator passed. Proposed batch:
-backend worker | needs data-contract | writes server/team | Claude visible Terminal | Sonnet/high
-UI worker | needs data-contract | writes app/team | Claude visible Terminal | Sonnet/high
-reviewer | needs backend+UI | read-only | separate visible Terminal | strongest available/high
+backend-team | persistent backend responsibility | Goal: team API | new visible Claude session | Sonnet/high
+frontend-team | persistent UI responsibility | Goal: team settings | new visible Claude session | Sonnet/high
+review-team-batch-1 | task-scoped independent review | Goal: verify backend+UI | separate visible session | strongest available/high
 I will supervise, reconcile state, and run final acceptance; I will not implement.
-All workers use isolated worktrees and standard permissions. Approve launch?
+The preview also records dependencies, non-overlapping writes, isolated worktrees,
+standard permissions, and full launch commands. Approve launch?
 
 Owner: Approve this dispatch. Merge still requires my approval.
 ```
@@ -312,12 +315,16 @@ This is primarily a **delivery task graph**, not a code knowledge graph. A futur
 
 ## Roles
 
+Agent TaskGraph separates a durable **Role** from a one-off **Goal**. A Role records a worker's long-term responsibility, boundaries, capabilities, current session, and handoff history in `roles/<role-id>/ROLE.md`. A Goal records only the scope and acceptance contract for one task. This lets a frontend, backend, data, research, or reporting worker keep responsibility across sequential tasks without relying on chat memory.
+
+Persistent roles move between `available`, `assigned`, `paused`, and `retired`; one persistent role cannot own two active/review Goals concurrently. Related sequential work should reuse the role and, when healthy, its session. Parallel work needs separate roles with non-overlapping writes. Reviewers are normally task-scoped independent roles and never reuse the author role.
+
 | Role | Does | Does not |
 |---|---|---|
 | PMO / Secretary | Onboarding, clarification, spec/graph, dispatch, monitoring, routing, closeout | Write implementation code after multi-agent mode starts |
 | Expert, on demand | Produce product, technical, design, data, or domain contracts | Silently decide owner scope |
-| Worker | Execute one Goal in an isolated worktree | Change the plan or queue state |
-| Reviewer | Independently inspect the diff and rerun acceptance | Repair while reviewing |
+| Worker | Hold a durable responsibility and execute one assigned Goal in an isolated worktree | Change the plan, exceed the Goal, or own concurrent Goals under one persistent role |
+| Reviewer | Independently inspect the diff and rerun acceptance as a task-scoped role | Reuse the author role or repair while reviewing |
 | Owner | Freeze scope, take Human Gates, final review | Manually maintain routine queue state |
 
 ## Checking Progress
@@ -352,6 +359,8 @@ An `idle` thread or a chat message saying “done” cannot by itself move work 
 | File | Purpose | Primary maintainer |
 |---|---|---|
 | `.agent-taskgraph/PROJECT.md` | Facts, rules, shared files, permissions, runtime policy | PMO; owner confirms |
+| `.agent-taskgraph/ROLES.md` | Registry of durable and task-scoped roles | PMO |
+| `.agent-taskgraph/roles/<role-id>/ROLE.md` | Responsibility, boundaries, occupancy, session, and handoff history | PMO |
 | `.agent-taskgraph/STATUS.md` | Lightweight active-task view | PMO derives it from queue/ledgers |
 | `.agent-taskgraph/DECISIONS.md` | Append-only decision history | PMO |
 | `spec.md` | Owner-approved outcome, scope, edges, and acceptance | PMO and owner |
@@ -470,8 +479,9 @@ These are maintainer/PMO commands run from the Skill checkout. Normal owners can
 | `./init.sh --migrate <project>` | Explicitly rename legacy `.agent-queue/` state and add missing current templates |
 | `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | Preview a native Claude/Codex worker command with a stable queue Goal ref |
 | `./scripts/open-worker-terminal.sh ...` | Open and verify one worker in a visible macOS Terminal.app window |
+| `./scripts/verify-hapi-session.py ... --json` | Verify the observed HAPI session, PID, workspace, model, effort, and permission before sending a Goal |
 | `./scripts/validate-graph.py <graph.yaml>` | Reject unknown dependencies, dynamic Goal paths, missing producer ancestry, cycles, and parallel write conflicts |
-| `./scripts/validate-state.py <project>` | Verify queue directories, Goals, ledgers, and active/review STATUS rows agree |
+| `./scripts/validate-state.py <project>` | Verify queue state, baseline, Frozen questions, requested/observed runtime settings, evidence, and STATUS agree |
 | `./workers/watch-worker.sh <log>` | Compact Codex JSONL or HAPI text logs into progress events |
 | `./workers/log-cleanup.sh` | Dry-run archived Codex logs older than 30 days |
 | `./workers/log-cleanup.sh --apply` | Delete the archived candidates just listed |
@@ -485,7 +495,8 @@ Live directories are scanned only with `--include-live`; deletion occurs only wi
 - The skill probes the current environment; it does not assume every Codex exposes `create_thread`, `wait_threads`, or similar tools.
 - Visible, owner-controllable sessions are preferred when available. Use Claude native commands (`claude`, `claude --bg`, `claude agents`, or `claude -p`) for Claude Code and Codex native commands (`codex`, `codex exec`, or `codex resume`) for Codex. Missing capabilities require an explicit fallback, not a fictional reviewer.
 - The public default is `auto + native-first` with no optional adapter enabled. HAPI support ships as an [opt-in runtime adapter](references/hapi-runtime.md): detection may be reported during onboarding, but it is not loaded or activated until the owner selects it in `PROJECT.md`.
-- Before every batch, the owner sees the actual workers/reviewer, responsibilities, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands. Graph approval alone is not session authorization.
+- Before every batch, the owner sees each Role ID, durable responsibility, one-off Goal, reuse plan, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands. The owner can adjust role, model, or reasoning effort; graph approval alone is not session authorization.
+- A spawned session stays in `inbox` until its observed model, effort, permission, workspace, identity, and process evidence match that preview. The first Goal is sent only after verification; API request fields and a returned session ID are not proof that settings took effect.
 - On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Queue work uses `--goal task:<id>` so inbox/active moves do not invalidate the command. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
 - Platform-standard permissions are the default. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project.
 - Frozen scope, worktrees, and reviewers are quality controls, not security sandboxes.
