@@ -12,7 +12,7 @@ This directory is the platform-ready package for the `agent-taskgraph` Skill. Th
 | `skills/agent-taskgraph/references/hapi-runtime.md` | Opt-in HAPI runtime adapter; native Claude/Codex remains the public default |
 | `LICENSE` | Apache-2.0 license for this package |
 
-The package version is `0.8.0-beta.3`. Before a release, keep it equal to the root [`VERSION`](../../VERSION), the Skill [`VERSION`](skills/agent-taskgraph/VERSION), and the Git tag.
+The package version is `0.8.0-beta.4`. Before a release, keep it equal to the root [`VERSION`](../../VERSION), the Skill [`VERSION`](skills/agent-taskgraph/VERSION), and the Git tag.
 
 ## Local validation
 

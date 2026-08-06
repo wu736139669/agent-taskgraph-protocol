@@ -6,7 +6,7 @@
 
 **Spec-first graph orchestration for AI coding agents.**
 
-Current version: [`v0.8.0-beta.3`](VERSION) | License: [Apache-2.0](LICENSE)
+Current version: [`v0.8.0-beta.4`](VERSION) | License: [Apache-2.0](LICENSE)
 
 > **Public Beta** for users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
 
@@ -425,7 +425,7 @@ Keep GitHub as the canonical source and point every other listing to a tag or co
 | Channel | Availability | Recommended use |
 |---|---|---|
 | GitHub repository | Public Beta | Canonical source, issues, reviews, and contributor history |
-| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | `v0.8.0-beta.3` published | Versioned archives and release notes |
+| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | `v0.8.0-beta.4` published | Versioned archives and release notes |
 | Codex / Claude Code local install | Available now | `./install.sh` links this checkout into `~/.codex/skills/agent-taskgraph` and `~/.claude/skills/agent-taskgraph` |
 | Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |
 | [skills.sh](https://skills.sh) | CLI-compatible; directory listing is third-party | Install with `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`; keep GitHub as the source of truth |
