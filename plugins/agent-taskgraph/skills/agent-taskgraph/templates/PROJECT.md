@@ -26,21 +26,36 @@
 | Source baseline | <READY: git root + HEAD + branch/upstream + clean/dirty ownership / BLOCKED: 原因> |
 | 单任务快速路径 | <允许 / 一律先确认> |
 | 复杂任务规格冻结 | 默认必须由用户确认；例外：<无 / 条件> |
-| Worker 权限 | <平台标准权限 / 当前项目明确授权 yolo> |
-| Worker 默认模型/effort | <明确模型 + effort；不得只写“默认”或“待确认”> |
 | 自主创建可见会话 | <已授权 / 每批次确认 / 未授权> |
-| Worker 运行方式（Owner 语言） | <原生可见终端 / 宿主可见线程 / 已启用 adapter / 无头后台> |
-| 模型选择策略 | <AI 推荐并在派发预览确认（推荐） / 每个 worker 确认 / 固定模型+effort> |
 | 派发预览授权 | <每批次确认（默认） / 已预授权的精确条件> |
 | 编制变更授权 | <每次确认（默认） / 精确预授权条件；新增成本、权限或可见性变化始终重新确认> |
 | 默认 Human Gates | <依赖安装 / 迁移 / 删除 / 权限 / 合并 / 发布等> |
-| Runtime preference | <auto / claude-native / codex-native / adapter:<name>> |
-| 原生运行时优先 | <是（公开默认） / 否> |
 | 已启用可选适配器 | <无（公开默认） / hapi / 其他名称> |
-| Runtime fallback 顺序 | <例如：claude-native → codex-native；不允许则写“无”> |
 | Runtime 证据策略 | spawn 后、首条 Goal 前验证 session/cwd/flavor/model/effort/permission；不匹配保持 inbox 并 fallback |
 | 上下文模式 | <lean（默认） / balanced / deep>；只影响读取广度，不降低验收标准 |
 | Context 必读项上限 | <默认 8；超过必须在 context.md 写 Budget exception，必要时拆 Goal> |
+
+## Execution profile（派发硬门）
+
+> PMO 先探测真实运行能力，再用一张普通语言选择表让 Owner **整体确认一次**。`PENDING`、旧项目里的分散配置或聊天中的口头推测都不能授权 spawn。运行时、机器、flavor、权限、可见性或 fallback 改变时，先把 status 改回 `PENDING`，展示 diff，重新确认后再派发。
+
+| Execution profile | Confirmed value |
+|---|---|
+| Execution profile status | <PENDING / CONFIRMED> |
+| Execution profile confirmed by/at | <Owner / ISO-8601 时间 / 适用批次或项目范围> |
+| Execution runtime | <hapi / claude-native / codex-native / 当前宿主真实 runtime ID> |
+| Execution control | <宿主原生工具 / 可见终端 / HAPI spawn 工具 / scripts/hapi-hub-session.py> |
+| Execution machine | <local: host=... / HAPI: id=...; name=...; host=...；不得只写“本机”> |
+| Execution flavor | <claude / codex> |
+| Model selection policy | <adaptive-batch（推荐） / fixed / per-worker> |
+| Fixed model/effort | <adaptive/per-worker 写 none；fixed 写 model=<id>; effort=<level>> |
+| Model catalog evidence | <runtime + machine ID + 探测时间 + 脱敏结果路径/命令摘要> |
+| Execution permission | <该 runtime 的准确 mode；default 也必须由 Owner 明确确认> |
+| Permission scope | <runtime-only / all-approved-runtimes；后者允许 fallback 映射同等级权限> |
+| Execution visibility | <visible / headless> |
+| Execution fallback | <none / 准确 runtime + flavor + machine + permission 映射及触发条件> |
+
+`adaptive-batch` 表示 AI 根据 Goal 复杂度从已探测目录推荐模型与 effort，并在每批派发预览中一次展示、一次确认；不是让 AI 静默决定。`per-worker` 才逐个询问。`fixed` 对所有 worker 使用同一明确组合。无论哪种策略，`default`、`auto`、`pending` 或 `待确认` 都不能写进某个 Goal 的 model/effort，也不能生成 `VERIFIED`。
 
 ## 共享文件锁
 
@@ -66,6 +81,7 @@
 |---|---|---|
 | Git/worktree | <✅/❌> | 记录 repo root、HEAD、branch/upstream、clean/dirty ownership；B/C/D 无 READY baseline 时禁止派发 |
 | 可选 runtime adapter | <未探测 / 名称 + ✅/❌> | 只探测 Owner 选择或允许评估的 adapter；安装成功不等于已启用，也不等于控制面支持 spawn |
+| HAPI Hub 控制面 | <未探测 / READY / 不可用> | 使用 `scripts/hapi-hub-session.py probe`；记录脱敏 machine/host 和能力，不记录 token/settings |
 | Runtime 配置验证 | <验证器/线程设置/日志证据路径> | 请求参数不算证据；必须能证明配置在第一条 Goal 前生效 |
 | claude CLI 登录 | ✅/❌ | 原生 `claude` / `claude --bg` / `claude agents` / `claude -p` 是否可跑 |
 | codex 登录 | ✅/❌ | 原生 `codex` / `codex exec` / `codex resume` 是否可跑 |

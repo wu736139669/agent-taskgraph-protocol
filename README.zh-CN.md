@@ -6,7 +6,7 @@
 
 **面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
-源码版本：[`v0.8.0-beta.7`](VERSION) | 最新已发布版本：`v0.8.0-beta.6` | 许可证：[Apache-2.0](LICENSE)
+源码版本：[`v0.8.0-beta.8`](VERSION) | 最新已发布版本：`v0.8.0-beta.7` | 许可证：[Apache-2.0](LICENSE)
 
 > **Public Beta**：面向已经使用 Claude Code 或 Codex 的用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
@@ -116,6 +116,8 @@ your-project/.agent-taskgraph/
 ./init.sh --migrate /path/to/your-project
 ```
 
+从 beta.7 或更早版本升级时，不要改写已经完成的历史证据；校验器保留只读兼容。下一个 active/review Goal 前，让 Agent 探测运行时并补充 `PROJECT.md` 的 Execution profile，再为当前 Goal 生成新的 runtime evidence。status 未确认时停在 `inbox` 是预期保护。
+
 ### 3. 在目标项目启动会话
 
 进入目标项目，新开 Claude Code 或 Codex 会话。普通用户不需要运行校验脚本、填写 Goal 路径或记内部 runtime 参数。支持 Skill 选择器时可使用 `$agent-taskgraph`；最简单只要说：
@@ -132,9 +134,29 @@ your-project/.agent-taskgraph/
 在我确认 PROJECT.md 前不要派发任务。
 ```
 
-第一次接入时，Agent 会分析技术栈、目录、Git baseline、构建测试命令、共享文件和运行时能力，并用普通语言让你选择运行方式与模型策略，再把权限、会话可见性、模型偏好和 Human Gates 写入 `.agent-taskgraph/PROJECT.md`。复杂任务必须先有可复现 Git baseline 且能创建隔离 worktree，才允许派发。
+第一次接入时，Agent 会分析技术栈、目录、Git baseline、构建测试命令、共享文件和运行时能力。探测完成后，它只给一张普通语言的 **Execution profile** 选择表，把运行方式/机器、模型策略、权限、可见性和 fallback 一次聊清楚；不会让你连续回答每个 worker 的内部参数。你确认后写入 `.agent-taskgraph/PROJECT.md`，status 不是 `CONFIRMED` 就不能创建会话。复杂任务还必须有可复现 Git baseline 且能创建隔离 worktree。
 
-### 4. 在 macOS 要求可见 Worker 终端
+模型默认使用 `adaptive-batch`：AI 从所选执行机器的真实模型目录按任务复杂度推荐，并在整批派发预览中一次展示、一次确认。只有你主动选择 `per-worker` 才逐个询问；`fixed` 则固定一个明确组合。Goal 中不会使用 `default/auto` 代替模型或推理强度。
+
+### 4. 使用 HAPI 可见会话（可选）
+
+在 Owner 会话中选择 HAPI；普通用户不需要自己调用 Hub API：
+
+```text
+使用 agent-taskgraph 管理这个项目，所有 Worker 和 Reviewer 都使用 HAPI。
+在名为 <执行机器名称> 的 runner 上运行。派发前展示每个角色、职责、模型、
+推理强度、权限、worktree 和 HAPI dry-run 预览。
+我批准后由你自动创建并验证会话。如果当前 MCP 只有 inspect/ping，先探测正式
+HAPI Hub helper；只有宿主 spawn 工具和 Hub helper 都不可用时才让我手动创建。
+```
+
+Owner 操作端、PMO 会话执行端和 HAPI runner 可以是三台不同机器。操作端不需要安装本地 `hapi` 命令；PMO 执行端需要能访问已配置的 HAPI settings 或等价环境变量。PMO 会先读取准确 machine ID/名称/host，再读取该 runner 的真实模型/effort 目录并检查 worktree 路径，随后展示 dry-run。只有 Owner 批准才创建；真实 PID、工作区、flavor、模型、effort、权限、active/running、idle/not-thinking 和零消息 watermark 全部验证前，任务一直留在 `inbox`。模型名中的方括号会被当成 ID 的一部分，缺失右侧 `]` 会在 spawn 前被拒绝。
+
+长期 Role 可以复用 HAPI 会话，但不是复用旧证据。每个新 Goal 都会重新确认会话空闲、实际配置匹配，并生成绑定新 `task:<id>` 的 verification ID 和消息 watermark；正在 thinking 的会话不会收到新的 Goal。
+
+多台 runner 在线时，应指定执行机器名称，不能只说“本机”。标准权限意味着运行中仍可能弹窗；若项目授权 yolo，还要选择授权范围是 `runtime-only`，还是覆盖 `all-approved-runtimes`。删除、迁移、权限扩大、合并和发布等 Human Gate 不会因此取消。
+
+### 5. 在 macOS 要求可见原生 Worker 终端
 
 这是可选设置。确认 `PROJECT.md` 前，在 Owner 会话里说明 Worker 的运行方式：
 
@@ -493,7 +515,13 @@ claude plugin validate ./plugins/agent-taskgraph
 | `./init.sh --migrate <project>` | 显式迁移旧 `.agent-queue/` 状态目录，并补齐缺失的新模板 |
 | `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | 用稳定队列 Goal ref 预览 Claude/Codex 原生 worker 命令 |
 | `./scripts/open-worker-terminal.sh ...` | 在 macOS Terminal.app 打开并验证一个可见 worker |
-| `./scripts/verify-hapi-session.py ... --json` | 在发送 Goal 前验证 HAPI 会话、PID、工作区、模型、effort 和权限的实际值 |
+| `./scripts/hapi-hub-session.py machines` | 即使保存的默认 machine ID 已过期，也能脱敏列出当前在线 runner |
+| `./scripts/hapi-hub-session.py probe [--machine-id <id>]` | 在不输出凭据的前提下认证并选择在线 HAPI runner |
+| `./scripts/hapi-hub-session.py catalog --flavor <claude\|codex>` | 读取所选 runner 被证明可用的模型、effort 和权限目录 |
+| `./scripts/hapi-hub-session.py spawn ... --dry-run` | 不创建会话，只预览准确的 HAPI machine、runtime、模型、effort 和权限 |
+| `./scripts/hapi-hub-session.py spawn ... --evidence-output <path>` | 创建一个 runner-backed HAPI 会话并写入派发前验证证据 |
+| `./scripts/hapi-hub-session.py reuse ... --goal-ref task:<id>` | 复用长期 Role 会话前验证 idle/config，并为新 Goal 写新 watermark 证据 |
+| `./scripts/verify-hapi-session.py ... --json` | 旧 HAPI 日志诊断/audit；不替代当前 Hub evidence 硬门 |
 | `./scripts/validate-graph.py <graph.yaml>` | 拒绝未知依赖、动态 Goal 路径、缺失生产者祖先、环和并行写冲突 |
 | `./scripts/validate-state.py <project>` | 校验队列、baseline、Frozen 开放问题、请求/实际运行配置、证据和 STATUS 一致 |
 | `./workers/watch-worker.sh <log>` | 把 Codex JSONL 或 HAPI 文本日志压缩成进展事件流 |
@@ -509,10 +537,11 @@ claude plugin validate ./plugins/agent-taskgraph
 - Skill 会探测当前环境，不假设每个 Codex 都有 `create_thread`、`wait_threads` 等工具。
 - 可用时优先用户可见、可接管的独立会话。Claude Code 优先使用 `claude`、`claude --bg`、`claude agents` 或 `claude -p`；Codex 优先使用 `codex`、`codex exec` 或 `codex resume`。能力不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
 - 公开默认是 `auto + native-first`，不启用任何可选 adapter。HAPI 作为[按需启用的运行时适配器](references/hapi-runtime.md)随仓库提供：接入时可以报告已检测到，但只有 Owner 在 `PROJECT.md` 选择后才加载和启用。
-- 每个批次派发前，Owner 都会看到 Role ID、长期职责、本次 Goal、复用方案、依赖、写入、运行时可见性、模型/effort、权限、worktree 和启动命令。Owner 可以调整角色、模型和推理强度；批准 graph 本身不等于授权开启会话。
-- spawn 后任务仍停留在 `inbox`；只有实际模型、effort、权限、工作区、会话身份和进程证据全部匹配派发预览，才发送第一条 Goal。API 请求字段和返回的 session ID 不能证明配置已生效。
+- 选择 HAPI 时要区分 Owner 操作端、PMO 执行端和 runner 执行机器。操作端没有 CLI，或当前 MCP 只有 `inspect_peer`/`ping_peer`，都不能证明 HAPI 无法创建；PMO 必须先探测 `scripts/hapi-hub-session.py` 再考虑已确认的 fallback。helper 私下读取凭据，禁止改成把 token 拼入命令行的内联 `curl`。
+- 首次接入先一次确认 Execution profile。每个批次派发前，Owner 再看到 Role ID、长期职责、本次 Goal、复用方案、依赖、写入、运行时可见性、模型/effort、权限、worktree 和启动命令；整批一次确认，除非 Owner 选择逐 worker 模式。批准 graph 本身不等于授权开启会话。
+- spawn 后任务仍停留在 `inbox`；只有实际模型、effort、权限、工作区、会话身份、idle 状态和进程证据全部匹配派发预览，才发送第一条 Goal。复用会话也必须为新 Goal 重新核验；API 请求字段、返回的 session ID 或旧证据不能证明本次配置合格。
 - 在 macOS 上，如果 Owner 要求每个 worker/reviewer 都显示独立 CLI，可使用 `scripts/open-worker-terminal.sh`。队列任务传 `--goal task:<id>`，避免 inbox/active 迁移让命令失效。必须先 `--dry-run` 预览并批准图和运行参数，再实际打开；PID 验证成功后才能把任务登记为 active。
-- 默认使用平台标准权限。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。
+- 默认使用平台标准权限，这会保留运行时弹窗。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。授权范围记录为 `runtime-only` 或 `all-approved-runtimes`；只有后者允许 fallback 沿用同等级策略而不再次询问。
 - Frozen、worktree 和 Reviewer 是质量控制，不是安全沙箱。
 - 依赖安装、数据库迁移、删除、权限扩大、合并和发布应按 `PROJECT.md` 保留 Human Gate。
 
@@ -528,7 +557,7 @@ claude plugin validate ./plugins/agent-taskgraph
 
 ### 必须安装 HAPI 吗？
 
-不必须。Claude/Codex 原生运行时是默认路径。HAPI 只面向需要可见远程控制流程的用户按需启用；检测到 HAPI 命令或 runner 只代表发现能力，绝不会静默激活。启用时必须写入 `PROJECT.md`、验证真实控制面能力，并保留已确认的原生 fallback。
+不必须。Claude/Codex 原生运行时是默认路径。HAPI 只面向需要可见远程控制流程的用户按需启用。选择 HAPI 后，缺少本地 CLI 或 MCP spawn 工具不足以判定失败；PMO 必须先检查正式 Hub helper 和准确的 runner 执行机器。HAPI 不会静默启用，原生 fallback 也必须在 `PROJECT.md` 中确认。
 
 ### 为什么 spec 冻结后还要批准 graph？
 

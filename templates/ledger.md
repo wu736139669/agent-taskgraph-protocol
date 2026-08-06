@@ -26,11 +26,11 @@
 | 最后更新 | |
 | 验收结果 | ✅ / ❌（附命令输出） |
 | 日志指针 | <当前运行时的会话日志、rollout JSONL、Terminal metadata 或等价证据路径——watch 监视器的输入> |
-| Runtime requested | runtime=<name>; flavor=<claude/codex/native>; model=<id>; effort=<level>; permission=<mode>; visibility=<visible/headless> |
+| Runtime requested | runtime=<Execution profile runtime>; flavor=<claude/codex>; model=<批次确认且目录中存在的准确 id>; effort=<该模型支持的明确 level>; permission=<准确 mode>; visibility=<visible/headless> |
 | Runtime observed | runtime=<name>; flavor=<claude/codex/native>; model=<id>; effort=<level>; permission=<mode>; visibility=<visible/headless> |
-| Runtime verification | <PENDING / VERIFIED> |
+| Runtime verification | <PENDING / VERIFIED；pre-dispatch 或复用时 pre-redispatch> |
 | Session ID | <真实会话/线程 ID；inbox 未创建时写 PENDING> |
-| Runtime evidence | <HAPI 写任务目录内 runtime-evidence.json；其他 runtime 写实际设置、PID/线程和日志/metadata 的脱敏证据路径；inbox 未创建时写 PENDING> |
+| Runtime evidence | <HAPI 写本任务目录内新生成的 runtime-evidence.json（含 goal_ref/verification_id/catalog/idle/watermark）；不得复制上一 Goal；其他 runtime 写实际设置、PID/线程和日志/metadata 的脱敏证据路径；inbox 未创建时写 PENDING> |
 | Dispatch message | <NOT_SENT / SENT: 时间 + 通道 + 送达证据> |
 | 等待归属 | 在等谁：<PMO / worker / Owner>；等什么：<验收 / 指示 / 外部条件>；静默多久算异常：<N 分钟> |
 

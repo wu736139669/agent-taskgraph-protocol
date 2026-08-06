@@ -6,7 +6,7 @@
 
 **Spec-first graph orchestration for AI coding agents.**
 
-Source version: [`v0.8.0-beta.7`](VERSION) | Latest published release: `v0.8.0-beta.6` | License: [Apache-2.0](LICENSE)
+Source version: [`v0.8.0-beta.8`](VERSION) | Latest published release: `v0.8.0-beta.7` | License: [Apache-2.0](LICENSE)
 
 > **Public Beta** for users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
 
@@ -114,6 +114,8 @@ Existing Agent Queue beta projects are never moved implicitly. Review their stat
 ./init.sh --migrate /path/to/your-project
 ```
 
+When upgrading from beta.7 or earlier, do not rewrite completed historical evidence; the validator keeps read-only compatibility. Before the next active/review Goal, let the agent probe the runtime, add the confirmed Execution profile to `PROJECT.md`, and generate fresh evidence for that Goal. Remaining in `inbox` while the profile is unconfirmed is an intentional guard.
+
 ### 3. Start a session in the target project
 
 Open a new Claude Code or Codex session. Normal users do not need to run validator scripts, write Goal paths, or choose internal runtime flags. Use `$agent-taskgraph` where a skill picker is available, or simply say:
@@ -131,9 +133,30 @@ Report confirmed facts, explicit inferences, and decisions only I can make.
 Do not dispatch work until I approve PROJECT.md.
 ```
 
-On first use, the agent inspects the stack, directories, Git baseline, build and test commands, shared files, and runtime capabilities. It asks about runtime and model strategy in plain-language choices, then records permissions, session visibility, model preferences, and Human Gates in `.agent-taskgraph/PROJECT.md`. Complex work is not dispatched until the source has a reproducible Git baseline and isolated worktrees can be created.
+On first use, the agent inspects the stack, directories, Git baseline, build and test commands, shared files, and runtime capabilities. It then presents one plain-language **Execution profile** covering runtime/machine, model policy, permission, visibility, and fallback; it does not make the owner answer internal settings worker by worker. The confirmed profile is stored in `.agent-taskgraph/PROJECT.md`, and no session can be created while its status is not `CONFIRMED`. Complex work also requires a reproducible Git baseline and isolated worktrees.
 
-### 4. Require visible worker terminals on macOS
+The default model policy is `adaptive-batch`: the agent recommends combinations from the selected machine's real model catalog, then shows and confirms the whole dispatch batch once. `per-worker` asks individually only when the owner selects it; `fixed` records one concrete combination. A Goal never uses `default/auto` as a substitute for an explicit model or reasoning effort.
+
+### 4. Use visible HAPI sessions (optional)
+
+Choose HAPI in the owner session; normal users should not call the Hub API themselves:
+
+```text
+Use agent-taskgraph for this project and use HAPI for every worker and reviewer.
+Run them on the runner named <machine name>. Before dispatch, show me each role,
+responsibility, model, effort, permission, worktree, and HAPI dry-run preview.
+After I approve, create and verify the sessions automatically. If this MCP only exposes
+inspect/ping, probe the formal HAPI Hub helper; do not ask me to create sessions manually
+unless both the host spawn tool and Hub helper are unavailable.
+```
+
+The owner control device, PMO execution host, and HAPI runner can be different machines. The control device does not need a local `hapi` command. The PMO host needs access to configured HAPI settings or equivalent environment variables. The PMO reads the exact machine ID/name/host, discovers that runner's real model/effort catalog, checks the worktree path, and then shows a dry-run. A session remains in `inbox` until its PID, workspace, flavor, model, effort, permission, active/running state, idle/not-thinking state, and zero-message watermark are verified. Brackets are part of a model ID; a missing trailing `]` is rejected before spawn.
+
+A durable Role may reuse its HAPI session, but never its old evidence. Every new Goal rechecks idle state and actual configuration, then writes a fresh verification ID, `task:<id>`, and message watermark. A thinking session is not redispatched.
+
+When multiple runners are online, name the desired execution machine instead of saying "local." Standard permissions still produce runtime prompts. If yolo is explicitly authorized, also choose whether it is `runtime-only` or applies to `all-approved-runtimes`; Human Gates for deletion, migration, privilege expansion, merge, and release remain in force either way.
+
+### 5. Require visible native worker terminals on macOS
 
 This is optional. Tell the owner session how workers must run before approving `PROJECT.md`:
 
@@ -500,7 +523,13 @@ These are maintainer/PMO commands run from the Skill checkout. Normal owners can
 | `./init.sh --migrate <project>` | Explicitly rename legacy `.agent-queue/` state and add missing current templates |
 | `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | Preview a native Claude/Codex worker command with a stable queue Goal ref |
 | `./scripts/open-worker-terminal.sh ...` | Open and verify one worker in a visible macOS Terminal.app window |
-| `./scripts/verify-hapi-session.py ... --json` | Verify the observed HAPI session, PID, workspace, model, effort, and permission before sending a Goal |
+| `./scripts/hapi-hub-session.py machines` | List online runners safely even when the saved default machine ID is stale |
+| `./scripts/hapi-hub-session.py probe [--machine-id <id>]` | Authenticate without printing credentials and select an online HAPI runner |
+| `./scripts/hapi-hub-session.py catalog --flavor <claude\|codex>` | Read models, efforts, and permissions proven available on the selected runner |
+| `./scripts/hapi-hub-session.py spawn ... --dry-run` | Preview the exact HAPI machine, runtime, model, effort, and permission without creating a session |
+| `./scripts/hapi-hub-session.py spawn ... --evidence-output <path>` | Create one runner-backed HAPI session and write verified pre-dispatch evidence |
+| `./scripts/hapi-hub-session.py reuse ... --goal-ref task:<id>` | Recheck idle/config and write fresh watermark evidence before reusing a durable Role session |
+| `./scripts/verify-hapi-session.py ... --json` | Diagnose/audit legacy HAPI logs; it does not replace the current Hub evidence gate |
 | `./scripts/validate-graph.py <graph.yaml>` | Reject unknown dependencies, dynamic Goal paths, missing producer ancestry, cycles, and parallel write conflicts |
 | `./scripts/validate-state.py <project>` | Verify queue state, baseline, Frozen questions, requested/observed runtime settings, evidence, and STATUS agree |
 | `./workers/watch-worker.sh <log>` | Compact Codex JSONL or HAPI text logs into progress events |
@@ -516,10 +545,11 @@ Live directories are scanned only with `--include-live`; deletion occurs only wi
 - The skill probes the current environment; it does not assume every Codex exposes `create_thread`, `wait_threads`, or similar tools.
 - Visible, owner-controllable sessions are preferred when available. Use Claude native commands (`claude`, `claude --bg`, `claude agents`, or `claude -p`) for Claude Code and Codex native commands (`codex`, `codex exec`, or `codex resume`) for Codex. Missing capabilities require an explicit fallback, not a fictional reviewer.
 - The public default is `auto + native-first` with no optional adapter enabled. HAPI support ships as an [opt-in runtime adapter](references/hapi-runtime.md): detection may be reported during onboarding, but it is not loaded or activated until the owner selects it in `PROJECT.md`.
-- Before every batch, the owner sees each Role ID, durable responsibility, one-off Goal, reuse plan, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands. The owner can adjust role, model, or reasoning effort; graph approval alone is not session authorization.
-- A spawned session stays in `inbox` until its observed model, effort, permission, workspace, identity, and process evidence match that preview. The first Goal is sent only after verification; API request fields and a returned session ID are not proof that settings took effect.
+- HAPI selection separates the owner control device, PMO execution host, and runner machine. A missing local CLI or an MCP that exposes only `inspect_peer`/`ping_peer` does not prove HAPI spawning is unavailable; the PMO probes `scripts/hapi-hub-session.py` before considering a confirmed fallback. The helper reads credentials privately and must never be replaced with an inline token-bearing `curl` command.
+- Onboarding confirms one Execution profile. Before every batch, the owner then sees each Role ID, durable responsibility, one-off Goal, reuse plan, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands; the whole table is confirmed once unless per-worker mode was chosen. Graph approval alone is not session authorization.
+- A spawned session stays in `inbox` until its observed model, effort, permission, workspace, identity, idle state, and process evidence match that preview. Reused sessions also require evidence bound to the new Goal. API request fields, a returned session ID, or old evidence are not proof that this dispatch is valid.
 - On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Queue work uses `--goal task:<id>` so inbox/active moves do not invalidate the command. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
-- Platform-standard permissions are the default. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project.
+- Platform-standard permissions are the default and retain runtime prompts. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project. The authorization scope is recorded as `runtime-only` or `all-approved-runtimes`; only the latter can carry the same approved policy into a fallback without asking again.
 - Frozen scope, worktrees, and reviewers are quality controls, not security sandboxes.
 - Dependency installs, migrations, deletion, privilege expansion, merge, and release should retain Human Gates defined in `PROJECT.md`.
 
@@ -535,7 +565,7 @@ It is enough to begin intake. The agent reads and triages first; complex work co
 
 ### Is HAPI required?
 
-No. Claude/Codex native runtimes are the default. HAPI is an opt-in adapter for owners who want its visible remote-control workflow. An installed HAPI command or runner is only a detected capability; it is never activated silently. Enable it in `PROJECT.md`, verify its real control-plane capabilities, and keep a confirmed native fallback.
+No. Claude/Codex native runtimes are the default. HAPI is an opt-in adapter for owners who want its visible remote-control workflow. When selected, a missing local CLI or missing MCP spawn tool is not enough to reject it: the PMO checks the formal Hub helper and exact runner machine first. HAPI is never activated silently, and a native fallback must be confirmed in `PROJECT.md`.
 
 ### Why approve a graph after approving the spec?
 

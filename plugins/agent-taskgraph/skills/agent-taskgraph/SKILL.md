@@ -149,9 +149,10 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 3. **负载均衡**：都合适时给最闲的
 
 **运行时选择与适配器合同**：
-- 第一次接入在 `PROJECT.md` 记录 `runtime preference`、原生优先策略、已启用的可选 adapter 和 fallback 顺序。公开默认是 `auto + native-first + optional adapters: none`；发现某个可选 adapter 已安装只能作为能力提示，不能自动启用。
-- 面向 Owner 只问一个简短选择题，选项只显示本机真实可用路径，例如“1. Claude 原生可见终端（推荐）/ 2. HAPI / 3. 无头后台”；AI 把答案映射到内部 runtime 字段。不得要求普通用户输入 `adapter:hapi`、命令行 flags、PID 或 Goal 路径。
+- 第一次接入或 runtime/machine/model-policy/permission/visibility/fallback 变化时，读取 [`references/runtime-profiles.md`](references/runtime-profiles.md)。先只读探测，再把这些选择合成一张普通语言短表让 Owner **整体确认一次**，写入 `PROJECT.md` 的 Execution profile；status 不是 `CONFIRMED` 时禁止 spawn/resume/send。公开默认只展示 `auto + native-first + optional adapters: none` 的可用路径；发现 adapter 已安装只能作为能力提示，不能自动启用。
+- 面向 Owner 不得连续逐项追问。一次选择表只显示真实可用路径、模型策略、权限结果与 fallback，例如“Claude 原生可见终端 / HAPI 某 runner / 无头后台”和“标准权限（仍会弹窗）/ 自动接受编辑 / 项目 yolo”。AI 把答案映射到准确 runtime/machine/flavor/permission/scope 字段；不得要求普通用户输入 adapter ID、命令行 flags、PID 或 Goal 路径。
 - `auto` 优先当前宿主真实提供的 Claude/Codex 原生命令或可见线程。Owner 明确选择已启用的可选 adapter 后，才加载对应 reference；选择 HAPI 时读取 [`references/hapi-runtime.md`](references/hapi-runtime.md)，未选择时不要加载其细节。
+- HAPI 拓扑必须区分 `操作端 / PMO 会话执行端 / runner 执行机器`。操作端没有 `hapi` CLI 不代表远端 runner 不可用；当前 MCP 列表没有 spawn 工具也不代表 HAPI 控制面不能创建。选择 HAPI 后从**当前 Skill 根目录**先运行 `scripts/hapi-hub-session.py machines`；即使 saved machine ID 已过期也能列在线候选。用 Owner 选择的准确 ID 执行 `probe --machine-id <id>`，再运行 `catalog --machine-id <id> --flavor <claude|codex>`；只从该目录推荐 model/effort，并把 machine ID/名称/host、控制路径和目录证据写入 Execution profile。只有正式控制面、宿主工具和已确认 fallback 都失败才报告 HAPI 不可用。
 - 任何运行时必须按语义提供本 Goal 所需的 `spawn / resume / send / observe-wait / stop / identity-evidence` 能力；命令存在不等于控制面可创建会话。缺少必需能力时该运行时不合格，按已确认 fallback 降级；若降级改变成本、权限或可见性，先请 Owner 决定。
 - 每个 Goal/ledger 分开记录 `Runtime requested` 与 `Runtime observed`，并记录会话标识、进程/线程标识、证据路径和派发消息状态。请求参数、API 返回值、短暂子进程或仅有退出码 0 都不是实际配置证据。
 - **运行时证据闸**：spawn 后任务仍在 `inbox`，且不得发送 Goal。先从运行时真实日志/线程设置验证 session、cwd/worktree、flavor、model、effort、permission 和存活状态全部等于派发预览；记录 `Runtime verification: VERIFIED` 后才允许发第一条 Goal。事后改配置只能记为恢复审计，不能倒推派发合格。
@@ -161,23 +162,24 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - **无头会话**（`claude -p` / `codex exec` / 子 agent）：不可见、快速批量，适合可完全自动化的任务
 
 **worker 运行参数**：
-- **权限**：按 PROJECT.md 的一次性授权执行。默认使用平台标准权限；只有用户对当前项目明确授权 `yolo` 时才可用 `--dangerously-skip-permissions`。Frozen + worktree + reviewer 是质量边界，不能替代操作系统/平台权限边界。
-- **工具与模型**：优先使用 PROJECT.md 已确认配置；模型策略默认“AI 推荐并在派发预览确认”，机械/简单任务用轻量模型 + 低思考等级，复杂/风险任务用强模型 + 高思考等级。`待确认`、模板占位符或仅写“默认”都不算已确认，不得据此 spawn。
+- **权限**：按 PROJECT.md 的一次性授权执行。默认使用平台标准权限；只有用户对当前项目明确授权 `yolo` 时才可用危险绕过。授权必须记录作用域：`runtime-only` 或 `all-approved-runtimes`。后者允许当前 runtime 不可用时把同一策略映射为 Claude `bypassPermissions`、Codex `yolo/danger-full-access`，无需重复询问；前者切换 runtime 前必须再确认。无论哪种作用域，删除、迁移、权限扩大、合并、发布等 Human Gate 不随 yolo 取消。Frozen + worktree + reviewer 是质量边界，不能替代操作系统/平台权限边界。
+- **工具与模型**：默认 `adaptive-batch`：AI 从所选执行机器已探测的目录按 Goal 复杂度推荐，Owner 在整批派发预览中一次确认；只有 PROJECT 选择 `per-worker` 才逐个询问。`fixed` 必须记录明确组合。机械/简单任务可用轻量模型 + 低思考等级，复杂/风险任务用强模型 + 高思考等级；`default/auto/pending/待确认` 都不能作为 Goal 的 model/effort。目录变化、模型 ID 不完整（包括缺失 `]`）或 effort 不受该模型支持时停止并展示 diff，不静默回退。
 
 **会话生命周期**（服从角色连续性，不是每次任务都开新会话）：
-- **复用**（运行时真实提供的 resume/handoff）：同一 persistent 角色的串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动
+- **复用**（运行时真实提供的 resume/handoff）：同一 persistent 角色的串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动。每个新 Goal 仍须重新验证 session active/running、配置匹配且 idle/not-thinking，并生成带当前 `goal_ref` 和消息 watermark 的新 evidence；HAPI 使用 `hapi-hub-session.py reuse`，不得复制前一个 Goal 的 pre-dispatch 文件。
 - **新开但保留角色**：首次开工、失败污染、上下文确实耗尽或运行时无法 resume；先把 handoff 落到 ROLE.md
 - **新建角色与会话**：并行隔离、职责边界不同或独立 reviewer
 
 **派发用 Goal 方式**（格式见 `templates/goal.md`）：每个任务是一份 Goal——引用冻结的 `spec.md` 与 `graph.yaml` 节点，带 **Legal terminal**（"candidate ready" 或 "redesign required: <最早失败边界>" 的二元终态判定）、**Baseline/证据链**、**输入/输出与写入范围**、**Frozen**、**Estimate**。只有低风险 A 类快速任务可把最小规格和验收直接内嵌 Goal且不建图。
 
-**派发预览闸（每批次强制）**：图批准不等于会话授权。PMO 必须先展示一张短表：`Role ID | worker/reviewer | 长期职责 | 本次 Goal | 生命周期/复用方式 | needs | writes | runtime/可见性 | model/effort | 权限 | worktree | Goal ref | 完整启动方式`，并给出自己的职责（监督、验收、状态记录，不写实现）。Owner 可调整角色、模型与推理强度；明确批准该预览后才可 spawn。“批准 graph”不能被解释成批准未展示的后台子 agent。若 PROJECT 已记录完全相同的批次级预授权，也仍要展示表，但可按预授权继续。
+**派发预览闸（每批次强制）**：图批准不等于会话授权，Execution profile 确认也不等于某批 Goal 已批准。PMO 必须先展示一张短表：`Role ID | worker/reviewer | 长期职责 | 本次 Goal | 生命周期/复用方式 | needs | writes | runtime/可见性 | model/effort | 权限 | worktree | Goal ref | 完整启动方式`，并给出自己的职责（监督、验收、状态记录，不写实现）。默认整张表一次确认，不按 worker 连续询问；Owner 可调整角色、模型与推理强度。明确批准后才可 spawn。“批准 graph”不能被解释成批准未展示的后台子 agent。若 PROJECT 已记录完全相同的批次级预授权，也仍要展示表，但可按预授权继续。
 
-派发动作：图校验通过并获批 → 创建/确认 Role 档案并绑定 Goal → 写 Goal 到 `queue/inbox/<task-id>/` → 建隔离 worktree → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn/resume worker（仍为 inbox）→ **验证实际运行配置** → 写入真实会话与角色连续性证据 → 发送第一条 Goal → 记录消息送达证据 → 角色标记 assigned、目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；配置不匹配时不得靠 Owner 逐次点允许继续，先停止/重配未派发会话或按已确认 fallback 重建。spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
+派发动作：Execution profile=`CONFIRMED` → 图校验通过并获批 → 创建/确认 Role 档案并绑定 Goal → 写 Goal 到 `queue/inbox/<task-id>/` → 建隔离 worktree → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn/reuse worker（仍为 inbox）→ **重新校验目录并验证实际运行配置** → 写入当前 Goal 专属会话/目录/模型/effort/权限/idle/watermark 证据 → 发送第一条 Goal → 记录消息送达证据 → 角色标记 assigned、目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；配置不匹配时不得靠 Owner 逐次点允许继续，先停止/重配本次新建且未派发的会话，或按已确认 fallback 重建。spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
 
 **默认原生命令适配**：
 - **Claude Code**：Owner 入口先 `cd <project>`，再使用 `claude --plugin-dir <plugin-dir>`（或已安装 Skill）；需要后台任务时，仅在 Claude 原生支持 `claude --bg`/`claude agents` 的环境使用这组命令，并记录返回的任务标识。`claude -p` 是无头 fallback。普通 Skill Bash 不得把 `claude ...` 子进程冒充成用户可见独立会话。
 - **Codex**：用户可见独立会话使用 `codex -C <project> "<prompt>"`；无头 worker 使用 `codex exec -C <project> "<prompt>"`，必要时用 `codex resume` 或 `codex exec resume` 接力。只有工具列表真实暴露 `create_thread` 时，才优先用它创建可见线程。
+- **HAPI**：启用后优先使用宿主真实 spawn 工具；工具缺失但 `scripts/hapi-hub-session.py probe` 为 `READY` 时，使用该 helper 调正式 Hub API。先用 `catalog` 形成推荐，再给 `spawn --dry-run --goal-ref task:<id>` 展示准确 machine/runtime/model/effort/permission；批准后由 PMO 自行创建并验证。复用长期角色会话必须调用 `reuse --session-id ... --goal-ref task:<new-id>`，thinking 或配置不匹配立即失败。只有当前 Goal 的 evidence 输出 `VERIFIED` 后才可 `ping_peer`；不得因为 MCP 只有 inspect/ping 就擅自降级，也不得使用占位 model/effort、跨 Goal 旧 evidence 或未列入目录的模型。
 - 可选 adapter 只有在 `PROJECT.md` 启用且其 reference 所列硬门满足后才参与选择；否则不读取、不调用，也不出现在默认派发说明里。
 
 **macOS 可见终端模式**：Owner 要求看到每个 worker/reviewer 的 CLI 时，禁止用隐藏的 `claude --bg` 或无头 `codex exec` 代替。使用 `scripts/open-worker-terminal.sh`：队列任务必须传稳定 `--goal task:<task-id>`，不得把会移动的 inbox/active 路径嵌入启动命令；先带 `--dry-run` 展示 runtime、权限、模型、effort、worktree、Goal ref 和完整命令，Owner 批准后去掉 `--dry-run`。脚本会通过 Terminal.app 打开独立窗口并用 PID 文件验证进程。默认 `--permission-mode plan`；实现任务只有获批后才改为 `acceptEdits`。`bypassPermissions` 还必须同时传 `--allow-dangerous`。launcher/PID/metadata 位于 `${TMPDIR:-/tmp}/agent-taskgraph-terminal/`，其真实路径和 PID 必须写入 ledger；窗口关闭或进程退出后记录清理结果。

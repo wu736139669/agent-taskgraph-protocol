@@ -20,7 +20,7 @@ bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" \
   "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
 python3 - "$ROOT/workers/parse-worker-log.py" \
   "$ROOT/scripts/validate-graph.py" "$ROOT/scripts/validate-state.py" \
-  "$ROOT/scripts/verify-hapi-session.py" <<'PY'
+  "$ROOT/scripts/verify-hapi-session.py" "$ROOT/scripts/hapi-hub-session.py" <<'PY'
 from pathlib import Path
 import sys
 
@@ -48,7 +48,7 @@ git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
 git -C "$TMP/update-local" push -u origin main >/dev/null
 
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
-grep -q 'version: 0.8.0-beta.7' "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.8' "$TMP/update-current.out"
 grep -q 'Update status: current' "$TMP/update-current.out"
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
 [ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
@@ -81,7 +81,7 @@ assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
-grep -q 'Version: 0.8.0-beta.7' "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.8' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -282,6 +282,7 @@ grep -q 'pre-dispatch verification must pass before the first Goal message' \
   --model 'deepseek-v4-flash[1m]' --effort max --permission yolo \
   --phase audit > "$TMP/hapi-audit.out"
 grep -q 'HAPI runtime verification passed' "$TMP/hapi-audit.out"
+python3 "$ROOT/tests/test_hapi_hub_session.py" -v
 
 echo "[8/12] graph validator rejects broken dependencies and write conflicts"
 cat > "$TMP/graph-valid.yaml" <<'YAML'
@@ -461,7 +462,12 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.jso
 {
   "status": "VERIFIED",
   "phase": "pre-dispatch",
+  "verification_id": "verification-p5-ui-001",
+  "goal_ref": "task:P5-ui",
   "session_id": "session-123",
+  "machine_id": "machine-1",
+  "machine_name": "Test Runner",
+  "machine_host": "test.local",
   "pid": "456",
   "flavor": "claude",
   "cwd": "/tmp/project-worktree",
@@ -469,7 +475,27 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.jso
   "effort": "high",
   "permission": "bypassPermissions",
   "messages_received": 0,
-  "evidence": "/tmp/session.log"
+  "message_watermark": {
+    "latest_page_count": 0,
+    "latest_message_id": "",
+    "snapshot_head_seq": null,
+    "snapshot_head_at": null,
+    "epoch": 1,
+    "captured_at": "2026-08-06T10:00:00Z"
+  },
+  "active": true,
+  "thinking": false,
+  "lifecycle": "running",
+  "catalog": {
+    "status": "VERIFIED",
+    "source": "/api/claude/custom-models",
+    "checked_at": "2026-08-06T09:59:00Z",
+    "model": "sonnet",
+    "effort": "high",
+    "model_supported": true,
+    "effort_supported": true
+  },
+  "evidence": "HAPI Hub metadata"
 }
 JSON
 cat > "$TMP/state-valid/.agent-taskgraph/PROJECT.md" <<'MD'
@@ -478,6 +504,22 @@ cat > "$TMP/state-valid/.agent-taskgraph/PROJECT.md" <<'MD'
 | 配置 | 项目选择 |
 |---|---|
 | Source baseline | READY: repo=/tmp/project; HEAD=abc1234; branch=main; clean |
+
+| Execution profile | Confirmed value |
+|---|---|
+| Execution profile status | CONFIRMED |
+| Execution profile confirmed by/at | Owner / 2026-08-06T09:55:00Z / test batch |
+| Execution runtime | hapi |
+| Execution control | scripts/hapi-hub-session.py |
+| Execution machine | id=machine-1; name=Test Runner; host=test.local |
+| Execution flavor | claude |
+| Model selection policy | adaptive-batch |
+| Fixed model/effort | none |
+| Model catalog evidence | machine-1 / 2026-08-06T09:59:00Z / catalog READY |
+| Execution permission | bypassPermissions |
+| Permission scope | runtime-only |
+| Execution visibility | visible |
+| Execution fallback | none |
 MD
 cat > "$TMP/state-valid/.agent-taskgraph/STATUS.md" <<'MD'
 # Status
@@ -692,6 +734,56 @@ fi
 grep -q 'HAPI evidence must precede the first Goal message' \
   "$TMP/state-late-runtime-evidence.out"
 
+cp -R "$TMP/state-valid" "$TMP/state-default-runtime"
+sed -i.bak \
+  -e 's/model=sonnet/model=default/g' \
+  -e 's/effort=high/effort=auto/g' \
+  "$TMP/state-default-runtime/.agent-taskgraph/queue/active/P5-ui/goal.md" \
+  "$TMP/state-default-runtime/.agent-taskgraph/queue/active/P5-ui/ledger.md"
+sed -i.bak \
+  -e 's/"model": "sonnet"/"model": "default"/g' \
+  -e 's/"effort": "high"/"effort": "auto"/g' \
+  "$TMP/state-default-runtime/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.json"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-default-runtime" \
+  > "$TMP/state-default-runtime.out" 2>&1; then
+  fail "state validator accepted default/auto model settings as VERIFIED"
+fi
+grep -q 'Runtime requested missing concrete fields: model, effort' \
+  "$TMP/state-default-runtime.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-copied-evidence"
+sed -i.bak 's/"goal_ref": "task:P5-ui"/"goal_ref": "task:P4-old"/' \
+  "$TMP/state-copied-evidence/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.json"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-copied-evidence" \
+  > "$TMP/state-copied-evidence.out" 2>&1; then
+  fail "state validator accepted HAPI evidence copied from another Goal"
+fi
+grep -q 'HAPI evidence goal_ref must match this Goal' \
+  "$TMP/state-copied-evidence.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-unconfirmed-profile"
+sed -i.bak 's/Execution profile status | CONFIRMED/Execution profile status | PENDING/' \
+  "$TMP/state-unconfirmed-profile/.agent-taskgraph/PROJECT.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-unconfirmed-profile" \
+  > "$TMP/state-unconfirmed-profile.out" 2>&1; then
+  fail "state validator accepted an unconfirmed Execution profile"
+fi
+grep -q 'Execution profile status must be CONFIRMED' \
+  "$TMP/state-unconfirmed-profile.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-valid-reuse"
+sed -i.bak \
+  -e 's/"phase": "pre-dispatch"/"phase": "pre-redispatch"/' \
+  -e 's/"messages_received": 0/"messages_received": 1/' \
+  -e 's/"latest_page_count": 0/"latest_page_count": 1/' \
+  -e 's/"latest_message_id": ""/"latest_message_id": "message-7"/' \
+  -e 's/"snapshot_head_seq": null/"snapshot_head_seq": 7/' \
+  -e 's/"snapshot_head_at": null/"snapshot_head_at": 7000/' \
+  "$TMP/state-valid-reuse/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.json"
+"$ROOT/scripts/validate-state.py" "$TMP/state-valid-reuse" \
+  > "$TMP/state-valid-reuse.out"
+grep -q 'State validation passed' "$TMP/state-valid-reuse.out"
+
 cp -R "$TMP/state-valid" "$TMP/state-done-runtime-mismatch"
 mv "$TMP/state-done-runtime-mismatch/.agent-taskgraph/queue/active/P5-ui" \
   "$TMP/state-done-runtime-mismatch/.agent-taskgraph/queue/done/P5-ui"
@@ -775,7 +867,7 @@ import re
 import sys
 
 root = Path(sys.argv[1])
-assert (root / "VERSION").read_text().strip() == "0.8.0-beta.7"
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.8"
 assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
@@ -791,8 +883,11 @@ for phrase in ("只在", "native-first", "派发硬门", "不得自动启用", "
 for phrase in ("verify-hapi-session.py", "RUNTIME_CONFIG_MISMATCH", "先不要 `ping_peer`"):
     assert phrase in hapi_reference, phrase
 project_template = (root / "templates/PROJECT.md").read_text()
-for phrase in ("Runtime preference", "原生运行时优先", "已启用可选适配器", "Runtime fallback"):
+for phrase in ("Execution profile status", "Execution runtime", "Model selection policy", "Execution fallback"):
     assert phrase in project_template, phrase
+runtime_profiles = (root / "references/runtime-profiles.md").read_text()
+for phrase in ("一次确认协议", "adaptive-batch", "Permission scope", "目录探测"):
+    assert phrase in runtime_profiles, phrase
 for path in ("templates/ROLES.md", "templates/role.md", "templates/context.md", "templates/staffing-change.md"):
     assert (root / path).is_file(), path
 for phrase in ("Role 与 Goal 分离", "初始组队协议", "动态编制协议", "persistent", "task-scoped", "上下文预算合同"):
@@ -835,7 +930,9 @@ required = (
     "skills/agent-taskgraph/agents/openai.yaml",
     "skills/agent-taskgraph/init.sh",
     "skills/agent-taskgraph/references/hapi-runtime.md",
+    "skills/agent-taskgraph/references/runtime-profiles.md",
     "skills/agent-taskgraph/scripts/check-update.sh",
+    "skills/agent-taskgraph/scripts/hapi-hub-session.py",
     "skills/agent-taskgraph/scripts/open-worker-terminal.sh",
     "skills/agent-taskgraph/scripts/validate-graph.py",
     "skills/agent-taskgraph/scripts/validate-state.py",
@@ -862,7 +959,9 @@ assert (package / "LICENSE").read_text() == (root / "LICENSE").read_text()
 for relative in (
     "init.sh",
     "references/hapi-runtime.md",
+    "references/runtime-profiles.md",
     "scripts/check-update.sh",
+    "scripts/hapi-hub-session.py",
     "scripts/open-worker-terminal.sh",
     "scripts/validate-graph.py",
     "scripts/validate-state.py",

@@ -23,6 +23,21 @@ ROLE_STATES = {"available", "assigned", "paused", "retired"}
 SPEC_STATUS = re.compile(r'^>\s*Status:\s*(DRAFT|FROZEN)\s*$', re.IGNORECASE)
 SPEC_FROZEN_BY = re.compile(r'^>\s*Frozen by:\s*(.*?)\s*$', re.IGNORECASE)
 RUNTIME_KEYS = ("runtime", "flavor", "model", "effort", "permission", "visibility")
+RUNTIME_PLACEHOLDERS = {"default", "auto", "pending", "待确认"}
+EXECUTION_PROFILE_KEYS = (
+    "Execution profile confirmed by/at",
+    "Execution runtime",
+    "Execution control",
+    "Execution machine",
+    "Execution flavor",
+    "Model selection policy",
+    "Fixed model/effort",
+    "Model catalog evidence",
+    "Execution permission",
+    "Permission scope",
+    "Execution visibility",
+    "Execution fallback",
+)
 PLACEHOLDER_TOKENS = (
     "<",
     "pending",
@@ -41,6 +56,8 @@ def ledger_fields(path):
         match = FIELD_ROW.match(raw)
         if match:
             name = match.group(1).strip()
+            if name and set(name) <= {"-", ":"}:
+                continue
             if name in fields:
                 duplicates.add(name)
             fields[name] = match.group(2).strip()
@@ -135,6 +152,10 @@ def is_placeholder(value):
     return not lowered or any(token in lowered for token in PLACEHOLDER_TOKENS)
 
 
+def json_value_is_placeholder(value):
+    return value is None or is_placeholder(str(value))
+
+
 def normalize_permission(value):
     compact = re.sub(r"[-_\s]", "", value).lower()
     aliases = {
@@ -157,6 +178,78 @@ def runtime_config(value):
     if "permission" in config:
         config["permission"] = normalize_permission(config["permission"])
     return config
+
+
+def runtime_value_is_placeholder(key, value):
+    if is_placeholder(value):
+        return True
+    return key in {"model", "effort"} and value.strip().lower() in RUNTIME_PLACEHOLDERS
+
+
+def validate_execution_profile(fields):
+    errors = []
+    if fields.get("Execution profile status", "") != "CONFIRMED":
+        errors.append("PROJECT.md: Execution profile status must be CONFIRMED before dispatch")
+    for key in EXECUTION_PROFILE_KEYS:
+        if is_placeholder(fields.get(key, "")):
+            errors.append("PROJECT.md: {} must be concrete".format(key))
+
+    runtime = fields.get("Execution runtime", "").strip().lower()
+    flavor = fields.get("Execution flavor", "").strip().lower()
+    visibility = fields.get("Execution visibility", "").strip().lower()
+    policy = fields.get("Model selection policy", "").strip().lower()
+    if flavor not in {"claude", "codex"}:
+        errors.append("PROJECT.md: Execution flavor must be claude or codex")
+    if visibility not in {"visible", "headless"}:
+        errors.append("PROJECT.md: Execution visibility must be visible or headless")
+    if policy not in {"adaptive-batch", "fixed", "per-worker"}:
+        errors.append(
+            "PROJECT.md: Model selection policy must be adaptive-batch, fixed, or per-worker"
+        )
+    if runtime == "hapi":
+        machine = fields.get("Execution machine", "")
+        if "id=" not in machine:
+            errors.append("PROJECT.md: HAPI Execution machine must include an exact id=")
+        if "hapi" not in fields.get("Execution control", "").lower():
+            errors.append("PROJECT.md: HAPI Execution control must name the verified HAPI path")
+
+    if policy == "fixed":
+        fixed = runtime_config(fields.get("Fixed model/effort", ""))
+        for key in ("model", "effort"):
+            if runtime_value_is_placeholder(key, fixed.get(key, "")):
+                errors.append(
+                    "PROJECT.md: fixed model policy requires concrete {}".format(key)
+                )
+    return errors
+
+
+def validate_task_against_execution_profile(task_id, requested, project_fields):
+    errors = []
+    expected = {
+        "runtime": project_fields.get("Execution runtime", "").strip(),
+        "flavor": project_fields.get("Execution flavor", "").strip(),
+        "permission": normalize_permission(
+            project_fields.get("Execution permission", "").strip()
+        ),
+        "visibility": project_fields.get("Execution visibility", "").strip(),
+    }
+    for key, value in expected.items():
+        if value and requested.get(key) != value:
+            errors.append(
+                "{}: requested {} differs from confirmed Execution profile: {!r} != {!r}".format(
+                    task_id, key, requested.get(key, ""), value
+                )
+            )
+    if project_fields.get("Model selection policy", "").strip().lower() == "fixed":
+        fixed = runtime_config(project_fields.get("Fixed model/effort", ""))
+        for key in ("model", "effort"):
+            if fixed.get(key) and requested.get(key) != fixed.get(key):
+                errors.append(
+                    "{}: requested {} differs from fixed Execution profile".format(
+                        task_id, key
+                    )
+                )
+    return errors
 
 
 def validate_role(
@@ -350,7 +443,9 @@ def validate_frozen_spec(instance):
     return errors
 
 
-def validate_hapi_evidence(task_id, task_dir, fields, observed):
+def validate_hapi_evidence(
+    task_id, task_dir, fields, observed, project_fields, require_goal_bound
+):
     raw_path = fields.get("Runtime evidence", "")
     if is_placeholder(raw_path):
         return []
@@ -372,10 +467,59 @@ def validate_hapi_evidence(task_id, task_dir, fields, observed):
     errors = []
     if evidence.get("status") != "VERIFIED":
         errors.append("{}: HAPI evidence status must be VERIFIED".format(task_id))
-    if evidence.get("phase") != "pre-dispatch":
-        errors.append("{}: HAPI evidence phase must be pre-dispatch".format(task_id))
-    if evidence.get("messages_received") != 0:
+
+    # Preserve completed pre-beta.8 history without pretending it had fields that
+    # did not exist. Active/review work always uses the strict Goal-bound schema.
+    if not require_goal_bound and "goal_ref" not in evidence:
+        if evidence.get("phase") != "pre-dispatch":
+            errors.append("{}: legacy HAPI evidence phase must be pre-dispatch".format(task_id))
+        if evidence.get("messages_received") != 0:
+            errors.append("{}: legacy HAPI evidence must precede dispatch".format(task_id))
+        if str(evidence.get("session_id", "")) != fields.get("Session ID", ""):
+            errors.append("{}: HAPI evidence Session ID differs from ledger".format(task_id))
+        for key in ("flavor", "model", "effort", "permission"):
+            evidence_value = str(evidence.get(key, ""))
+            if key == "permission":
+                evidence_value = normalize_permission(evidence_value)
+            if evidence_value != observed.get(key, ""):
+                errors.append(
+                    "{}: legacy HAPI evidence {} differs from observed runtime".format(
+                        task_id, key
+                    )
+                )
+        return errors
+
+    phase = evidence.get("phase")
+    if phase not in {"pre-dispatch", "pre-redispatch"}:
+        errors.append(
+            "{}: HAPI evidence phase must be pre-dispatch or pre-redispatch".format(
+                task_id
+            )
+        )
+    if evidence.get("goal_ref") != "task:{}".format(task_id):
+        errors.append("{}: HAPI evidence goal_ref must match this Goal".format(task_id))
+    if json_value_is_placeholder(evidence.get("verification_id")):
+        errors.append("{}: HAPI evidence requires a fresh verification_id".format(task_id))
+    if evidence.get("thinking") is not False:
+        errors.append("{}: HAPI evidence requires an idle, non-thinking session".format(task_id))
+    if evidence.get("active") is not True or evidence.get("lifecycle") != "running":
+        errors.append("{}: HAPI evidence requires an active/running session".format(task_id))
+
+    watermark = evidence.get("message_watermark")
+    if not isinstance(watermark, dict):
+        errors.append("{}: HAPI evidence requires a message watermark".format(task_id))
+        watermark = {}
+    if json_value_is_placeholder(watermark.get("captured_at")):
+        errors.append("{}: HAPI message watermark requires captured_at".format(task_id))
+    if phase == "pre-dispatch" and (
+        evidence.get("messages_received") != 0
+        or watermark.get("snapshot_head_seq") is not None
+    ):
         errors.append("{}: HAPI evidence must precede the first Goal message".format(task_id))
+    if phase == "pre-redispatch" and not isinstance(
+        evidence.get("messages_received"), int
+    ):
+        errors.append("{}: HAPI reuse evidence requires a message count".format(task_id))
     if str(evidence.get("session_id", "")) != fields.get("Session ID", ""):
         errors.append("{}: HAPI evidence Session ID differs from ledger".format(task_id))
     for key in ("flavor", "model", "effort", "permission"):
@@ -388,6 +532,24 @@ def validate_hapi_evidence(task_id, task_dir, fields, observed):
                     task_id, key, observed.get(key, ""), evidence_value
                 )
             )
+
+    catalog = evidence.get("catalog")
+    if not isinstance(catalog, dict) or catalog.get("status") != "VERIFIED":
+        errors.append("{}: HAPI evidence requires VERIFIED model catalog data".format(task_id))
+    else:
+        if catalog.get("model_supported") is not True or catalog.get("effort_supported") is not True:
+            errors.append("{}: HAPI catalog must prove model and effort support".format(task_id))
+        for key in ("model", "effort"):
+            if str(catalog.get(key, "")) != observed.get(key, ""):
+                errors.append("{}: HAPI catalog {} differs from observed runtime".format(task_id, key))
+        for key in ("source", "checked_at"):
+            if json_value_is_placeholder(catalog.get(key)):
+                errors.append("{}: HAPI catalog {} must be concrete".format(task_id, key))
+
+    if project_fields.get("Execution runtime", "") == "hapi":
+        machine_id = str(evidence.get("machine_id", ""))
+        if not machine_id or machine_id not in project_fields.get("Execution machine", ""):
+            errors.append("{}: HAPI evidence machine differs from Execution profile".format(task_id))
     return errors
 
 
@@ -413,6 +575,17 @@ def validate(project):
     errors = []
     if not queue.is_dir() or not status_path.is_file():
         return ["missing .agent-taskgraph/queue or STATUS.md"]
+
+    project_path = instance / "PROJECT.md"
+    project_fields = {}
+    if project_path.is_file():
+        project_fields, project_duplicates = ledger_fields(project_path)
+        if project_duplicates:
+            errors.append(
+                "PROJECT.md: duplicate fields: {}".format(
+                    ", ".join(sorted(project_duplicates))
+                )
+            )
 
     tasks = {}
     persistent_assignments = {}
@@ -515,8 +688,16 @@ def validate(project):
                 observed_raw = fields.get("Runtime observed", "")
                 requested = runtime_config(requested_raw)
                 observed = runtime_config(observed_raw)
-                missing_requested = [key for key in RUNTIME_KEYS if is_placeholder(requested.get(key, ""))]
-                missing_observed = [key for key in RUNTIME_KEYS if is_placeholder(observed.get(key, ""))]
+                missing_requested = [
+                    key
+                    for key in RUNTIME_KEYS
+                    if runtime_value_is_placeholder(key, requested.get(key, ""))
+                ]
+                missing_observed = [
+                    key
+                    for key in RUNTIME_KEYS
+                    if runtime_value_is_placeholder(key, observed.get(key, ""))
+                ]
                 if missing_requested:
                     errors.append(
                         "{}: Runtime requested missing concrete fields: {}".format(
@@ -536,6 +717,13 @@ def validate(project):
                                 child.name, key, requested.get(key), observed.get(key)
                             )
                         )
+
+                if state in VISIBLE_STATES:
+                    errors.extend(
+                        validate_task_against_execution_profile(
+                            child.name, requested, project_fields
+                        )
+                    )
 
                 if fields.get("Runtime verification", "") != "VERIFIED":
                     errors.append("{}: Runtime verification must be VERIFIED".format(child.name))
@@ -560,7 +748,16 @@ def validate(project):
                 if not goal_assignments.get("Dispatch message", "").startswith("SENT:"):
                     errors.append("{}: Goal Dispatch message must start with SENT:".format(child.name))
                 if requested.get("runtime") == "hapi":
-                    errors.extend(validate_hapi_evidence(child.name, child, fields, observed))
+                    errors.extend(
+                        validate_hapi_evidence(
+                            child.name,
+                            child,
+                            fields,
+                            observed,
+                            project_fields if state in VISIBLE_STATES else {},
+                            state in VISIBLE_STATES,
+                        )
+                    )
 
     for role_ref, task_ids in sorted(persistent_assignments.items()):
         if len(task_ids) > 1:
@@ -571,14 +768,13 @@ def validate(project):
             )
 
     if active_or_review:
-        project_path = instance / "PROJECT.md"
         if not project_path.is_file():
             errors.append("active/review tasks require PROJECT.md")
         else:
-            project_fields, _ = ledger_fields(project_path)
             source_baseline = project_fields.get("Source baseline", "")
             if not source_baseline.upper().startswith("READY:") or is_placeholder(source_baseline):
                 errors.append("PROJECT.md: Source baseline must start with READY: before dispatch")
+            errors.extend(validate_execution_profile(project_fields))
         errors.extend(validate_frozen_spec(instance))
 
     rows, duplicate_rows = status_rows(status_path)

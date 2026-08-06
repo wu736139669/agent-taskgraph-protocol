@@ -33,10 +33,10 @@
 - 分配理由：相关性（同模块历史） / 职责匹配（岗位） / 负载均衡
 - 连续性：<新角色 / 复用 session-id / 新会话 + handoff 路径>
 - 工作区：<worktree 路径>（分支：<branch>）
-- Runtime requested：`runtime=<name>; flavor=<claude|codex|native>; model=<id>; effort=<level>; permission=<mode>; visibility=<visible|headless>`
+- Runtime requested：`runtime=<Execution profile runtime>; flavor=<claude|codex>; model=<批次确认的准确 id>; effort=<该模型已证明支持的 level>; permission=<准确 mode>; visibility=<visible|headless>`
 - Runtime observed：<spawn 后由 PMO 填；必须与 requested 一致，未验证写 `PENDING`>
-- Runtime verification：<`PENDING` / `VERIFIED`；验证命令摘要 + 时间>
-- Session evidence：<真实会话 ID + PID/线程 ID + 日志/metadata 路径；HAPI 还要引用 runtime-evidence.json>
+- Runtime verification：<`PENDING` / `VERIFIED`；`pre-dispatch` 或复用时 `pre-redispatch` + 时间>
+- Session evidence：<真实会话 ID + PID/线程 ID + 当前 goal_ref + verification ID + 日志/metadata 路径；HAPI 还要引用本任务 runtime-evidence.json 与消息 watermark>
 - Dispatch message：<`NOT_SENT` / `SENT: <时间 + 通道 + 送达证据>`；VERIFIED 前必须为 NOT_SENT>
 - 完整启动方式：<可复现命令或控制面动作；不得把请求值写成实际值>
 
