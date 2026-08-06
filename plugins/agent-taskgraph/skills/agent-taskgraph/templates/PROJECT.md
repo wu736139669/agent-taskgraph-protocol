@@ -12,7 +12,7 @@
 
 ## 长期角色策略
 
-（PMO 根据模块边界建立 `.agent-taskgraph/ROLES.md` 与 `roles/<role-id>/ROLE.md`。稳定模块职责使用 persistent；一次性探索或独立 reviewer 使用 task-scoped。角色是长期职责，Goal 是单次授权。）
+（PMO 根据模块边界建立 `.agent-taskgraph/ROLES.md` 与 `roles/<role-id>/ROLE.md`。稳定模块职责使用 persistent；一次性探索或独立 reviewer 使用 task-scoped。角色是长期职责，Goal 是单次授权；每次 worker Role→Session 绑定使用当前任务的 `dispatch.md` 和新 Identity ACK。）
 
 ## 硬性规范（不可违反）
 
@@ -31,7 +31,7 @@
 | 编制变更授权 | <每次确认（默认） / 精确预授权条件；新增成本、权限或可见性变化始终重新确认> |
 | 默认 Human Gates | <依赖安装 / 迁移 / 删除 / 权限 / 合并 / 发布等> |
 | 已启用可选适配器 | <无（公开默认） / hapi / 其他名称> |
-| Runtime 证据策略 | spawn 后、首条 Goal 前验证 session/cwd/flavor/model/effort/permission；不匹配保持 inbox 并 fallback |
+| Runtime 证据策略 | spawn 后、首条 bootstrap 前验证 session/cwd/flavor/model/effort/permission；随后核对 Role/Team/Goal/Context Identity ACK；不匹配保持 inbox 并 fallback |
 | 上下文模式 | <lean（默认） / balanced / deep>；只影响读取广度，不降低验收标准 |
 | Context 必读项上限 | <默认 8；超过必须在 context.md 写 Budget exception，必要时拆 Goal> |
 
@@ -82,7 +82,7 @@
 | Git/worktree | <✅/❌> | 记录 repo root、HEAD、branch/upstream、clean/dirty ownership；B/C/D 无 READY baseline 时禁止派发 |
 | 可选 runtime adapter | <未探测 / 名称 + ✅/❌> | 只探测 Owner 选择或允许评估的 adapter；安装成功不等于已启用，也不等于控制面支持 spawn |
 | HAPI Hub 控制面 | <未探测 / READY / 不可用> | 使用 `scripts/hapi-hub-session.py probe`；记录脱敏 machine/host 和能力，不记录 token/settings |
-| Runtime 配置验证 | <验证器/线程设置/日志证据路径> | 请求参数不算证据；必须能证明配置在第一条 Goal 前生效 |
+| Runtime 配置验证 | <验证器/线程设置/日志证据路径> | 请求参数不算证据；必须能证明配置在 task-bearing bootstrap 前生效 |
 | claude CLI 登录 | ✅/❌ | 原生 `claude` / `claude --bg` / `claude agents` / `claude -p` 是否可跑 |
 | codex 登录 | ✅/❌ | 原生 `codex` / `codex exec` / `codex resume` 是否可跑 |
 | 开新会话可用路径 | <按探查结果填：Claude native / Codex native / 原生 thread / 已启用 adapter / 子 agent> | 供 Reviewer/worker 真实创建时选用；不得列入未启用或未验证的路径 |

@@ -31,6 +31,7 @@
 - 角色负责长期判断边界，Goal 负责单次授权；角色不能扩大 Goal。
 - 同一 persistent 角色不得并发执行多个 active/review Goal。
 - 同模块串行任务优先复用本角色及其可恢复会话；失败污染、上下文耗尽或隔离要求出现时换会话，但保留同一 Role ID 并写 handoff。
+- 每次新建、复用或替换 Session 都使用当前 Goal 的新 `dispatch.md` 完成 Role/Team/Context 身份 ACK；旧 Goal 的 ACK 不能复用。
 - task-scoped 角色完成后标记 `retired`；persistent 角色完成后回到 `available`。
 - 动态新增、拆分、替换、暂停或退役必须引用 staffing change；不能只改会话名称或聊天称呼。
 

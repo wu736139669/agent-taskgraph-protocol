@@ -124,6 +124,8 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **Role 与 Goal 分离（强制）**：Role 是可跨任务复用的长期职责身份，Goal 是一次性工作授权。PMO 在 `.agent-taskgraph/ROLES.md` 注册角色，并在 `roles/<role-id>/ROLE.md` 落盘核心职责、负责范围、明确不负责、能力、生命周期、当前 Goal、会话和 handoff。不得只在聊天中称呼“前端 worker”而没有角色档案；也不得把某次 Goal 的临时范围永久写成岗位职责。
 
+**Role Bootstrap 闭环（强制）**：创建、复用或替换任何 worker 会话前读取 [`references/dispatch-bootstrap.md`](references/dispatch-bootstrap.md)。每次 Role→Session 绑定都在任务目录生成新的 `dispatch.md`，首条消息必须同时包含 Role/Team revision/Goal/Context revision 和连续性引用；worker 在实现前返回完全匹配的 `IDENTITY_READY`。只记录 `SENT`、只说“你是某 worker”或复用上一 Goal 的 ACK 均不得进入 `active`。
+
 **角色生命周期**：
 - `persistent`：稳定模块/领域的长期岗位；状态为 `available → assigned → available`，暂停时 `paused`，明确废止才 `retired`。同一角色同一时间最多绑定一个 active/review Goal，串行相关 Goal 优先复用角色与可恢复会话。
 - `task-scoped`：一次性探索、迁移或独立 reviewer；状态为 `available → assigned → retired`。Reviewer 默认使用此类型，并与被审 worker 分离。
@@ -155,7 +157,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - HAPI 拓扑必须区分 `操作端 / PMO 会话执行端 / runner 执行机器`。操作端没有 `hapi` CLI 不代表远端 runner 不可用；当前 MCP 列表没有 spawn 工具也不代表 HAPI 控制面不能创建。选择 HAPI 后从**当前 Skill 根目录**先运行 `scripts/hapi-hub-session.py machines`；即使 saved machine ID 已过期也能列在线候选。用 Owner 选择的准确 ID 执行 `probe --machine-id <id>`，再运行 `catalog --machine-id <id> --flavor <claude|codex>`；只从该目录推荐 model/effort，并把 machine ID/名称/host、控制路径和目录证据写入 Execution profile。只有正式控制面、宿主工具和已确认 fallback 都失败才报告 HAPI 不可用。
 - 任何运行时必须按语义提供本 Goal 所需的 `spawn / resume / send / observe-wait / stop / identity-evidence` 能力；命令存在不等于控制面可创建会话。缺少必需能力时该运行时不合格，按已确认 fallback 降级；若降级改变成本、权限或可见性，先请 Owner 决定。
 - 每个 Goal/ledger 分开记录 `Runtime requested` 与 `Runtime observed`，并记录会话标识、进程/线程标识、证据路径和派发消息状态。请求参数、API 返回值、短暂子进程或仅有退出码 0 都不是实际配置证据。
-- **运行时证据闸**：spawn 后任务仍在 `inbox`，且不得发送 Goal。先从运行时真实日志/线程设置验证 session、cwd/worktree、flavor、model、effort、permission 和存活状态全部等于派发预览；记录 `Runtime verification: VERIFIED` 后才允许发第一条 Goal。事后改配置只能记为恢复审计，不能倒推派发合格。
+- **运行时证据闸**：spawn 后任务仍在 `inbox`，且不得发送任务授权。先从运行时真实日志/线程设置验证 session、cwd/worktree、flavor、model、effort、permission 和存活状态全部等于派发预览；记录 `Runtime verification: VERIFIED` 后才允许发送 task-bearing Role bootstrap。事后改配置只能记为恢复审计，不能倒推派发合格。
 
 **worker 形态**（按需选）：
 - **独立可见会话（默认）**：由当前平台真实提供的线程控制面或用户打开的终端会话——可见、可插手、可续接。
@@ -174,7 +176,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **派发预览闸（每批次强制）**：图批准不等于会话授权，Execution profile 确认也不等于某批 Goal 已批准。PMO 必须先展示一张短表：`Role ID | worker/reviewer | 长期职责 | 本次 Goal | 生命周期/复用方式 | needs | writes | runtime/可见性 | model/effort | 权限 | worktree | Goal ref | 完整启动方式`，并给出自己的职责（监督、验收、状态记录，不写实现）。默认整张表一次确认，不按 worker 连续询问；Owner 可调整角色、模型与推理强度。明确批准后才可 spawn。“批准 graph”不能被解释成批准未展示的后台子 agent。若 PROJECT 已记录完全相同的批次级预授权，也仍要展示表，但可按预授权继续。
 
-派发动作：Execution profile=`CONFIRMED` → 图校验通过并获批 → 创建/确认 Role 档案并绑定 Goal → 写 Goal 到 `queue/inbox/<task-id>/` → 建隔离 worktree → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn/reuse worker（仍为 inbox）→ **重新校验目录并验证实际运行配置** → 写入当前 Goal 专属会话/目录/模型/effort/权限/idle/watermark 证据 → 发送第一条 Goal → 记录消息送达证据 → 角色标记 assigned、目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；配置不匹配时不得靠 Owner 逐次点允许继续，先停止/重配本次新建且未派发的会话，或按已确认 fallback 重建。spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
+派发动作：Execution profile=`CONFIRMED` → 图校验通过并获批 → 创建/确认 Role 档案并绑定 Goal → 写 Goal/context/dispatch 到 `queue/inbox/<task-id>/` → 建隔离 worktree → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn/reuse worker（仍为 inbox）→ **重新校验目录并验证实际运行配置** → 写入当前 Goal 专属会话/目录/模型/effort/权限/idle/watermark 证据 → 用 `scripts/render-dispatch.py` 生成并发送 Role bootstrap → 从真实会话观察并核对 `IDENTITY_READY` → 写完整 ACK 与证据 → 角色标记 assigned、目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；配置不匹配时不得靠 Owner 逐次点允许继续，先停止/重配本次新建且未派发的会话，或按已确认 fallback 重建。spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
 
 **默认原生命令适配**：
 - **Claude Code**：Owner 入口先 `cd <project>`，再使用 `claude --plugin-dir <plugin-dir>`（或已安装 Skill）；需要后台任务时，仅在 Claude 原生支持 `claude --bg`/`claude agents` 的环境使用这组命令，并记录返回的任务标识。`claude -p` 是无头 fallback。普通 Skill Bash 不得把 `claude ...` 子进程冒充成用户可见独立会话。
@@ -185,7 +187,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 **macOS 可见终端模式**：Owner 要求看到每个 worker/reviewer 的 CLI 时，禁止用隐藏的 `claude --bg` 或无头 `codex exec` 代替。使用 `scripts/open-worker-terminal.sh`：队列任务必须传稳定 `--goal task:<task-id>`，不得把会移动的 inbox/active 路径嵌入启动命令；先带 `--dry-run` 展示 runtime、权限、模型、effort、worktree、Goal ref 和完整命令，Owner 批准后去掉 `--dry-run`。脚本会通过 Terminal.app 打开独立窗口并用 PID 文件验证进程。默认 `--permission-mode plan`；实现任务只有获批后才改为 `acceptEdits`。`bypassPermissions` 还必须同时传 `--allow-dangerous`。launcher/PID/metadata 位于 `${TMPDIR:-/tmp}/agent-taskgraph-terminal/`，其真实路径和 PID 必须写入 ledger；窗口关闭或进程退出后记录清理结果。
 
 **Goal/会话交互协议（强制）**：
-- **Goal 是指令源**：首次派发只发送稳定 Goal ref（优先 `task:<task-id>`）+ context revision + 本轮 delta，不重复粘贴整份项目背景。worker 从唯一当前队列目录解析 Goal 和 `context.md`，按 manifest 读必读项；只在聊天里发一段模糊任务或会失效的旧队列路径不算派发。
+- **Bootstrap 是身份入口，Goal 是指令源**：首次派发发送由 `scripts/render-dispatch.py` 生成的 Role bootstrap，其中只有稳定 Role/Team/Goal/Context 引用、连续性和本轮 delta，不重复粘贴整份项目背景。worker 先按 manifest 读取并返回精确 `IDENTITY_READY`，再执行 Goal；只在聊天里发一段模糊任务、裸 Goal ref 或会失效的旧队列路径不算派发。
 - **聊天是控制通道**：当前运行时的消息通道用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收、依赖或资源顺序的消息都触发 graph diff，并同步到 spec/graph/Goal/DECISIONS/ledger。
 - **状态分工**：worker 负责实现 worktree、Goal 约定的 produces、Goal 完成区和任务证据；PMO 负责 `.agent-taskgraph/queue/*/ledger.md`、目录状态、`STATUS.md`、reviewer 身份/验收报告和 Owner 汇报。两边只通过 revision、证据路径和 legal terminal 对账，不互相覆盖。
 - **完成协议**：worker 必须在 Goal 完成区或 Goal 指定的 evidence artifact 写明 legal terminal、source/closure revision、测试/证据路径、clean/upstream、owned-process 清理，并通过当前运行时的消息/ping 通知 PMO；PMO 不因“完成了”聊天直接验收。

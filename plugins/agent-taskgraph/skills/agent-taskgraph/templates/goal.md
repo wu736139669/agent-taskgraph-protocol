@@ -37,7 +37,9 @@
 - Runtime observed：<spawn 后由 PMO 填；必须与 requested 一致，未验证写 `PENDING`>
 - Runtime verification：<`PENDING` / `VERIFIED`；`pre-dispatch` 或复用时 `pre-redispatch` + 时间>
 - Session evidence：<真实会话 ID + PID/线程 ID + 当前 goal_ref + verification ID + 日志/metadata 路径；HAPI 还要引用本任务 runtime-evidence.json 与消息 watermark>
-- Dispatch message：<`NOT_SENT` / `SENT: <时间 + 通道 + 送达证据>`；VERIFIED 前必须为 NOT_SENT>
+- Dispatch bootstrap：<`dispatch.md`；绑定本 Role/Team revision/Goal/Context revision 的当前身份合同>
+- Dispatch message：<`NOT_SENT` / `SENT: <时间 + 通道 + Dispatch ID + 送达证据>`；VERIFIED 前必须为 NOT_SENT>
+- Identity ACK：<`PENDING` / `VERIFIED: <完整 IDENTITY_READY 行>`；未匹配不得进入 active>
 - 完整启动方式：<可复现命令或控制面动作；不得把请求值写成实际值>
 
 ## 报告协议

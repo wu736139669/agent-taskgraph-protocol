@@ -14,6 +14,7 @@ PLUGIN_DIR=""
 VERIFY_TIMEOUT=15
 DRY_RUN=0
 ALLOW_DANGEROUS=0
+SCRIPT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
   cat <<'EOF'
@@ -34,8 +35,10 @@ Options:
   -h, --help                 Show this help.
 
 Use task:ID for queue-managed work so the Goal remains resolvable when its state
-directory moves. File paths may be absolute or relative to --project. Launcher
-artifacts are written under ${TMPDIR:-/tmp}/agent-taskgraph-terminal.
+directory moves. Queue-managed work requires a concrete task dispatch.md; the
+launcher renders its Role/Team/Goal/Context bootstrap automatically. File paths
+may be absolute or relative to --project. Launcher artifacts are written under
+${TMPDIR:-/tmp}/agent-taskgraph-terminal.
 EOF
 }
 
@@ -181,11 +184,12 @@ if [ -n "$PLUGIN_DIR" ]; then
 fi
 
 if [ -n "$GOAL_REF" ]; then
-  GOAL_INSTRUCTION="Use stable Goal ref $GOAL_REF. Before each Goal read or write, resolve exactly one current file at $PROJECT/.agent-taskgraph/queue/{inbox,active,review,done,failed}/$TASK_ID/goal.md because its state directory may move."
+  PROMPT="$("$SCRIPT_ROOT/scripts/render-dispatch.py" --project "$PROJECT" --goal "$GOAL_REF")" || \
+    die "unable to render the Role bootstrap for $GOAL_REF"
 else
   GOAL_INSTRUCTION="Read the Goal at $GOAL_PATH."
+  PROMPT="Use \$agent-taskgraph. You are worker $NAME. $GOAL_INSTRUCTION Read the Goal's Role and Context references before implementation. Execute only the Goal's writes and Frozen scope. Do not edit PMO-owned queue state, STATUS, DECISIONS, or ledger unless the Goal explicitly assigns that file. Report the legal terminal and evidence before exiting."
 fi
-PROMPT="Use \$agent-taskgraph. You are worker $NAME. $GOAL_INSTRUCTION Then read the PROJECT, frozen spec, graph node, ledger, and direct dependencies referenced by that Goal. Execute only the Goal's writes and Frozen scope. Do not edit PMO-owned queue state, STATUS, DECISIONS, or ledger unless the Goal explicitly assigns that file. Report the legal terminal and evidence before exiting."
 
 CMD=()
 if [ "$RUNTIME" = "claude" ]; then

@@ -43,7 +43,7 @@
 - [ ] ROLES.md team revision 与 ROLE.md 职责边界已更新
 - [ ] Goal/context/ledger 与 handoff 已更新
 - [ ] 新派发预览已确认
-- [ ] 新 runtime 已完成首条 Goal 前验证
+- [ ] 新 runtime 已完成 task-bearing bootstrap 前验证
 - [ ] STATUS/state validator 已通过
 - [ ] 旧会话/角色已恢复、暂停或退役，无双重 owner
 

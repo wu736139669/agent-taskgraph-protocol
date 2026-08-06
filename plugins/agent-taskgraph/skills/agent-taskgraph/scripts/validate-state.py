@@ -15,7 +15,7 @@ GOAL_BASELINE = re.compile(r'^>\s*Baseline:\s*(.+?)\s*$')
 GOAL_CONTEXT = re.compile(r'^>\s*Context manifest:\s*`?([^`]+?)`?\s*$')
 GOAL_CONTEXT_REVISION = re.compile(r'^>\s*Context revision:\s*`?([^`]+?)`?\s*$')
 GOAL_ASSIGNMENT = re.compile(
-    r'^-\s*(Role ref|角色职责|角色生命周期|连续性|Runtime requested|Runtime observed|Runtime verification|Session evidence|Dispatch message)[：:]\s*(.*?)\s*$'
+    r'^-\s*(Role ref|角色职责|角色生命周期|连续性|Runtime requested|Runtime observed|Runtime verification|Session evidence|Dispatch bootstrap|Dispatch message|Identity ACK)[：:]\s*(.*?)\s*$'
 )
 ROLE_REF = re.compile(r'^role:([a-z0-9][a-z0-9-]*)$')
 ROLE_LIFECYCLES = {"persistent", "task-scoped"}
@@ -47,6 +47,7 @@ PLACEHOLDER_TOKENS = (
     "unknown",
     "tbd",
 )
+PROTOCOL_VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$", re.IGNORECASE)
 
 
 def ledger_fields(path):
@@ -144,6 +145,131 @@ def validate_context(task_id, task_dir, fields, goal_data):
         if is_placeholder(path_ref) or is_placeholder(revision_ref) or is_placeholder(reason):
             errors.append("{}: context required items must use concrete path, revision, and reason".format(task_id))
             break
+    return errors
+
+
+def identity_bootstrap_required(project_fields):
+    """Preserve batches explicitly pinned pre-beta.9 while hardening new revisions."""
+    raw = project_fields.get("Agent TaskGraph 协议版本", "").strip().strip("`")
+    if is_placeholder(raw):
+        return True
+    match = PROTOCOL_VERSION.fullmatch(raw)
+    if not match:
+        return True
+    release = tuple(int(match.group(index)) for index in (1, 2, 3))
+    if release != (0, 8, 0):
+        return release > (0, 8, 0)
+    beta = match.group(4)
+    return beta is None or int(beta) >= 9
+
+
+def dispatch_expected_ack(dispatch):
+    return (
+        "IDENTITY_READY dispatch_id={Dispatch ID} role={Role ref} "
+        "team_revision={Team revision} goal={Goal ref} "
+        "context_revision={Context revision}"
+    ).format(**dispatch)
+
+
+def validate_dispatch_bootstrap(
+    task_id, task_dir, fields, goal_assignments, team_revision
+):
+    errors = []
+    dispatch_ref = fields.get("Dispatch bootstrap", "")
+    if dispatch_ref != "dispatch.md":
+        return ["{}: Dispatch bootstrap must be dispatch.md".format(task_id)]
+    if goal_assignments.get("Dispatch bootstrap", "").strip("`") != dispatch_ref:
+        errors.append("{}: Goal and ledger Dispatch bootstrap differ".format(task_id))
+
+    dispatch_path = task_dir / dispatch_ref
+    if not dispatch_path.is_file():
+        errors.append("{}: missing dispatch.md".format(task_id))
+        return errors
+    dispatch, duplicates = ledger_fields(dispatch_path)
+    if duplicates:
+        errors.append(
+            "{}: duplicate dispatch fields: {}".format(
+                task_id, ", ".join(sorted(duplicates))
+            )
+        )
+
+    required = (
+        "Task ID",
+        "Dispatch ID",
+        "Role ref",
+        "Role profile",
+        "Role lifecycle",
+        "Team revision",
+        "Goal ref",
+        "Context manifest",
+        "Context revision",
+        "Continuity",
+        "Session ID",
+        "Expected identity ACK",
+        "Delivery",
+        "Identity ACK",
+        "ACK evidence",
+    )
+    missing = [key for key in required if is_placeholder(dispatch.get(key, ""))]
+    if missing:
+        errors.append(
+            "{}: dispatch requires concrete fields: {}".format(
+                task_id, ", ".join(missing)
+            )
+        )
+        return errors
+
+    expected_values = {
+        "Task ID": task_id,
+        "Role ref": fields.get("Role ref", ""),
+        "Role profile": fields.get("Role profile", ""),
+        "Role lifecycle": fields.get("Role lifecycle", ""),
+        "Team revision": team_revision,
+        "Goal ref": "task:{}".format(task_id),
+        "Context manifest": fields.get("Context manifest", ""),
+        "Context revision": fields.get("Context revision", ""),
+        "Continuity": fields.get("Role continuity", ""),
+        "Session ID": fields.get("Session ID", ""),
+    }
+    for key, expected in expected_values.items():
+        if dispatch.get(key, "") != expected:
+            errors.append(
+                "{}: dispatch {} differs from ledger/registry".format(task_id, key)
+            )
+
+    dispatch_id = dispatch.get("Dispatch ID", "")
+    if not re.fullmatch(
+        r"dispatch:{}:[A-Za-z0-9][A-Za-z0-9._:-]*".format(re.escape(task_id)),
+        dispatch_id,
+    ):
+        errors.append("{}: Dispatch ID must be unique to this task".format(task_id))
+    expected_ack = dispatch_expected_ack(dispatch)
+    if dispatch.get("Expected identity ACK", "") != expected_ack:
+        errors.append("{}: Expected identity ACK does not match dispatch metadata".format(task_id))
+    verified_ack = "VERIFIED: {}".format(expected_ack)
+    if dispatch.get("Identity ACK", "") != verified_ack:
+        errors.append("{}: dispatch Identity ACK must exactly match Expected identity ACK".format(task_id))
+    if fields.get("Identity ACK", "") != verified_ack:
+        errors.append("{}: ledger Identity ACK must exactly match dispatch.md".format(task_id))
+    if goal_assignments.get("Identity ACK", "").strip("`") != verified_ack:
+        errors.append("{}: Goal Identity ACK must exactly match dispatch.md".format(task_id))
+
+    delivery = dispatch.get("Delivery", "")
+    if not delivery.startswith("SENT:") or dispatch_id not in delivery:
+        errors.append("{}: dispatch Delivery must cite its SENT Dispatch ID".format(task_id))
+    for source, value in (
+        ("ledger", fields.get("Dispatch message", "")),
+        ("Goal", goal_assignments.get("Dispatch message", "")),
+    ):
+        if not value.startswith("SENT:") or dispatch_id not in value:
+            errors.append(
+                "{}: {} Dispatch message must cite the SENT Dispatch ID".format(
+                    task_id, source
+                )
+            )
+    ack_evidence = dispatch.get("ACK evidence", "")
+    if fields.get("Session ID", "") not in ack_evidence:
+        errors.append("{}: ACK evidence must cite the verified Session ID".format(task_id))
     return errors
 
 
@@ -320,6 +446,8 @@ def validate_role(
                 errors.append("{}: active/review role must be assigned".format(task_id))
             if profile.get("当前 Goal", "") != "task:{}".format(task_id):
                 errors.append("{}: role profile Current Goal must reference this task".format(task_id))
+            if profile.get("当前 Session ID", "") != fields.get("Session ID", ""):
+                errors.append("{}: role profile Current Session ID differs from ledger".format(task_id))
         elif state == "done" and lifecycle == "task-scoped":
             if role_state != "retired":
                 errors.append("{}: completed task-scoped role must be retired".format(task_id))
@@ -637,6 +765,9 @@ def validate(project):
             context_required = state in VISIBLE_STATES or (
                 state == "done" and "Context manifest" in fields
             )
+            dispatch_required = identity_bootstrap_required(project_fields) and (
+                state in VISIBLE_STATES or (state == "done" and "Role ref" in fields)
+            )
             if runtime_evidence_required and is_placeholder(goal_data["baseline"]):
                 errors.append("{}: evidence-bearing Goal requires a concrete baseline".format(child.name))
             if duplicate_fields:
@@ -682,6 +813,17 @@ def validate(project):
 
             if context_required:
                 errors.extend(validate_context(child.name, child, fields, goal_data))
+
+            if dispatch_required:
+                errors.extend(
+                    validate_dispatch_bootstrap(
+                        child.name,
+                        child,
+                        fields,
+                        goal_data["assignments"],
+                        team_revision,
+                    )
+                )
 
             if runtime_evidence_required:
                 requested_raw = fields.get("Runtime requested", "")
@@ -771,6 +913,11 @@ def validate(project):
         if not project_path.is_file():
             errors.append("active/review tasks require PROJECT.md")
         else:
+            protocol_version = project_fields.get("Agent TaskGraph 协议版本", "")
+            if is_placeholder(protocol_version):
+                errors.append(
+                    "PROJECT.md: Agent TaskGraph 协议版本 must be concrete before dispatch"
+                )
             source_baseline = project_fields.get("Source baseline", "")
             if not source_baseline.upper().startswith("READY:") or is_placeholder(source_baseline):
                 errors.append("PROJECT.md: Source baseline must start with READY: before dispatch")

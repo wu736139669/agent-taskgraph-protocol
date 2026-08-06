@@ -19,7 +19,7 @@ bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" \
   "$ROOT/scripts/open-worker-terminal.sh" "$ROOT/workers/watch-worker.sh" \
   "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
 python3 - "$ROOT/workers/parse-worker-log.py" \
-  "$ROOT/scripts/validate-graph.py" "$ROOT/scripts/validate-state.py" \
+  "$ROOT/scripts/render-dispatch.py" "$ROOT/scripts/validate-graph.py" "$ROOT/scripts/validate-state.py" \
   "$ROOT/scripts/verify-hapi-session.py" "$ROOT/scripts/hapi-hub-session.py" <<'PY'
 from pathlib import Path
 import sys
@@ -48,7 +48,7 @@ git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
 git -C "$TMP/update-local" push -u origin main >/dev/null
 
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
-grep -q 'version: 0.8.0-beta.8' "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.9' "$TMP/update-current.out"
 grep -q 'Update status: current' "$TMP/update-current.out"
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
 [ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
@@ -81,7 +81,7 @@ assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
-grep -q 'Version: 0.8.0-beta.8' "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.9' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -131,6 +131,7 @@ assert_dir "$TMP/project/.agent-taskgraph/roles"
 assert_file "$TMP/project/.agent-taskgraph/templates/spec.md"
 assert_file "$TMP/project/.agent-taskgraph/templates/graph.yaml"
 assert_file "$TMP/project/.agent-taskgraph/templates/context.md"
+assert_file "$TMP/project/.agent-taskgraph/templates/dispatch.md"
 assert_file "$TMP/project/.agent-taskgraph/templates/staffing-change.md"
 assert_dir "$TMP/project/.agent-taskgraph/staffing"
 echo sentinel > "$TMP/project/.agent-taskgraph/PROJECT.md"
@@ -160,7 +161,70 @@ assert_dir "$TMP/project-both/.agent-taskgraph"
 
 echo "[6/12] visible Terminal launcher dry-run and permission gates"
 mkdir -p "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test"
-echo '# Goal: launcher test' > "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/goal.md"
+cat > "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/goal.md" <<'MD'
+# Goal: launcher test
+
+> Task ID: `T1-test`
+> Context manifest: `context.md`
+> Context revision: `ctx-1`
+
+## 分配记录
+
+- Role ref：`role:test-worker`
+MD
+cat > "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/context.md" <<'MD'
+# Context
+
+> Task ID: `T1-test`
+> Revision: `ctx-1`
+MD
+mkdir -p "$TMP/terminal-project/.agent-taskgraph/roles/test-worker"
+cat > "$TMP/terminal-project/.agent-taskgraph/roles/test-worker/ROLE.md" <<'MD'
+# Role: Test Worker
+
+| 字段 | 值 |
+|---|---|
+| Role ID | test-worker |
+| Team revision | rev-1 |
+| 生命周期 | persistent |
+MD
+cat > "$TMP/terminal-project/.agent-taskgraph/ROLES.md" <<'MD'
+# Roles
+
+> Team revision: `rev-1`
+MD
+cat > "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/dispatch.md" <<'MD'
+# Dispatch Bootstrap: T1-test
+
+| 字段 | 值 |
+|---|---|
+| Task ID | T1-test |
+| Dispatch ID | dispatch:T1-test:attempt-1 |
+| Role ref | role:test-worker |
+| Role profile | roles/test-worker/ROLE.md |
+| Role lifecycle | persistent |
+| Team revision | rev-1 |
+| Goal ref | task:T1-test |
+| Context manifest | context.md |
+| Context revision | ctx-1 |
+| Continuity | new-role |
+| Session ID | PENDING |
+| Expected identity ACK | IDENTITY_READY dispatch_id=dispatch:T1-test:attempt-1 role=role:test-worker team_revision=rev-1 goal=task:T1-test context_revision=ctx-1 |
+| Delivery | NOT_SENT |
+| Identity ACK | PENDING |
+| ACK evidence | PENDING |
+MD
+cp "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/context.md" \
+  "$TMP/terminal-project/context.saved"
+sed -i.bak 's/Revision: `ctx-1`/Revision: `ctx-2`/' \
+  "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/context.md"
+if "$ROOT/scripts/render-dispatch.py" --project "$TMP/terminal-project" \
+  --goal task:T1-test > "$TMP/terminal-context-drift.out" 2>&1; then
+  fail "dispatch renderer accepted Context revision drift"
+fi
+grep -q 'context revision differs from dispatch' "$TMP/terminal-context-drift.out"
+mv "$TMP/terminal-project/context.saved" \
+  "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/context.md"
 AGENT_TASKGRAPH_TERMINAL_DIR="$TMP/terminal-runtime" \
   "$ROOT/scripts/open-worker-terminal.sh" --runtime claude \
   --project "$TMP/terminal-project" --name test-claude \
@@ -170,6 +234,9 @@ AGENT_TASKGRAPH_TERMINAL_DIR="$TMP/terminal-runtime" \
 grep -q '^runtime: claude$' "$TMP/terminal-claude.out"
 grep -q '^goal-ref: task:T1-test$' "$TMP/terminal-claude.out"
 grep -q 'command: claude .*--name test-claude .*--permission-mode plan' "$TMP/terminal-claude.out"
+grep -q 'role=role:test-worker' "$TMP/terminal-claude.out"
+grep -q 'context_revision=ctx-1' "$TMP/terminal-claude.out"
+grep -q 'IDENTITY_READY dispatch_id=dispatch:T1-test:attempt-1' "$TMP/terminal-claude.out"
 if sed -n '/^command:/p' "$TMP/terminal-claude.out" | grep -q 'queue/inbox'; then
   fail "stable Goal launch command embedded the inbox path"
 fi
@@ -384,7 +451,9 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/goal.md" <<'MD'
 - Runtime observed：`runtime=hapi; flavor=claude; model=sonnet; effort=high; permission=bypassPermissions; visibility=visible`
 - Runtime verification：VERIFIED: pre-dispatch check
 - Session evidence：session-123 + pid 456 + /tmp/session.log
-- Dispatch message：SENT: 2026-08-06 via ping_peer
+- Dispatch bootstrap：dispatch.md
+- Dispatch message：SENT: 2026-08-06 via ping_peer dispatch:P5-ui:attempt-1
+- Identity ACK：VERIFIED: IDENTITY_READY dispatch_id=dispatch:P5-ui:attempt-1 role=role:frontend-ui team_revision=rev-1 goal=task:P5-ui context_revision=ctx-1
 MD
 cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/ledger.md" <<'MD'
 # Ledger
@@ -408,7 +477,9 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/ledger.md" <<'MD'
 | Runtime verification | VERIFIED |
 | Session ID | session-123 |
 | Runtime evidence | runtime-evidence.json |
-| Dispatch message | SENT: 2026-08-06 via ping_peer |
+| Dispatch bootstrap | dispatch.md |
+| Dispatch message | SENT: 2026-08-06 via ping_peer dispatch:P5-ui:attempt-1 |
+| Identity ACK | VERIFIED: IDENTITY_READY dispatch_id=dispatch:P5-ui:attempt-1 role=role:frontend-ui team_revision=rev-1 goal=task:P5-ui context_revision=ctx-1 |
 MD
 cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/context.md" <<'MD'
 # Context Manifest: P5-ui
@@ -423,6 +494,8 @@ cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/context.md" <<'MD'
 | 路径或稳定引用 | Revision / 范围 | 为什么本 Goal 必须读 |
 |---|---|---|
 | `.agent-taskgraph/PROJECT.md` | relevant-sections | 项目硬约束 |
+| `.agent-taskgraph/roles/frontend-ui/ROLE.md` | rev-1 | 长期职责与连续性 |
+| `dispatch.md` | dispatch:P5-ui:attempt-1 | Role 与 Session 身份绑定 |
 | `task:P5-ui` | current | 单次执行合同 |
 
 ## 按需检索（先搜索，再局部读取）
@@ -457,6 +530,27 @@ cat > "$TMP/state-valid/.agent-taskgraph/ROLES.md" <<'MD'
 | Role ID | 名称 | 生命周期 | 状态 | 核心职责 | 当前 Goal | Session ID | 最后更新 |
 |---|---|---|---|---|---|---|---|
 | frontend-ui | Frontend UI | persistent | assigned | UI | task:P5-ui | session-123 | now |
+MD
+cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/dispatch.md" <<'MD'
+# Dispatch Bootstrap: P5-ui
+
+| 字段 | 值 |
+|---|---|
+| Task ID | P5-ui |
+| Dispatch ID | dispatch:P5-ui:attempt-1 |
+| Role ref | role:frontend-ui |
+| Role profile | roles/frontend-ui/ROLE.md |
+| Role lifecycle | persistent |
+| Team revision | rev-1 |
+| Goal ref | task:P5-ui |
+| Context manifest | context.md |
+| Context revision | ctx-1 |
+| Continuity | 新角色 + session-123 |
+| Session ID | session-123 |
+| Expected identity ACK | IDENTITY_READY dispatch_id=dispatch:P5-ui:attempt-1 role=role:frontend-ui team_revision=rev-1 goal=task:P5-ui context_revision=ctx-1 |
+| Delivery | SENT: 2026-08-06 via ping_peer dispatch:P5-ui:attempt-1 |
+| Identity ACK | VERIFIED: IDENTITY_READY dispatch_id=dispatch:P5-ui:attempt-1 role=role:frontend-ui team_revision=rev-1 goal=task:P5-ui context_revision=ctx-1 |
+| ACK evidence | session-123 message=msg-001 observed=2026-08-06T10:01:00Z |
 MD
 cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/runtime-evidence.json" <<'JSON'
 {
@@ -503,6 +597,7 @@ cat > "$TMP/state-valid/.agent-taskgraph/PROJECT.md" <<'MD'
 
 | 配置 | 项目选择 |
 |---|---|
+| Agent TaskGraph 协议版本 | 0.8.0-beta.9 |
 | Source baseline | READY: repo=/tmp/project; HEAD=abc1234; branch=main; clean |
 
 | Execution profile | Confirmed value |
@@ -530,6 +625,42 @@ cat > "$TMP/state-valid/.agent-taskgraph/STATUS.md" <<'MD'
 MD
 "$ROOT/scripts/validate-state.py" "$TMP/state-valid" > "$TMP/state-valid.out"
 grep -q 'State validation passed' "$TMP/state-valid.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-beta8-compatible"
+sed -i.bak 's/0.8.0-beta.9/0.8.0-beta.8/' \
+  "$TMP/state-beta8-compatible/.agent-taskgraph/PROJECT.md"
+rm "$TMP/state-beta8-compatible/.agent-taskgraph/queue/active/P5-ui/dispatch.md"
+"$ROOT/scripts/validate-state.py" "$TMP/state-beta8-compatible" \
+  > "$TMP/state-beta8-compatible.out"
+grep -q 'State validation passed' "$TMP/state-beta8-compatible.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-missing-dispatch"
+rm "$TMP/state-missing-dispatch/.agent-taskgraph/queue/active/P5-ui/dispatch.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-missing-dispatch" \
+  > "$TMP/state-missing-dispatch.out" 2>&1; then
+  fail "state validator accepted an active task without dispatch.md"
+fi
+grep -q 'missing dispatch.md' "$TMP/state-missing-dispatch.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-dispatch-role-drift"
+sed -i.bak 's/| Role ref | role:frontend-ui |/| Role ref | role:other-worker |/' \
+  "$TMP/state-dispatch-role-drift/.agent-taskgraph/queue/active/P5-ui/dispatch.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-dispatch-role-drift" \
+  > "$TMP/state-dispatch-role-drift.out" 2>&1; then
+  fail "state validator accepted dispatch Role drift"
+fi
+grep -q 'dispatch Role ref differs from ledger/registry' \
+  "$TMP/state-dispatch-role-drift.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-identity-ack-drift"
+sed -i.bak '/| Identity ACK |/s/context_revision=ctx-1/context_revision=ctx-2/' \
+  "$TMP/state-identity-ack-drift/.agent-taskgraph/queue/active/P5-ui/dispatch.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-identity-ack-drift" \
+  > "$TMP/state-identity-ack-drift.out" 2>&1; then
+  fail "state validator accepted an unverified identity ACK"
+fi
+grep -q 'dispatch Identity ACK must exactly match' \
+  "$TMP/state-identity-ack-drift.out"
 
 cp -R "$TMP/state-valid" "$TMP/state-missing-context"
 rm "$TMP/state-missing-context/.agent-taskgraph/queue/active/P5-ui/context.md"
@@ -867,7 +998,7 @@ import re
 import sys
 
 root = Path(sys.argv[1])
-assert (root / "VERSION").read_text().strip() == "0.8.0-beta.8"
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.9"
 assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
@@ -888,7 +1019,7 @@ for phrase in ("Execution profile status", "Execution runtime", "Model selection
 runtime_profiles = (root / "references/runtime-profiles.md").read_text()
 for phrase in ("一次确认协议", "adaptive-batch", "Permission scope", "目录探测"):
     assert phrase in runtime_profiles, phrase
-for path in ("templates/ROLES.md", "templates/role.md", "templates/context.md", "templates/staffing-change.md"):
+for path in ("templates/ROLES.md", "templates/role.md", "templates/context.md", "templates/dispatch.md", "templates/staffing-change.md"):
     assert (root / path).is_file(), path
 for phrase in ("Role 与 Goal 分离", "初始组队协议", "动态编制协议", "persistent", "task-scoped", "上下文预算合同"):
     assert phrase in skill, phrase
@@ -930,16 +1061,19 @@ required = (
     "skills/agent-taskgraph/agents/openai.yaml",
     "skills/agent-taskgraph/init.sh",
     "skills/agent-taskgraph/references/hapi-runtime.md",
+    "skills/agent-taskgraph/references/dispatch-bootstrap.md",
     "skills/agent-taskgraph/references/runtime-profiles.md",
     "skills/agent-taskgraph/scripts/check-update.sh",
     "skills/agent-taskgraph/scripts/hapi-hub-session.py",
     "skills/agent-taskgraph/scripts/open-worker-terminal.sh",
+    "skills/agent-taskgraph/scripts/render-dispatch.py",
     "skills/agent-taskgraph/scripts/validate-graph.py",
     "skills/agent-taskgraph/scripts/validate-state.py",
     "skills/agent-taskgraph/scripts/verify-hapi-session.py",
     "skills/agent-taskgraph/templates/PROJECT.md",
     "skills/agent-taskgraph/templates/ROLES.md",
     "skills/agent-taskgraph/templates/context.md",
+    "skills/agent-taskgraph/templates/dispatch.md",
     "skills/agent-taskgraph/templates/role.md",
     "skills/agent-taskgraph/templates/staffing-change.md",
     "skills/agent-taskgraph/workers/parse-worker-log.py",
@@ -959,10 +1093,12 @@ assert (package / "LICENSE").read_text() == (root / "LICENSE").read_text()
 for relative in (
     "init.sh",
     "references/hapi-runtime.md",
+    "references/dispatch-bootstrap.md",
     "references/runtime-profiles.md",
     "scripts/check-update.sh",
     "scripts/hapi-hub-session.py",
     "scripts/open-worker-terminal.sh",
+    "scripts/render-dispatch.py",
     "scripts/validate-graph.py",
     "scripts/validate-state.py",
     "scripts/verify-hapi-session.py",
@@ -970,6 +1106,7 @@ for relative in (
     "templates/PROJECT.md",
     "templates/ROLES.md",
     "templates/context.md",
+    "templates/dispatch.md",
     "templates/STATUS.md",
     "templates/DECISIONS.md",
     "templates/spec.md",

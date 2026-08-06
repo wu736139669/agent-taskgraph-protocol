@@ -6,7 +6,7 @@
 
 **Spec-first graph orchestration for AI coding agents.**
 
-Source version: [`v0.8.0-beta.8`](VERSION) | Latest published release: `v0.8.0-beta.7` | License: [Apache-2.0](LICENSE)
+Source version: [`v0.8.0-beta.9`](VERSION) | Latest published release: `v0.8.0-beta.8` | License: [Apache-2.0](LICENSE)
 
 > **Public Beta** for users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
 
@@ -344,6 +344,8 @@ Agent TaskGraph separates a durable **Role** from a one-off **Goal**. A Role rec
 
 Persistent roles move between `available`, `assigned`, `paused`, and `retired`; one persistent role cannot own two active/review Goals concurrently. Related sequential work should reuse the role and, when healthy, its session. Parallel work needs separate roles with non-overlapping writes. Reviewers are normally task-scoped independent roles and never reuse the author role.
 
+Every new, reused, or replacement worker session receives a generated Role bootstrap before implementation. It names the exact Role profile, lifecycle, Team revision, Goal, Context revision, and continuity checkpoint without copying the full project history. The worker must return the matching `IDENTITY_READY` line; a bare worker name, stale revision, copied ACK, or missing message/log evidence cannot enter `active`. The durable identity lives in files, so a long-lived Role can move to a fresh session without replaying its entire chat.
+
 The initial team is proposed only after the spec and graph expose real responsibilities. The PMO shows Role IDs, durable boundaries, current Goals, session reuse, model/effort, permissions, visibility, and concurrency; the owner approves or changes that smallest viable team before any session starts.
 
 Adding people later is a versioned staffing change, not an informal extra agent. The PMO must show evidence of a responsibility gap or critical-path bottleneck, the serial alternative, graph/write-scope changes, added sessions and cost, handoff, and rollback. The owner approves `ADD`, `SPLIT`, `TEMP_AUGMENT`, `REPLACE`, `PAUSE`, or `RETIRE` unless `PROJECT.md` contains an exact applicable pre-authorization. Temporary help is task-scoped by default and retires after its Goal. “More agents might be faster” is not sufficient evidence.
@@ -478,7 +480,7 @@ Keep GitHub as the canonical source and point every other listing to a tag or co
 | Channel | Availability | Recommended use |
 |---|---|---|
 | GitHub repository | Public Beta | Canonical source, issues, reviews, and contributor history |
-| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | `v0.8.0-beta.4` published | Versioned archives and release notes |
+| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | `v0.8.0-beta.8` published | Versioned archives and release notes |
 | Codex / Claude Code local install | Available now | `./install.sh` links this checkout into `~/.codex/skills/agent-taskgraph` and `~/.claude/skills/agent-taskgraph` |
 | Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |
 | [skills.sh](https://skills.sh) | CLI-compatible; directory listing is third-party | Install with `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`; keep GitHub as the source of truth |
@@ -523,6 +525,7 @@ These are maintainer/PMO commands run from the Skill checkout. Normal owners can
 | `./init.sh --migrate <project>` | Explicitly rename legacy `.agent-queue/` state and add missing current templates |
 | `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | Preview a native Claude/Codex worker command with a stable queue Goal ref |
 | `./scripts/open-worker-terminal.sh ...` | Open and verify one worker in a visible macOS Terminal.app window |
+| `./scripts/render-dispatch.py --project <dir> --goal task:<id>` | Validate `dispatch.md` and render the same Role bootstrap for native, HAPI, or host-thread delivery |
 | `./scripts/hapi-hub-session.py machines` | List online runners safely even when the saved default machine ID is stale |
 | `./scripts/hapi-hub-session.py probe [--machine-id <id>]` | Authenticate without printing credentials and select an online HAPI runner |
 | `./scripts/hapi-hub-session.py catalog --flavor <claude\|codex>` | Read models, efforts, and permissions proven available on the selected runner |
@@ -547,7 +550,7 @@ Live directories are scanned only with `--include-live`; deletion occurs only wi
 - The public default is `auto + native-first` with no optional adapter enabled. HAPI support ships as an [opt-in runtime adapter](references/hapi-runtime.md): detection may be reported during onboarding, but it is not loaded or activated until the owner selects it in `PROJECT.md`.
 - HAPI selection separates the owner control device, PMO execution host, and runner machine. A missing local CLI or an MCP that exposes only `inspect_peer`/`ping_peer` does not prove HAPI spawning is unavailable; the PMO probes `scripts/hapi-hub-session.py` before considering a confirmed fallback. The helper reads credentials privately and must never be replaced with an inline token-bearing `curl` command.
 - Onboarding confirms one Execution profile. Before every batch, the owner then sees each Role ID, durable responsibility, one-off Goal, reuse plan, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands; the whole table is confirmed once unless per-worker mode was chosen. Graph approval alone is not session authorization.
-- A spawned session stays in `inbox` until its observed model, effort, permission, workspace, identity, idle state, and process evidence match that preview. Reused sessions also require evidence bound to the new Goal. API request fields, a returned session ID, or old evidence are not proof that this dispatch is valid.
+- A spawned session stays in `inbox` until its observed model, effort, permission, workspace, identity, idle state, and process evidence match that preview. It then receives a revision-bound Role bootstrap and must return an exact `IDENTITY_READY` with real message/log evidence. Reused sessions require both fresh runtime evidence and a fresh Dispatch ID/ACK bound to the new Goal. API request fields, a returned session ID, a worker display name, or old evidence are not proof that this dispatch is valid.
 - On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Queue work uses `--goal task:<id>` so inbox/active moves do not invalidate the command. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
 - Platform-standard permissions are the default and retain runtime prompts. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project. The authorization scope is recorded as `runtime-only` or `all-approved-runtimes`; only the latter can carry the same approved policy into a fallback without asking again.
 - Frozen scope, worktrees, and reviewers are quality controls, not security sandboxes.

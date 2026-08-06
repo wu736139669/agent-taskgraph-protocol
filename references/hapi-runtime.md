@@ -36,9 +36,9 @@
 - 禁止直接调用 runner 本地 `/spawn-session`：它不是完整的远程配置接口，可能忽略 model/effort/permission。请求 JSON、HTTP 2xx、返回的 session ID 和 ledger 中的计划值都不能证明参数已生效。
 - spawn 后保持任务在 `inbox`，且**先不要 `ping_peer`**。`hapi-hub-session.py spawn` 重新验证 runner 目录与模型目录，再等待 Hub metadata，核对 goal_ref、session、machine、PID、cwd、flavor、model、effort、permission、runner 身份、active/running、idle/not-thinking 和零消息 watermark；成功时写当前 Goal 专属 `runtime-evidence.json`。UI 创建的全新会话可用 `verify` 执行同一硬门。
 - 同一 persistent Role 复用旧 session 时必须运行 `reuse`。它允许历史消息，但要求会话 active/running、配置匹配、idle/not-thinking，并为新 Goal 写新的 `verification_id`、`goal_ref` 和消息 watermark。禁止复制上一 Goal evidence 或把历史 `pre-dispatch` 当作本次核验。
-- 把 helper JSON 保存为当前 inbox 任务目录的 `runtime-evidence.json`。只有输出为 `VERIFIED` 才能写 Goal/ledger、发送第一条 Goal，再迁移到 `active`。`validate-state.py` 会核对 goal_ref、phase、idle、catalog、machine、requested/observed 和 watermark；shell 退出码 0、API 返回成功或人工推断都不构成合格证据。`verify-hapi-session.py` 旧日志解析器只用于诊断/audit，不能替代当前 Hub evidence 硬门。
+- 把 helper JSON 保存为当前 inbox 任务目录的 `runtime-evidence.json`。只有输出为 `VERIFIED` 才能更新本次 `dispatch.md` 的真实 Session ID，并用 `scripts/render-dispatch.py --project <project> --goal task:<id>` 生成首条 Role bootstrap。通过 `ping_peer`/等价消息能力发送后，从真实 HAPI 消息观察完全匹配的 `IDENTITY_READY`，把 ACK 与 message/session 证据写回 dispatch/Goal/ledger，才迁移到 `active`。`validate-state.py` 会核对 goal_ref、phase、idle、catalog、machine、requested/observed、watermark 和身份 revision；shell 退出码 0、API 返回成功或人工推断都不构成合格证据。`verify-hapi-session.py` 旧日志解析器只用于诊断/audit，不能替代当前 Hub evidence 硬门。
 - 配置不匹配时标记 `RUNTIME_CONFIG_MISMATCH`：不要发 Goal，不要让 Owner 逐次批准工具。helper 默认只归档它本次刚创建且尚未派发的会话；不得停止 runner/hub/其他会话。然后修正参数、改由 HAPI UI，或走 PROJECT.md 已确认 fallback。若 Goal 已经发送，保留失败证据并按失败重试处理；事后配置变更只能用 audit 记录恢复，不能把原派发改写为合格。
-- 每个 Goal/ledger 记录 runtime=`hapi`、`Runtime requested`、`Runtime observed`、`Runtime verification`、完整创建方式、会话 ID、PID、runner/peer 观察证据、日志路径、首条消息送达证据和 fallback。不得记录认证 token、完整 settings 或未脱敏诊断输出。
+- 每个 Goal/ledger 记录 runtime=`hapi`、`Runtime requested`、`Runtime observed`、`Runtime verification`、完整创建方式、会话 ID、PID、runner/peer 观察证据、日志路径、Dispatch ID、首条 bootstrap 送达与 Identity ACK 证据和 fallback。不得记录认证 token、完整 settings 或未脱敏诊断输出。
 
 自动派发示例（Skill 根目录执行；普通 Owner 无需手写）。派发预览先运行 dry-run：
 
@@ -59,7 +59,7 @@ scripts/hapi-hub-session.py spawn \
   --evidence-output '<project>/.agent-taskgraph/queue/inbox/<task-id>/runtime-evidence.json'
 ```
 
-只有输出 `VERIFIED` 后才使用 `ping_peer` 发送 Goal。复用已有角色会话：
+只有输出 `VERIFIED` 后才渲染并使用 `ping_peer` 发送 Role bootstrap，不直接发送裸 Goal。复用已有角色会话：
 
 ```bash
 scripts/hapi-hub-session.py reuse \

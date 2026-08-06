@@ -11,6 +11,7 @@
 |---|---|---|
 | `.agent-taskgraph/PROJECT.md` | relevant sections | 项目硬约束与运行策略 |
 | `.agent-taskgraph/roles/<role-id>/ROLE.md` | current | 职责边界与连续性 |
+| `<current task>/dispatch.md` | `<Dispatch ID>` | 本次 Role/Session 身份绑定与 ACK 合同 |
 | `<frozen spec>` | `<revision>` | 本次冻结需求 |
 | `<graph#node>` | `<revision>` | 本节点依赖与路由 |
 | `<current goal>` | current | 单次执行合同 |
