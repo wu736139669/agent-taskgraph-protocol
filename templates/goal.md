@@ -2,7 +2,8 @@
 
 > Stage: <阶段标签>（如 T1 authoring checkpoint / C11E1 implementation）
 > Started: <时间>
-> Baseline: `<git hash + branch/upstream + clean/dirty ownership>`（无 git 则记录可校验的源版本/产物摘要）
+> Task ID: `<与 graph goal_ref、queue 目录、STATUS 完全一致的稳定 ID>`
+> Baseline: `<git hash + branch/upstream + clean/dirty ownership>`（B/C/D 类必须可复现且能创建 worktree；无 Git 不得派实现 worker）
 > Accepted 上一阶段: `<hash>`（上一个 goal 的验收 hash，证据链；首任务可省）
 > Frozen spec: `<spec.md 路径 + revision>`（只有低风险 A 类快速任务可写“内嵌本 Goal”）
 > Graph node: `<graph.yaml 路径#node-id>`（低风险 A 类快速任务写“不适用”）
@@ -26,6 +27,7 @@
 - 派给：<会话 ID / 岗位名>
 - 分配理由：相关性（同模块历史） / 职责匹配（岗位） / 负载均衡
 - 工作区：<worktree 路径>（分支：<branch>）
+- Runtime：<runtime / visibility / model / effort / permission / 完整启动方式>
 
 ## 报告协议
 

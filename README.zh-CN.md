@@ -114,7 +114,13 @@ your-project/.agent-taskgraph/
 
 ### 3. 在目标项目启动会话
 
-进入目标项目，新开 Claude Code 或 Codex 会话。支持 Skill 选择器时可使用 `$agent-taskgraph`；也可以直接说：
+进入目标项目，新开 Claude Code 或 Codex 会话。普通用户不需要运行校验脚本、填写 Goal 路径或记内部 runtime 参数。支持 Skill 选择器时可使用 `$agent-taskgraph`；最简单只要说：
+
+```text
+使用 agent-taskgraph 帮我增加团队成员管理。
+```
+
+这一句话用于发起接入，不代表跳过澄清。需要更严格控制时，可以说：
 
 ```text
 使用 agent-taskgraph 管理这个项目。
@@ -122,11 +128,11 @@ your-project/.agent-taskgraph/
 在我确认 PROJECT.md 前不要派发任务。
 ```
 
-第一次接入时，Agent 会分析技术栈、目录、构建测试命令、共享文件和运行时能力，然后请你确认 `.agent-taskgraph/PROJECT.md` 中的权限、会话可见性、模型偏好和 Human Gates。
+第一次接入时，Agent 会分析技术栈、目录、Git baseline、构建测试命令、共享文件和运行时能力，并用普通语言让你选择运行方式与模型策略，再把权限、会话可见性、模型偏好和 Human Gates 写入 `.agent-taskgraph/PROJECT.md`。复杂任务必须先有可复现 Git baseline 且能创建隔离 worktree，才允许派发。
 
 ### 4. 在 macOS 要求可见 Worker 终端
 
-确认 `PROJECT.md` 前，在 Owner 会话里说明 Worker 的运行方式：
+这是可选设置。确认 `PROJECT.md` 前，在 Owner 会话里说明 Worker 的运行方式：
 
 ```text
 本批次使用 Claude 原生 CLI，不使用 HAPI。
@@ -135,7 +141,7 @@ your-project/.agent-taskgraph/
 等我确认后才能打开窗口。
 ```
 
-PMO 会先运行 `scripts/open-worker-terminal.sh ... --dry-run`，预演阶段不会打开任何窗口。Owner 批准任务图和运行参数后，PMO 去掉 `--dry-run`；每个 Worker 会在带名称的独立 Terminal 窗口中启动，并且只有 PID 验证成功后才能登记为 active。只读探索使用 `plan`，已获批的实现 Goal 才使用 `acceptEdits`。`bypassPermissions` 除了项目明确授权，还必须附带 `--allow-dangerous`。
+内部命令由 PMO 生成并执行，Owner 不需要自己拼参数。dry-run 预演阶段不会打开任何窗口。Owner 批准任务图和独立的派发预览后，PMO 才实际启动；每个 Worker 会在带名称的独立 Terminal 窗口中运行，并且只有 PID 验证成功后才能登记为 active。只读探索使用 `plan`，已获批的实现 Goal 才使用 `acceptEdits`。`bypassPermissions` 除了项目明确授权，还必须附带 `--allow-dangerous`。
 
 ## 最常用的五种用法
 
@@ -162,8 +168,9 @@ PMO 会先运行 `scripts/open-worker-terminal.sh ... --dry-run`，预演阶段�
 2. Agent 返回“已确认 / 合理推断 / 待用户决策”。
 3. 每轮只问少量阻塞执行的问题，并给推荐默认值和影响。
 4. 开放问题清零后，Agent 提交 `spec.md` 摘要让你冻结。
-5. spec 冻结后，Agent 提交 `graph.yaml` 摘要让你批准。
-6. 只有图获批后，才创建 Worker、worktree 和 Reviewer。
+5. spec 冻结后，Agent 先校验再提交 `graph.yaml` 摘要让你批准。
+6. 然后展示派发预览：每个 Worker/Reviewer 的职责、依赖、写入范围、可见运行时、模型、推理强度、权限、worktree 和完整启动命令。
+7. 只有你批准这张预览后，才能打开会话并把任务标记为 active。
 
 一次完整对话大致如下：
 
@@ -188,7 +195,15 @@ Owner：确认冻结 spec revision 1。先给任务图，不执行。
 PMO：graph revision 1 有 5 个节点：数据合同 → 后端与 UI 并行 → 独立验证 → 合并闸。
 共享写入由 merge 节点独占；失败分别回到后端或 UI 修复节点。请确认。
 
-Owner：批准 graph revision 1，开始执行；合并仍需找我确认。
+Owner：批准 graph revision 1。先给我派发预览。
+
+PMO：graph validator 已通过。计划派发：
+后端 Worker | 依赖 data-contract | 写 server/team | Claude 可见终端 | Sonnet/high
+UI Worker | 依赖 data-contract | 写 app/team | Claude 可见终端 | Sonnet/high
+Reviewer | 依赖后端+UI | 只读 | 独立可见终端 | 当前最强模型/high
+我负责监督、状态对账和最终验收，不写实现。全部使用隔离 worktree 和标准权限。批准启动吗？
+
+Owner：批准这次派发；合并仍需找我确认。
 ```
 
 关键点不是固定问三道题，而是 PMO 先用代码证据缩小问题，再让 Owner 决定代码无法回答的产品选择。
@@ -408,12 +423,12 @@ GitHub 仓库应始终是唯一主源，其他目录或安装包只指向本仓�
 | Codex / Claude Code 本地安装 | 现在可用 | `./install.sh` 将 checkout 链接到 `~/.codex/skills/agent-taskgraph` 和 `~/.claude/skills/agent-taskgraph` |
 | 团队内部仓库 | 现在可用 | 在受控团队环境中放入或链接到 `.agents/skills/` |
 | [skills.sh](https://skills.sh) | CLI 已兼容；目录收录由第三方维护 | 使用 `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph` 安装；GitHub 仍是主源 |
-| OpenAI / Codex Plugin 目录 | 包已准备，等待平台提交 | 本地验证 `plugins/agent-taskgraph` 后，通过 [OpenAI Plugin Portal](https://developers.openai.com/plugins/deploy/submission) 提交 |
+| OpenAI / Codex Plugin 目录 | 已提交，等待平台审核 | 包已通过本地验证；平台批准前不声称已经公开上架 |
 | Claude Code Plugin Marketplace | 已提交，等待平台审核 | 包和 catalog 已通过本地验证；平台批准前不声称已经公开上架 |
 
 发布顺序是：公开 GitHub、发布带 tag 的 GitHub Release、提交 `skills.sh` 发现入口、提交 OpenAI/Codex 包、最后提交 Claude Code Marketplace。Beta 阶段继续使用当前独立 Skill 目录最简单。平台目录的审核和更新节奏各自独立；它们都不是第二个主仓库。
 
-Git 更新检查只适用于独立 Git clone 和软链安装。Plugin Marketplace 使用各自的包更新机制；版本主线仍以 GitHub 仓库和 Release tag 为准。Claude Code 包已经提交审核，但在平台批准前仍不视为公开上架；OpenAI/Codex 包已准备好，但尚未完成平台提交。
+Git 更新检查只适用于独立 Git clone 和软链安装。Plugin Marketplace 使用各自的包更新机制；版本主线仍以 GitHub 仓库和 Release tag 为准。Claude Code 与 OpenAI/Codex 包都已提交审核，但在平台批准前仍不视为公开上架。
 
 ### 平台包
 
@@ -441,17 +456,21 @@ claude plugin validate ./plugins/agent-taskgraph
 
 ## 辅助命令
 
+以下是从 Skill checkout 运行的维护者/PMO 命令；普通 Owner 只用自然语言即可。
+
 | 命令 | 用途 |
 |---|---|
 | `./init.sh <project>` | 初始化项目实例，保留已有文件 |
 | `./init.sh --migrate <project>` | 显式迁移旧 `.agent-queue/` 状态目录，并补齐缺失的新模板 |
-| `./scripts/open-worker-terminal.sh ... --dry-run` | 只预览 Claude/Codex 原生 worker 命令，不打开终端 |
+| `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | 用稳定队列 Goal ref 预览 Claude/Codex 原生 worker 命令 |
 | `./scripts/open-worker-terminal.sh ...` | 在 macOS Terminal.app 打开并验证一个可见 worker |
+| `./scripts/validate-graph.py <graph.yaml>` | 拒绝未知依赖、动态 Goal 路径、缺失生产者祖先、环和并行写冲突 |
+| `./scripts/validate-state.py <project>` | 校验队列目录、Goal、ledger 与 active/review STATUS 行一致 |
 | `./workers/watch-worker.sh <log>` | 把 Codex JSONL 或 HAPI 文本日志压缩成进展事件流 |
 | `./workers/log-cleanup.sh` | dry-run 列出 30 天前的 Codex 已归档日志 |
 | `./workers/log-cleanup.sh --apply` | 删除刚才列出的已归档候选 |
 | `./workers/log-cleanup.sh --include-live` | 额外预览 live Codex/HAPI 日志，仍不删除 |
-| `./tests/smoke.sh` | 验证安装、初始化、解析器、清理安全和模板 |
+| `./tests/smoke.sh` | 验证安装、初始化、启动预览、graph/state 硬门、解析器、清理安全和平台包 |
 
 日志清理默认不碰 live 目录，只有显式 `--include-live` 才扫描；只有显式 `--apply` 才删除。被 Goal、ledger 或 report 引用的证据日志应保留。
 
@@ -460,7 +479,8 @@ claude plugin validate ./plugins/agent-taskgraph
 - Skill 会探测当前环境，不假设每个 Codex 都有 `create_thread`、`wait_threads` 等工具。
 - 可用时优先用户可见、可接管的独立会话。Claude Code 优先使用 `claude`、`claude --bg`、`claude agents` 或 `claude -p`；Codex 优先使用 `codex`、`codex exec` 或 `codex resume`。能力不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
 - 公开默认是 `auto + native-first`，不启用任何可选 adapter。HAPI 作为[按需启用的运行时适配器](references/hapi-runtime.md)随仓库提供：接入时可以报告已检测到，但只有 Owner 在 `PROJECT.md` 选择后才加载和启用。
-- 在 macOS 上，如果 Owner 要求每个 worker/reviewer 都显示独立 CLI，可使用 `scripts/open-worker-terminal.sh`。必须先 `--dry-run` 预览并批准图和运行参数，再实际打开；PID 验证成功后才能把任务登记为 active。
+- 每个批次派发前，Owner 都会看到实际 Worker/Reviewer、职责、依赖、写入、运行时可见性、模型/effort、权限、worktree 和启动命令。批准 graph 本身不等于授权开启会话。
+- 在 macOS 上，如果 Owner 要求每个 worker/reviewer 都显示独立 CLI，可使用 `scripts/open-worker-terminal.sh`。队列任务传 `--goal task:<id>`，避免 inbox/active 迁移让命令失效。必须先 `--dry-run` 预览并批准图和运行参数，再实际打开；PID 验证成功后才能把任务登记为 active。
 - 默认使用平台标准权限。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。
 - Frozen、worktree 和 Reviewer 是质量控制，不是安全沙箱。
 - 依赖安装、数据库迁移、删除、权限扩大、合并和发布应按 `PROJECT.md` 保留 Human Gate。
@@ -500,6 +520,7 @@ Agent TaskGraph Protocol 使用 [Apache License 2.0](LICENSE) 发布。Copyright
 已经具备：
 
 - 项目接入、需求澄清、spec 冻结和 graph 审批
+- 确定性 graph 校验，以及 queue/ledger/STATUS 一致性校验
 - Goal 拆分、队列/ledger 状态协议、有限失败路由
 - Worker 自验、独立 Reviewer、Owner 终审
 - 冲突安全安装、项目初始化、日志解析和保守清理
@@ -508,9 +529,9 @@ Agent TaskGraph Protocol 使用 [Apache License 2.0](LICENSE) 发布。Copyright
 尚未实现或不承诺：
 
 - 没有 `dispatch.sh` 和 `run-worker.sh`；派发仍由运行中的 Agent 调用平台工具
-- 没有确定性的 graph validator、ready-node 计算器和状态迁移 CLI
+- 没有确定性的 ready-node 计算器和状态迁移 CLI
 - 跨运行时效果仍取决于实际工具能力和 Agent 是否正确遵循 `SKILL.md`
-- 当前没有稳定版本保证；公开发布前仍需完成版本策略、公开历史审查和平台 Plugin 包决策
+- 当前没有稳定版本保证；v1.0 仍需更多非游戏项目、原生 Codex 环境验证和稳定发布策略
 
 ## 仓库结构
 
@@ -536,9 +557,9 @@ agent-taskgraph-protocol/
 
 ## Roadmap
 
-- 确定性 graph 校验与 ready-node 计算
+- 确定性 ready-node 计算
 - 带一致性检查的安全队列迁移 CLI
 - Codex、HAPI、Claude runtime adapters
 - 重试、通过率、耗时和 token 成本指标
 - 一个非游戏项目和一个纯 Codex 环境的脱敏案例
-- OpenAI/Codex 与 Claude Code 平台包的提交与审核
+- OpenAI/Codex 与 Claude Code 平台包的审核与公开上架

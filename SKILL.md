@@ -12,6 +12,8 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **版本与更新提示**：只在 Owner 入口会话首次启用本 Skill 时，从本 Skill 目录运行一次 `scripts/check-update.sh --quiet`；worker、reviewer 和同会话后续轮次不重复检查。输出为空或联网失败时继续当前任务；出现 `Update available:` 或 `Update warning:` 时，先用一句话告知 Owner 和建议命令，**不得自动 pull、切换版本或重启会话**。活跃批次继续使用 `PROJECT.md` 记录的协议版本，更新放到新批次前由 Owner 决定。
 
+**辅助脚本根目录**：本文中的 `scripts/...` 和 `workers/...` 都相对于本 Skill 安装根目录，不是目标项目 cwd；先解析实际 Skill 路径再调用。普通 Owner 不需要手写这些命令。
+
 ## 第 0 节：团队结构与职责边界
 
 | 角色 | 形态 | 职责 | 边界 |
@@ -28,7 +30,9 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 2. 分析技术栈与模块划分 → **推断岗位配置**（如 UI/数据/后端/测试 worker，无需用户预先指定）
 3. 分析测试与构建命令 → 定各岗位验收命令
 4. 识别硬性规范与共享文件锁
-5. 从本 Skill 的 `VERSION` 写入当前协议版本，并把接入结果写入 `PROJECT.md`，请 Owner 确认
+5. 探测 Git/source baseline：仓库根、HEAD、分支/upstream、clean/dirty ownership；无 Git 或无法得到可复现 baseline 时标记 `BLOCKED`，只允许继续澄清/建图，不得派实现 worker
+6. 用用户语言给出一次运行方式选择，不要求 Owner 手写内部参数：①原生可见终端（推荐）②宿主可见线程（若存在）③已检测到的可选 adapter（如 HAPI）④无头后台；模型策略选“AI 推荐并在派发前确认”（推荐）/每个 worker 确认/固定配置
+7. 从本 Skill 的 `VERSION` 写入当前协议版本，把接入结果、baseline 与选择映射写入 `PROJECT.md`，请 Owner 确认
 
 ## 第 1 节：接入、上下文发现与分诊（必做）
 
@@ -54,7 +58,8 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - 只有范围局部、行为明确、验收可从代码/测试确定、低影响且容易回滚的 A 类任务可走快速路径。
 - B/C/D 类，或任一敏感度高的任务，必须先形成 `spec.md`（模板见 `templates/spec.md`）。每轮只问 1-5 个真正阻塞执行的决策题，并附推荐默认值和影响；不要用“请详细说明”把分析责任退给用户。
 - `spec.md` 必须写清目标用户/场景、当前状态、包含与不做、边界行为、验收标准、硬约束、Human Gates 和开放问题。开放问题未清零，或用户未确认 `Status: FROZEN`，不得写实现代码、建实现 worktree 或派 worker；只读探索可以继续。
-- 用户确认冻结规格后，复杂/多任务再生成 `graph.yaml` 并给出并行点、关键路径、共享写入、失败路由和人工闸摘要。图获批后才派发。
+- **Source Baseline Gate**：B/C/D 类派发前必须有可复现 Git HEAD 和可用 worktree。空目录/非 Git 项目先向 Owner 提供“本地 `git init` + baseline commit（推荐）/提供其他可校验 VCS baseline/停止多 agent”三选一；dirty 仓库由 Owner 决定提交现状、明确归属后继续或暂停。不得自动 stash、吞掉用户改动，也不得以“空项目”作为直接写根目录的理由。
+- 用户确认冻结规格后，复杂/多任务再生成 `graph.yaml` 并给出并行点、关键路径、共享写入、失败路由和人工闸摘要。先运行 `scripts/validate-graph.py <graph.yaml>`；校验失败不得展示为可批准图。图获批后还必须通过派发预览闸才可开会话。
 
 ## 第 2 节：专家装配（按需，不是固定编制）
 
@@ -108,10 +113,11 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **Task Graph 合同（B/C/D 类必需，A 类不建图）**：
 - `graph.yaml`（模板见 `templates/graph.yaml`）只保存获批的稳定拓扑：节点、真实输入/输出依赖、写入范围、验收、通过/失败路由、最大重试和 Human Gate；不要把实时状态或聊天摘要塞进图。
-- 节点是可交给一个执行者、能独立验收的**工作**，不是抽象岗位。只有下游确实读取上游产物时才画边；删除“先说然后做”但无数据流的假边。
+- 节点是可交给一个执行者、能独立验收的**工作**，不是抽象岗位。只有下游确实读取上游产物时才画边；删除“先说然后做”但无数据流的假边。反向也成立：`consumes` 命中另一节点的 `produces/writes` 时，该生产者必须位于本节点 `needs` 的祖先链，不能只写在注释或关键路径摘要里。
 - 能独立的节点才并行；需要完整共享上下文的顺序工作留给同一 worker。并行节点不得同时写同一文件/产物；一个 merge 节点拥有最终整合。
 - 实现节点之后设置独立 verifier；失败只回到最早失败边界对应的最小修复节点，循环必须有 `max_attempts`。发布、删除、迁移、支付、权限扩大等不可逆边经过 Human Gate。
-- `graph.yaml` 是静态计划源，队列目录 + ledger 是动态状态源；Mermaid/STATUS 只能从二者按需生成，不能成为第三份手工事实源。
+- `graph.yaml` 用稳定 `goal_ref: "task:<task-id>"` 引用任务；PMO 在 `queue/*/<task-id>/goal.md` 中解析唯一当前路径。禁止把 `queue/inbox|active|review|done|failed` 路径写进静态图。Human Gate 使用 `goal_ref: "decision:<stable-id>"`。
+- `graph.yaml` 是静态计划源，队列目录 + ledger 是动态状态源；Mermaid/STATUS 只能从二者按需生成，不能成为第三份手工事实源。每次创建/修改图后必须重跑 validator，保留输出作为图批准证据。
 - 执行中若用户变更 Frozen、验收、依赖或写入范围，先暂停受影响节点，给出 graph diff（保留/作废/新增节点及成本），用户确认后更新 `spec.md`、`graph.yaml`、Goal 和 DECISIONS，再恢复执行。
 
 ## 第 7 节：任务分配与派发
@@ -123,6 +129,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **运行时选择与适配器合同**：
 - 第一次接入在 `PROJECT.md` 记录 `runtime preference`、原生优先策略、已启用的可选 adapter 和 fallback 顺序。公开默认是 `auto + native-first + optional adapters: none`；发现某个可选 adapter 已安装只能作为能力提示，不能自动启用。
+- 面向 Owner 只问一个简短选择题，选项只显示本机真实可用路径，例如“1. Claude 原生可见终端（推荐）/ 2. HAPI / 3. 无头后台”；AI 把答案映射到内部 runtime 字段。不得要求普通用户输入 `adapter:hapi`、命令行 flags、PID 或 Goal 路径。
 - `auto` 优先当前宿主真实提供的 Claude/Codex 原生命令或可见线程。Owner 明确选择已启用的可选 adapter 后，才加载对应 reference；选择 HAPI 时读取 [`references/hapi-runtime.md`](references/hapi-runtime.md)，未选择时不要加载其细节。
 - 任何运行时必须按语义提供本 Goal 所需的 `spawn / resume / send / observe-wait / stop / identity-evidence` 能力；命令存在不等于控制面可创建会话。缺少必需能力时该运行时不合格，按已确认 fallback 降级；若降级改变成本、权限或可见性，先请 Owner 决定。
 - 每个 Goal 都记录实际 runtime、模型、effort、权限、完整启动方式、会话标识和证据路径。不得把计划中的 runtime、短暂子进程或仅有退出码 0 的命令登记为已创建会话。
@@ -133,7 +140,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **worker 运行参数**：
 - **权限**：按 PROJECT.md 的一次性授权执行。默认使用平台标准权限；只有用户对当前项目明确授权 `yolo` 时才可用 `--dangerously-skip-permissions`。Frozen + worktree + reviewer 是质量边界，不能替代操作系统/平台权限边界。
-- **工具与模型**：优先使用 PROJECT.md 已确认配置；缺配置且选择会显著影响成本、可见性或能力时，在规格冻结时一次询问。机械/简单任务用轻量模型 + 低思考等级，复杂/风险任务用强模型 + 高思考等级。
+- **工具与模型**：优先使用 PROJECT.md 已确认配置；模型策略默认“AI 推荐并在派发预览确认”，机械/简单任务用轻量模型 + 低思考等级，复杂/风险任务用强模型 + 高思考等级。`待确认`、模板占位符或仅写“默认”都不算已确认，不得据此 spawn。
 
 **会话生命周期**（按任务相关性，不是每次任务都开新会话）：
 - **复用**（运行时真实提供的 resume/handoff）：串行组/流水线同链任务、同一模块连续迭代、同需求多轮改动
@@ -141,17 +148,19 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **派发用 Goal 方式**（格式见 `templates/goal.md`）：每个任务是一份 Goal——引用冻结的 `spec.md` 与 `graph.yaml` 节点，带 **Legal terminal**（"candidate ready" 或 "redesign required: <最早失败边界>" 的二元终态判定）、**Baseline/证据链**、**输入/输出与写入范围**、**Frozen**、**Estimate**。只有低风险 A 类快速任务可把最小规格和验收直接内嵌 Goal且不建图。
 
-派发动作：写 Goal（含分配记录）→ 建 worktree → spawn worker → 台账登记，Goal 移入 `active/`。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
+**派发预览闸（每批次强制）**：图批准不等于会话授权。PMO 必须先展示一张短表：`worker/reviewer | 职责 | needs | writes | runtime/可见性 | model/effort | 权限 | worktree | Goal ref | 完整启动方式`，并给出自己的职责（监督、验收、状态记录，不写实现）。Owner 明确批准该预览后才可 spawn；“批准 graph”不能被解释成批准未展示的后台子 agent。若 PROJECT 已记录完全相同的批次级预授权，也仍要展示表，但可按预授权继续。
+
+派发动作：图校验通过并获批 → 写 Goal 到 `queue/inbox/<task-id>/` → 建隔离 worktree → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn worker → 记录真实会话证据 → 目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
 
 **默认原生命令适配**：
 - **Claude Code**：Owner 入口先 `cd <project>`，再使用 `claude --plugin-dir <plugin-dir>`（或已安装 Skill）；需要后台任务时，仅在 Claude 原生支持 `claude --bg`/`claude agents` 的环境使用这组命令，并记录返回的任务标识。`claude -p` 是无头 fallback。普通 Skill Bash 不得把 `claude ...` 子进程冒充成用户可见独立会话。
 - **Codex**：用户可见独立会话使用 `codex -C <project> "<prompt>"`；无头 worker 使用 `codex exec -C <project> "<prompt>"`，必要时用 `codex resume` 或 `codex exec resume` 接力。只有工具列表真实暴露 `create_thread` 时，才优先用它创建可见线程。
 - 可选 adapter 只有在 `PROJECT.md` 启用且其 reference 所列硬门满足后才参与选择；否则不读取、不调用，也不出现在默认派发说明里。
 
-**macOS 可见终端模式**：Owner 要求看到每个 worker/reviewer 的 CLI 时，禁止用隐藏的 `claude --bg` 或无头 `codex exec` 代替。使用 `scripts/open-worker-terminal.sh`：先带 `--dry-run` 展示 runtime、权限、模型、effort、worktree、Goal 和完整命令；Owner 批准后去掉 `--dry-run`，脚本会通过 Terminal.app 打开独立窗口并用 PID 文件验证进程。默认 `--permission-mode plan`；实现任务只有获批后才改为 `acceptEdits`。`bypassPermissions` 还必须同时传 `--allow-dangerous`。launcher/PID/metadata 位于 `${TMPDIR:-/tmp}/agent-taskgraph-terminal/`，其真实路径和 PID 必须写入 ledger；窗口关闭或进程退出后记录清理结果。
+**macOS 可见终端模式**：Owner 要求看到每个 worker/reviewer 的 CLI 时，禁止用隐藏的 `claude --bg` 或无头 `codex exec` 代替。使用 `scripts/open-worker-terminal.sh`：队列任务必须传稳定 `--goal task:<task-id>`，不得把会移动的 inbox/active 路径嵌入启动命令；先带 `--dry-run` 展示 runtime、权限、模型、effort、worktree、Goal ref 和完整命令，Owner 批准后去掉 `--dry-run`。脚本会通过 Terminal.app 打开独立窗口并用 PID 文件验证进程。默认 `--permission-mode plan`；实现任务只有获批后才改为 `acceptEdits`。`bypassPermissions` 还必须同时传 `--allow-dangerous`。launcher/PID/metadata 位于 `${TMPDIR:-/tmp}/agent-taskgraph-terminal/`，其真实路径和 PID 必须写入 ledger；窗口关闭或进程退出后记录清理结果。
 
 **Goal/会话交互协议（强制）**：
-- **Goal 是指令源**：首次派发必须把 Goal 文件路径（或完整内容）发给 worker，并要求先读 `PROJECT.md`、冻结规格、图中本节点及直接依赖、Goal、contract 和 ledger；只在聊天里发一段模糊任务不算派发。
+- **Goal 是指令源**：首次派发必须把稳定 Goal ref（优先 `task:<task-id>`）或完整内容发给 worker，并要求每次读写前从唯一当前队列目录解析，再读 `PROJECT.md`、冻结规格、图中本节点及直接依赖、Goal、contract 和 ledger；只在聊天里发一段模糊任务或会失效的旧队列路径不算派发。
 - **聊天是控制通道**：当前运行时的消息通道用于确认收到、补充边界、处理阻塞、宣布 legal terminal；不用于承载唯一需求、验收标准或长期状态。任何改变 scope、baseline、Frozen、验收、依赖或资源顺序的消息都触发 graph diff，并同步到 spec/graph/Goal/DECISIONS/ledger。
 - **状态分工**：worker 负责实现 worktree、Goal 约定的 produces、Goal 完成区和任务证据；PMO 负责 `.agent-taskgraph/queue/*/ledger.md`、目录状态、`STATUS.md`、reviewer 身份/验收报告和 Owner 汇报。两边只通过 revision、证据路径和 legal terminal 对账，不互相覆盖。
 - **完成协议**：worker 必须在 Goal 完成区或 Goal 指定的 evidence artifact 写明 legal terminal、source/closure revision、测试/证据路径、clean/upstream、owned-process 清理，并通过当前运行时的消息/ping 通知 PMO；PMO 不因“完成了”聊天直接验收。
@@ -252,9 +261,11 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 2. **PROJECT 完整性检查（开工前置）**：skill/模板更新后，PMO 开工时检查 PROJECT.md 是否缺当前模板字段，缺则补录——防止"规则更新了旧台账不迁移"
 3. **验收核对台账**：reviewer 验收时顺带核对 ledger 记录与实际状态一致（不一致 = 台账过期，先补账再验收）
 
+**状态迁移事务硬门**：一次状态变化只有在以下四项全部完成后才算成功：①ledger 追加转换及唯一下一步；②任务目录移到目标 state；③STATUS 从队列+ledger 重建；④运行 `scripts/validate-state.py <project>` 返回 0。validator 失败时立即标记 `STATE_SYNC_ERROR`、修正一致性，禁止汇报“已开工/已完成”、禁止派下游、禁止重新进入 wait；若这是 spawn 后的首次 active 迁移，先停止新 worker 再回滚/修正。STATUS 的任务 ID 必须等于队列目录名，不能用 `P0` 代替 `P0-scaffold`。
+
 **跟进动作（PMO 例行）**：
 1. 派发时：登记日志指针到 ledger（watch 监视器的输入）
-2. 状态变化 → 更新 ledger + 移动任务目录 + 刷新 STATUS.md（三步一体）
+2. 状态变化 → 更新 ledger + 移动任务目录 + 重建 STATUS.md + validate-state（四步事务）
 3. 实时：监视器事件流——worker 进展 / 完成 / 失败即时可见
 4. 卡死检测：活跃 worker 日志**静默超 20 分钟**无新输出 → 事件告警 → 查证 → 续接 / 重开 / 上报 Owner
 5. 监视器断线（重启 / 网络）→ 回退台账检查，恢复 watch——兜底是恢复手段，不是主机制
@@ -340,6 +351,8 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - 一句话只能发起分诊；复杂/模糊/高影响任务未完成上下文发现、用户澄清和规格冻结 → 不派发
 - 清晰低风险小任务退出编排后由当前会话执行；一旦进入 PMO 编排，PMO 永远不写代码
 - 验收标准写不清、开放问题未清零、图中存在假边/写入冲突/无上限循环 → 不派发
+- B/C/D 类没有可复现 source baseline、clean/明确归属或可用 worktree → 不派发；非 Git 空项目不得让 worker 直接写根目录
+- runtime/可见性/模型策略仍为待确认，或派发预览未获批 → 不派发；用户选择可见会话时禁止隐藏后台子 agent 代替
 - worker 不临场改方案，发现方案问题上报 PMO（由 PMO 决定退回专家或现场授权）
 - 专家产出物不合格（spec 缺不做清单/用户冻结、技术方案缺风险清单）→ 退回重写，不进派发
 - 一任务一 worktree；台账在文件系统，只有 PMO 能改状态

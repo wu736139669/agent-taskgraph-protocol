@@ -5,6 +5,8 @@ RUNTIME=""
 PROJECT=""
 NAME=""
 GOAL=""
+GOAL_REF=""
+GOAL_PATH=""
 MODEL=""
 EFFORT=""
 PERMISSION_MODE="plan"
@@ -16,7 +18,7 @@ ALLOW_DANGEROUS=0
 usage() {
   cat <<'EOF'
 Usage: open-worker-terminal.sh --runtime claude|codex --project DIR \
-  --name NAME --goal FILE [options]
+  --name NAME --goal FILE|task:ID [options]
 
 Open a visible macOS Terminal window running a native Claude or Codex worker.
 
@@ -31,8 +33,9 @@ Options:
   --dry-run                  Print the native command without opening Terminal.
   -h, --help                 Show this help.
 
-The Goal path may be absolute or relative to --project. Launcher artifacts are
-written under ${TMPDIR:-/tmp}/agent-taskgraph-terminal, never into the project.
+Use task:ID for queue-managed work so the Goal remains resolvable when its state
+directory moves. File paths may be absolute or relative to --project. Launcher
+artifacts are written under ${TMPDIR:-/tmp}/agent-taskgraph-terminal.
 EOF
 }
 
@@ -146,11 +149,30 @@ fi
 
 PROJECT="$(cd "$PROJECT" && pwd -P)"
 case "$GOAL" in
-  /*) ;;
-  *) GOAL="$PROJECT/$GOAL" ;;
+  task:*)
+    TASK_ID="${GOAL#task:}"
+    case "$TASK_ID" in
+      *[!A-Za-z0-9._-]*|'') die "task Goal refs may contain only letters, digits, dot, underscore, and hyphen" ;;
+    esac
+    GOAL_REF="$GOAL"
+    GOAL_MATCHES=()
+    for state in inbox active review done failed; do
+      candidate="$PROJECT/.agent-taskgraph/queue/$state/$TASK_ID/goal.md"
+      [ ! -f "$candidate" ] || GOAL_MATCHES+=("$candidate")
+    done
+    [ "${#GOAL_MATCHES[@]}" -eq 1 ] || \
+      die "$GOAL_REF must resolve to exactly one queue Goal; found ${#GOAL_MATCHES[@]}"
+    GOAL_PATH="${GOAL_MATCHES[0]}"
+    ;;
+  /*)
+    GOAL_PATH="$GOAL"
+    ;;
+  *)
+    GOAL_PATH="$PROJECT/$GOAL"
+    ;;
 esac
-[ -f "$GOAL" ] || die "Goal file does not exist: $GOAL"
-GOAL="$(cd "$(dirname "$GOAL")" && pwd -P)/$(basename "$GOAL")"
+[ -f "$GOAL_PATH" ] || die "Goal file does not exist: $GOAL_PATH"
+GOAL_PATH="$(cd "$(dirname "$GOAL_PATH")" && pwd -P)/$(basename "$GOAL_PATH")"
 
 if [ -n "$PLUGIN_DIR" ]; then
   [ "$RUNTIME" = "claude" ] || die "--plugin-dir is supported only for Claude"
@@ -158,7 +180,12 @@ if [ -n "$PLUGIN_DIR" ]; then
   PLUGIN_DIR="$(cd "$PLUGIN_DIR" && pwd -P)"
 fi
 
-PROMPT="Use \$agent-taskgraph. You are worker $NAME. Read the Goal at $GOAL, then read the PROJECT, frozen spec, graph node, ledger, and direct dependencies referenced by that Goal. Execute only the Goal's writes and Frozen scope. Do not edit PMO-owned queue state, STATUS, DECISIONS, or ledger unless the Goal explicitly assigns that file. Report the legal terminal and evidence before exiting."
+if [ -n "$GOAL_REF" ]; then
+  GOAL_INSTRUCTION="Use stable Goal ref $GOAL_REF. Before each Goal read or write, resolve exactly one current file at $PROJECT/.agent-taskgraph/queue/{inbox,active,review,done,failed}/$TASK_ID/goal.md because its state directory may move."
+else
+  GOAL_INSTRUCTION="Read the Goal at $GOAL_PATH."
+fi
+PROMPT="Use \$agent-taskgraph. You are worker $NAME. $GOAL_INSTRUCTION Then read the PROJECT, frozen spec, graph node, ledger, and direct dependencies referenced by that Goal. Execute only the Goal's writes and Frozen scope. Do not edit PMO-owned queue state, STATUS, DECISIONS, or ledger unless the Goal explicitly assigns that file. Report the legal terminal and evidence before exiting."
 
 CMD=()
 if [ "$RUNTIME" = "claude" ]; then
@@ -197,7 +224,12 @@ print_command() {
 printf 'runtime: %s\n' "$RUNTIME"
 printf 'name: %s\n' "$NAME"
 printf 'project: %s\n' "$PROJECT"
-printf 'goal: %s\n' "$GOAL"
+if [ -n "$GOAL_REF" ]; then
+  printf 'goal-ref: %s\n' "$GOAL_REF"
+  printf 'goal-current: %s\n' "$GOAL_PATH"
+else
+  printf 'goal: %s\n' "$GOAL_PATH"
+fi
 printf 'permission-mode: %s\n' "$PERMISSION_MODE"
 print_command
 
@@ -224,7 +256,7 @@ mkdir -p "$LAUNCH_DIR"
   printf 'cd %q\n' "$PROJECT"
   printf 'printf "%%s\\n" %q\n' "Agent TaskGraph visible worker: $NAME"
   printf 'printf "%%s\\n" %q\n' "Runtime: $RUNTIME"
-  printf 'printf "%%s\\n" %q\n' "Goal: $GOAL"
+  printf 'printf "%%s\\n" %q\n' "Goal: ${GOAL_REF:-$GOAL_PATH}"
   printf 'printf "%%s\\n" "$$" > %q\n' "$PID_FILE"
   printf 'exec'
   printf ' %q' "${CMD[@]}"
@@ -236,7 +268,8 @@ chmod +x "$LAUNCHER"
   printf 'runtime=%s\n' "$RUNTIME"
   printf 'name=%s\n' "$NAME"
   printf 'project=%s\n' "$PROJECT"
-  printf 'goal=%s\n' "$GOAL"
+  printf 'goal_ref=%s\n' "$GOAL_REF"
+  printf 'goal_current=%s\n' "$GOAL_PATH"
   printf 'permission_mode=%s\n' "$PERMISSION_MODE"
   printf 'launcher=%s\n' "$LAUNCHER"
   printf 'pid_file=%s\n' "$PID_FILE"

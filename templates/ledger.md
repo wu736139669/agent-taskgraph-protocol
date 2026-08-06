@@ -1,15 +1,16 @@
-# 台账记录：<任务号>
+# 台账记录：<稳定 Task ID>
 
 > 每个任务一条记录。状态只有 PMO 能改。文件放在 `queue/<state>/<task>/ledger.md`。
 
 | 字段 | 值 |
 |---|---|
-| 任务号 | <T1 / T2 / …> |
-| Goal | queue/inbox/T1-xxx/goal.md |
+| 任务 ID | <与 queue 目录名、graph goal_ref、STATUS 完全一致> |
+| Goal ref | task:<task-id> |
+| Goal current path | queue/<当前 state>/<task-id>/goal.md |
 | Frozen spec | <spec.md 路径 + revision> |
 | Graph node | <graph.yaml#node-id；快速任务写“不适用”> |
 | 依赖/路由 | needs: <node-id>；PASS → <node-id/done>；FAIL → <node-id/failed> |
-| 状态 | inbox → active → review → done / failed |
+| 状态 | <inbox / active / review / done / failed 中唯一当前值> |
 | 负责人 | <会话 ID / 岗位名> |
 | 分配理由 | 相关性 / 职责匹配 / 负载均衡 |
 | 轮次 | 第 1 次（重试 +1） |

@@ -19,16 +19,19 @@
 | 配置 | 项目选择 |
 |---|---|
 | Agent TaskGraph 协议版本 | <从 Skill 根目录 VERSION 读取> |
+| Source baseline | <READY: git root + HEAD + branch/upstream + clean/dirty ownership / BLOCKED: 原因> |
 | 单任务快速路径 | <允许 / 一律先确认> |
 | 复杂任务规格冻结 | 默认必须由用户确认；例外：<无 / 条件> |
 | Worker 权限 | <平台标准权限 / 当前项目明确授权 yolo> |
 | 自主创建可见会话 | <已授权 / 每批次确认 / 未授权> |
+| Worker 运行方式（Owner 语言） | <原生可见终端 / 宿主可见线程 / 已启用 adapter / 无头后台> |
+| 模型选择策略 | <AI 推荐并在派发预览确认（推荐） / 每个 worker 确认 / 固定模型+effort> |
+| 派发预览授权 | <每批次确认（默认） / 已预授权的精确条件> |
 | 默认 Human Gates | <依赖安装 / 迁移 / 删除 / 权限 / 合并 / 发布等> |
 | Runtime preference | <auto / claude-native / codex-native / adapter:<name>> |
 | 原生运行时优先 | <是（公开默认） / 否> |
 | 已启用可选适配器 | <无（公开默认） / hapi / 其他名称> |
 | Runtime fallback 顺序 | <例如：claude-native → codex-native；不允许则写“无”> |
-| 模型与可见性偏好 | <模型/effort；可见线程/可见终端/无头> |
 
 ## 共享文件锁
 
@@ -52,6 +55,7 @@
 
 | 能力 | 状态 | 说明 |
 |---|---|---|
+| Git/worktree | <✅/❌> | 记录 repo root、HEAD、branch/upstream、clean/dirty ownership；B/C/D 无 READY baseline 时禁止派发 |
 | 可选 runtime adapter | <未探测 / 名称 + ✅/❌> | 只探测 Owner 选择或允许评估的 adapter；安装成功不等于已启用，也不等于控制面支持 spawn |
 | claude CLI 登录 | ✅/❌ | 原生 `claude` / `claude --bg` / `claude agents` / `claude -p` 是否可跑 |
 | codex 登录 | ✅/❌ | 原生 `codex` / `codex exec` / `codex resume` 是否可跑 |

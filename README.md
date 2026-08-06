@@ -112,7 +112,13 @@ Existing Agent Queue beta projects are never moved implicitly. Review their stat
 
 ### 3. Start a session in the target project
 
-Open a new Claude Code or Codex session. Use `$agent-taskgraph` where a skill picker is available, or say:
+Open a new Claude Code or Codex session. Normal users do not need to run validator scripts, write Goal paths, or choose internal runtime flags. Use `$agent-taskgraph` where a skill picker is available, or simply say:
+
+```text
+Use agent-taskgraph to help me add team member management.
+```
+
+That one sentence starts intake; it does not skip clarification. For tighter control, you can say:
 
 ```text
 Use agent-taskgraph for this project.
@@ -121,11 +127,11 @@ Report confirmed facts, explicit inferences, and decisions only I can make.
 Do not dispatch work until I approve PROJECT.md.
 ```
 
-On first use, the agent inspects the stack, directories, build and test commands, shared files, and runtime capabilities. You then confirm permissions, session visibility, model preferences, and Human Gates in `.agent-taskgraph/PROJECT.md`.
+On first use, the agent inspects the stack, directories, Git baseline, build and test commands, shared files, and runtime capabilities. It asks about runtime and model strategy in plain-language choices, then records permissions, session visibility, model preferences, and Human Gates in `.agent-taskgraph/PROJECT.md`. Complex work is not dispatched until the source has a reproducible Git baseline and isolated worktrees can be created.
 
 ### 4. Require visible worker terminals on macOS
 
-Tell the owner session how workers must run before approving `PROJECT.md`:
+This is optional. Tell the owner session how workers must run before approving `PROJECT.md`:
 
 ```text
 Use native Claude CLI for this batch; do not use HAPI.
@@ -134,7 +140,7 @@ Before dispatch, show each role, responsibility, dependency, model, effort,
 permission mode, Goal path, and dry-run command. Wait for my approval before opening any window.
 ```
 
-The PMO first runs `scripts/open-worker-terminal.sh ... --dry-run`. Nothing opens during this preview. After the owner approves the graph and runtime parameters, the PMO removes `--dry-run`; each worker opens in its own named Terminal window and is registered only after PID verification. Use `plan` for read-only exploration and `acceptEdits` only for an approved implementation Goal. `bypassPermissions` requires both explicit project authorization and `--allow-dangerous`.
+The PMO generates and runs the internal command; the owner does not have to construct it. Nothing opens during the dry-run preview. After the owner approves the graph and the separate dispatch preview, the PMO launches each worker in its own named Terminal window and registers it only after PID verification. Use `plan` for read-only exploration and `acceptEdits` only for an approved implementation Goal. `bypassPermissions` requires both explicit project authorization and `--allow-dangerous`.
 
 ## Five Common Workflows
 
@@ -163,8 +169,9 @@ Expected behavior:
 2. It reports confirmed facts, explicit inferences, and owner decisions.
 3. Each round asks only a few blocking questions with recommended defaults and tradeoffs.
 4. Once open questions are resolved, it presents a `spec.md` summary for approval.
-5. After the spec is frozen, it presents a `graph.yaml` summary for approval.
-6. Only an approved graph can create implementation workers, worktrees, and reviewers.
+5. After the spec is frozen, it validates and presents a `graph.yaml` summary for approval.
+6. It then shows a dispatch preview: every worker/reviewer, responsibility, dependencies, writes, visible runtime, model, effort, permissions, worktree, and full launch command.
+7. Only after that preview is approved can it open sessions and mark work active.
 
 A complete conversation looks roughly like this:
 
@@ -191,7 +198,16 @@ PMO: Graph revision 1 has five nodes: data contract, backend and UI in parallel,
 independent verification, then merge gate. The merge node owns shared writes;
 failures return to the backend or UI repair node. Approve?
 
-Owner: Approve graph revision 1 and execute. Merge still requires my approval.
+Owner: Approve graph revision 1. Show the dispatch preview.
+
+PMO: The graph validator passed. Proposed batch:
+backend worker | needs data-contract | writes server/team | Claude visible Terminal | Sonnet/high
+UI worker | needs data-contract | writes app/team | Claude visible Terminal | Sonnet/high
+reviewer | needs backend+UI | read-only | separate visible Terminal | strongest available/high
+I will supervise, reconcile state, and run final acceptance; I will not implement.
+All workers use isolated worktrees and standard permissions. Approve launch?
+
+Owner: Approve this dispatch. Merge still requires my approval.
 ```
 
 The point is not to ask exactly three questions. The PMO first uses repository evidence to reduce uncertainty, then asks the owner only for product choices the code cannot answer.
@@ -413,7 +429,7 @@ Keep GitHub as the canonical source and point every other listing to a tag or co
 | Codex / Claude Code local install | Available now | `./install.sh` links this checkout into `~/.codex/skills/agent-taskgraph` and `~/.claude/skills/agent-taskgraph` |
 | Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |
 | [skills.sh](https://skills.sh) | CLI-compatible; directory listing is third-party | Install with `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`; keep GitHub as the source of truth |
-| OpenAI / Codex plugin directory | Package ready; platform submission pending | Test `plugins/agent-taskgraph` locally, then submit through the [OpenAI plugin portal](https://developers.openai.com/plugins/deploy/submission) |
+| OpenAI / Codex plugin directory | Submitted; platform review pending | The package passed local validation; the public directory listing remains unavailable until platform approval |
 | Claude Code plugin marketplace | Submitted; platform review pending | The package and catalog passed local validation; the public directory listing remains unavailable until platform approval |
 
 The release order is: public GitHub repository, tagged GitHub release, `skills.sh` discovery, OpenAI/Codex package submission, then Claude Code marketplace submission. The current standalone folder remains the simplest installation path for beta users. Platform directories may approve or update packages on their own schedule; none is a second canonical repository.
@@ -428,7 +444,7 @@ The repository includes a self-contained package at [`plugins/agent-taskgraph`](
 - Claude Code: [`plugins/agent-taskgraph/.claude-plugin/plugin.json`](plugins/agent-taskgraph/.claude-plugin/plugin.json)
 - Claude marketplace catalog: [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)
 
-The Claude Code package has been submitted for review but is not claimed to be publicly listed yet. The OpenAI/Codex package is prepared but has not completed platform submission. To test either package locally, run:
+Both the Claude Code and OpenAI/Codex packages have been submitted for review; neither is claimed to be publicly listed yet. To test either package locally, run:
 
 ```bash
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py" \
@@ -446,17 +462,21 @@ Please remove secrets, tokens, credentials, private paths, session IDs, customer
 
 ## Helper Commands
 
+These are maintainer/PMO commands run from the Skill checkout. Normal owners can use natural language only.
+
 | Command | Purpose |
 |---|---|
 | `./init.sh <project>` | Initialize project state while preserving existing files |
 | `./init.sh --migrate <project>` | Explicitly rename legacy `.agent-queue/` state and add missing current templates |
-| `./scripts/open-worker-terminal.sh ... --dry-run` | Preview a native Claude/Codex worker command without opening Terminal |
+| `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | Preview a native Claude/Codex worker command with a stable queue Goal ref |
 | `./scripts/open-worker-terminal.sh ...` | Open and verify one worker in a visible macOS Terminal.app window |
+| `./scripts/validate-graph.py <graph.yaml>` | Reject unknown dependencies, dynamic Goal paths, missing producer ancestry, cycles, and parallel write conflicts |
+| `./scripts/validate-state.py <project>` | Verify queue directories, Goals, ledgers, and active/review STATUS rows agree |
 | `./workers/watch-worker.sh <log>` | Compact Codex JSONL or HAPI text logs into progress events |
 | `./workers/log-cleanup.sh` | Dry-run archived Codex logs older than 30 days |
 | `./workers/log-cleanup.sh --apply` | Delete the archived candidates just listed |
 | `./workers/log-cleanup.sh --include-live` | Also preview live Codex/HAPI logs; still no deletion |
-| `./tests/smoke.sh` | Validate install, init, parser, cleanup safety, and templates |
+| `./tests/smoke.sh` | Validate install, init, launch preview, graph/state guards, parser, cleanup safety, and packaging |
 
 Live directories are scanned only with `--include-live`; deletion occurs only with `--apply`. Preserve logs referenced by Goals, ledgers, or reports.
 
@@ -465,7 +485,8 @@ Live directories are scanned only with `--include-live`; deletion occurs only wi
 - The skill probes the current environment; it does not assume every Codex exposes `create_thread`, `wait_threads`, or similar tools.
 - Visible, owner-controllable sessions are preferred when available. Use Claude native commands (`claude`, `claude --bg`, `claude agents`, or `claude -p`) for Claude Code and Codex native commands (`codex`, `codex exec`, or `codex resume`) for Codex. Missing capabilities require an explicit fallback, not a fictional reviewer.
 - The public default is `auto + native-first` with no optional adapter enabled. HAPI support ships as an [opt-in runtime adapter](references/hapi-runtime.md): detection may be reported during onboarding, but it is not loaded or activated until the owner selects it in `PROJECT.md`.
-- On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
+- Before every batch, the owner sees the actual workers/reviewer, responsibilities, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands. Graph approval alone is not session authorization.
+- On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Queue work uses `--goal task:<id>` so inbox/active moves do not invalidate the command. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
 - Platform-standard permissions are the default. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project.
 - Frozen scope, worktrees, and reviewers are quality controls, not security sandboxes.
 - Dependency installs, migrations, deletion, privilege expansion, merge, and release should retain Human Gates defined in `PROJECT.md`.
@@ -505,6 +526,7 @@ Agent TaskGraph Protocol is released under the [Apache License 2.0](LICENSE). Co
 Ready now:
 
 - Project onboarding, requirement clarification, spec freeze, and graph approval
+- Deterministic graph validation plus queue/ledger/STATUS consistency checks
 - Goal decomposition, queue/ledger protocol, and bounded failure routing
 - Worker self-test, independent reviewer, and owner final review
 - Conflict-safe install, project init, current Codex log parsing, and conservative cleanup
@@ -513,9 +535,9 @@ Ready now:
 Not yet implemented or guaranteed:
 
 - No `dispatch.sh` or `run-worker.sh`; the active agent still invokes runtime tools
-- No deterministic graph validator, ready-node calculator, or queue-transition CLI
+- No deterministic ready-node calculator or queue-transition CLI
 - Cross-runtime quality still depends on actual tool capabilities and adherence to `SKILL.md`
-- No stable-version guarantee; public release still needs a release policy, public-history review, and platform-specific packaging decisions
+- No stable-version guarantee; v1.0 still needs broader non-game and native Codex validation plus a stable release policy
 
 ## Repository Layout
 
@@ -541,9 +563,9 @@ The repository ships the operating protocol, deterministic helpers, templates, a
 
 ## Roadmap
 
-- Deterministic graph validation and ready-node calculation
+- Deterministic ready-node calculation
 - Safe queue-transition CLI with consistency checks
 - Runtime adapters for Codex, HAPI, and Claude
 - Metrics for retry count, pass rate, latency, and token cost
 - Sanitized case studies from a non-game project and a Codex-only environment
-- Platform submission and review for the OpenAI/Codex and Claude Code packages
+- Platform review and public listing for the OpenAI/Codex and Claude Code packages

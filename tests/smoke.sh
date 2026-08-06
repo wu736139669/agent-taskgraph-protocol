@@ -14,24 +14,26 @@ assert_file() { [ -f "$1" ] || fail "missing file: $1"; }
 assert_dir() { [ -d "$1" ] || fail "missing directory: $1"; }
 assert_link_to() { [ -L "$1" ] && [ "$(readlink "$1")" = "$2" ] || fail "unexpected symlink: $1"; }
 
-echo "[1/9] shell and Python syntax"
+echo "[1/11] shell and Python syntax"
 bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" \
   "$ROOT/scripts/open-worker-terminal.sh" "$ROOT/workers/watch-worker.sh" \
   "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
-python3 - "$ROOT/workers/parse-worker-log.py" <<'PY'
+python3 - "$ROOT/workers/parse-worker-log.py" \
+  "$ROOT/scripts/validate-graph.py" "$ROOT/scripts/validate-state.py" <<'PY'
 from pathlib import Path
 import sys
 
-source = Path(sys.argv[1]).read_text()
-compile(source, sys.argv[1], "exec")
+for filename in sys.argv[1:]:
+    source = Path(filename).read_text()
+    compile(source, filename, "exec")
 PY
 
-echo "[2/9] Codex log parser fixtures"
+echo "[2/11] Codex log parser fixtures"
 python3 "$ROOT/workers/parse-worker-log.py" --format jsonl \
   < "$ROOT/tests/fixtures/codex-events.jsonl" > "$TMP/parser.out"
 diff -u "$ROOT/tests/fixtures/codex-events.expected" "$TMP/parser.out"
 
-echo "[3/9] update checker states"
+echo "[3/11] update checker states"
 git init --bare "$TMP/update-remote.git" >/dev/null
 git init "$TMP/update-local" >/dev/null
 git -C "$TMP/update-local" checkout -b main >/dev/null
@@ -72,7 +74,7 @@ cp "$ROOT/VERSION" "$TMP/update-not-git/VERSION"
 AGENT_TASKGRAPH_ROOT="$TMP/update-not-git" "$ROOT/scripts/check-update.sh" > "$TMP/update-unavailable.out"
 grep -q 'Update status: unavailable' "$TMP/update-unavailable.out"
 
-echo "[4/9] install, status, conflict, force, and uninstall"
+echo "[4/11] install, status, conflict, force, and uninstall"
 HOME="$TMP/home-install" "$ROOT/install.sh" > "$TMP/install.out"
 assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
@@ -115,7 +117,7 @@ find "$TMP/home-conflict/.claude/skills" -maxdepth 1 -name 'agent-taskgraph.back
   > "$TMP/backups.out"
 [ -s "$TMP/backups.out" ] || fail "forced install did not create a backup"
 
-echo "[5/9] project initialization preserves existing files"
+echo "[5/11] project initialization preserves existing files"
 mkdir -p "$TMP/project"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/init.out"
 for state in inbox active review done failed; do
@@ -149,23 +151,27 @@ fi
 assert_dir "$TMP/project-both/.agent-queue"
 assert_dir "$TMP/project-both/.agent-taskgraph"
 
-echo "[6/9] visible Terminal launcher dry-run and permission gates"
-mkdir -p "$TMP/terminal-project/.agent-taskgraph/queue/active/T1-test"
-echo '# Goal: launcher test' > "$TMP/terminal-project/.agent-taskgraph/queue/active/T1-test/goal.md"
+echo "[6/11] visible Terminal launcher dry-run and permission gates"
+mkdir -p "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test"
+echo '# Goal: launcher test' > "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/goal.md"
 AGENT_TASKGRAPH_TERMINAL_DIR="$TMP/terminal-runtime" \
   "$ROOT/scripts/open-worker-terminal.sh" --runtime claude \
   --project "$TMP/terminal-project" --name test-claude \
-  --goal .agent-taskgraph/queue/active/T1-test/goal.md \
+  --goal task:T1-test \
   --plugin-dir "$ROOT/plugins/agent-taskgraph" --model sonnet --effort high \
   --permission-mode plan --dry-run > "$TMP/terminal-claude.out"
 grep -q '^runtime: claude$' "$TMP/terminal-claude.out"
+grep -q '^goal-ref: task:T1-test$' "$TMP/terminal-claude.out"
 grep -q 'command: claude .*--name test-claude .*--permission-mode plan' "$TMP/terminal-claude.out"
+if sed -n '/^command:/p' "$TMP/terminal-claude.out" | grep -q 'queue/inbox'; then
+  fail "stable Goal launch command embedded the inbox path"
+fi
 grep -q 'mode: dry-run (Terminal not opened)' "$TMP/terminal-claude.out"
 [ ! -e "$TMP/terminal-runtime" ] || fail "launcher dry-run created runtime artifacts"
 
 "$ROOT/scripts/open-worker-terminal.sh" --runtime codex \
   --project "$TMP/terminal-project" --name test-codex \
-  --goal .agent-taskgraph/queue/active/T1-test/goal.md \
+  --goal task:T1-test \
   --model gpt-test --effort high --permission-mode acceptEdits --dry-run \
   > "$TMP/terminal-codex.out"
 grep -q '^runtime: codex$' "$TMP/terminal-codex.out"
@@ -173,11 +179,15 @@ grep -q 'command: codex .* -s workspace-write -a on-request' "$TMP/terminal-code
 
 if "$ROOT/scripts/open-worker-terminal.sh" --runtime claude \
   --project "$TMP/terminal-project" --name test-danger \
-  --goal .agent-taskgraph/queue/active/T1-test/goal.md \
+  --goal task:T1-test \
   --permission-mode bypassPermissions --dry-run > "$TMP/terminal-danger.out" 2>&1; then
   fail "launcher allowed bypassPermissions without --allow-dangerous"
 fi
 grep -q 'requires the explicit --allow-dangerous flag' "$TMP/terminal-danger.out"
+
+mkdir -p "$TMP/terminal-project/.agent-taskgraph/queue/active"
+mv "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test" \
+  "$TMP/terminal-project/.agent-taskgraph/queue/active/T1-test"
 
 mkdir -p "$TMP/terminal-bin"
 cat > "$TMP/terminal-bin/open" <<'SH'
@@ -195,7 +205,7 @@ chmod +x "$TMP/terminal-bin/open" "$TMP/terminal-bin/claude"
 PATH="$TMP/terminal-bin:$PATH" AGENT_TASKGRAPH_TERMINAL_DIR="$TMP/terminal-runtime" \
   "$ROOT/scripts/open-worker-terminal.sh" --runtime claude \
   --project "$TMP/terminal-project" --name test-visible \
-  --goal .agent-taskgraph/queue/active/T1-test/goal.md \
+  --goal task:T1-test \
   --permission-mode plan --verify-timeout 5 > "$TMP/terminal-visible.out"
 grep -q '^launched: true$' "$TMP/terminal-visible.out"
 VISIBLE_PID="$(sed -n 's/^pid: //p' "$TMP/terminal-visible.out")"
@@ -209,7 +219,142 @@ if kill -0 "$VISIBLE_PID" 2>/dev/null; then
   fail "launcher test worker was not cleaned up"
 fi
 
-echo "[7/9] cleanup is dry-run and archived-only by default"
+echo "[7/11] graph validator rejects broken dependencies and write conflicts"
+cat > "$TMP/graph-valid.yaml" <<'YAML'
+version: 1
+nodes:
+  - id: "base"
+    title: "Create the base contract"
+    kind: "worker"
+    goal_ref: "task:base"
+    needs: []
+    consumes: []
+    produces: ["build/base.json"]
+    writes: ["src/base"]
+    on_pass: "api"
+    on_fail: "failed"
+    max_attempts: 1
+  - id: "api"
+    title: "Build the API"
+    kind: "worker"
+    goal_ref: "task:api"
+    needs: ["base"]
+    consumes: ["build/base.json"]
+    produces: ["build/api.json"]
+    writes: ["src/api"]
+    on_pass: "merge"
+    on_fail: "failed"
+    max_attempts: 1
+  - id: "ui"
+    title: "Build the UI"
+    kind: "worker"
+    goal_ref: "task:ui"
+    needs: ["base"]
+    consumes: ["build/base.json"]
+    produces: ["build/ui.json"]
+    writes: ["src/ui"]
+    on_pass: "merge"
+    on_fail: "failed"
+    max_attempts: 1
+  - id: "merge"
+    title: "Integrate the outputs"
+    kind: "merge"
+    goal_ref: "task:merge"
+    needs: ["api", "ui"]
+    consumes: ["build/api.json", "build/ui.json"]
+    produces: ["build/release.json"]
+    writes: ["release"]
+    on_pass: "done"
+    on_fail: "failed"
+    max_attempts: 1
+YAML
+"$ROOT/scripts/validate-graph.py" "$TMP/graph-valid.yaml" > "$TMP/graph-valid.out"
+grep -q 'Graph validation passed' "$TMP/graph-valid.out"
+
+cp "$TMP/graph-valid.yaml" "$TMP/graph-missing-dependency.yaml"
+sed -i.bak 's/needs: \["api", "ui"\]/needs: ["api"]/' "$TMP/graph-missing-dependency.yaml"
+if "$ROOT/scripts/validate-graph.py" "$TMP/graph-missing-dependency.yaml" \
+  > "$TMP/graph-missing-dependency.out" 2>&1; then
+  fail "graph validator accepted a consumed output without dependency ancestry"
+fi
+grep -q 'none is in its needs ancestry' "$TMP/graph-missing-dependency.out"
+
+cp "$TMP/graph-valid.yaml" "$TMP/graph-dynamic-goal.yaml"
+sed -i.bak 's/goal_ref: "task:base"/goal_ref: "queue\/inbox\/base\/goal.md"/' \
+  "$TMP/graph-dynamic-goal.yaml"
+if "$ROOT/scripts/validate-graph.py" "$TMP/graph-dynamic-goal.yaml" \
+  > "$TMP/graph-dynamic-goal.out" 2>&1; then
+  fail "graph validator accepted a dynamic queue Goal path"
+fi
+grep -q 'goal_ref contains a dynamic queue path' "$TMP/graph-dynamic-goal.out"
+
+cp "$TMP/graph-valid.yaml" "$TMP/graph-write-overlap.yaml"
+sed -i.bak 's/writes: \["src\/ui"\]/writes: ["src\/api\/components"]/' \
+  "$TMP/graph-write-overlap.yaml"
+if "$ROOT/scripts/validate-graph.py" "$TMP/graph-write-overlap.yaml" \
+  > "$TMP/graph-write-overlap.out" 2>&1; then
+  fail "graph validator accepted overlapping parallel writes"
+fi
+grep -q 'parallel write overlap' "$TMP/graph-write-overlap.out"
+
+echo "[8/11] state validator keeps queue, ledger, Goal, and STATUS atomic"
+mkdir -p "$TMP/state-valid"
+"$ROOT/init.sh" "$TMP/state-valid" > "$TMP/state-init.out"
+mkdir -p "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui"
+cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/goal.md" <<'MD'
+# Goal: Build UI
+
+> Task ID: `P5-ui`
+MD
+cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/ledger.md" <<'MD'
+# Ledger
+
+| 字段 | 值 |
+|---|---|
+| 任务 ID | P5-ui |
+| Goal ref | task:P5-ui |
+| Goal current path | queue/active/P5-ui/goal.md |
+| 状态 | active |
+MD
+cat > "$TMP/state-valid/.agent-taskgraph/STATUS.md" <<'MD'
+# Status
+
+| 任务 ID | 标题 | 状态 | 负责人 | 轮次 | 最后更新 | 卡点 |
+|---|---|---|---|---|---|---|
+| P5-ui | Build UI | active | worker | 1 | now | none |
+MD
+"$ROOT/scripts/validate-state.py" "$TMP/state-valid" > "$TMP/state-valid.out"
+grep -q 'State validation passed' "$TMP/state-valid.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-stale"
+printf '%s\n' '| stale-task | Stale | active | worker | 1 | now | none |' \
+  >> "$TMP/state-stale/.agent-taskgraph/STATUS.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-stale" > "$TMP/state-stale.out" 2>&1; then
+  fail "state validator accepted a stale STATUS row"
+fi
+grep -q 'stale or unknown STATUS.md row' "$TMP/state-stale.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-short-id"
+sed -i.bak 's/| P5-ui | Build UI/| P5 | Build UI/' \
+  "$TMP/state-short-id/.agent-taskgraph/STATUS.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-short-id" > "$TMP/state-short-id.out" 2>&1; then
+  fail "state validator accepted a shortened STATUS task ID"
+fi
+grep -q 'P5-ui: missing from STATUS.md' "$TMP/state-short-id.out"
+
+cp -R "$TMP/state-valid" "$TMP/state-wrong-ledger"
+sed -i.bak 's/queue\/active\/P5-ui\/goal.md/queue\/inbox\/P5-ui\/goal.md/' \
+  "$TMP/state-wrong-ledger/.agent-taskgraph/queue/active/P5-ui/ledger.md"
+sed -i.bak 's/| 状态 | active |/| 状态 | inbox |/' \
+  "$TMP/state-wrong-ledger/.agent-taskgraph/queue/active/P5-ui/ledger.md"
+if "$ROOT/scripts/validate-state.py" "$TMP/state-wrong-ledger" \
+  > "$TMP/state-wrong-ledger.out" 2>&1; then
+  fail "state validator accepted a stale ledger state and Goal path"
+fi
+grep -q "ledger state 'inbox' != directory state 'active'" "$TMP/state-wrong-ledger.out"
+grep -q 'Goal current path must be queue/active/P5-ui/goal.md' "$TMP/state-wrong-ledger.out"
+
+echo "[9/11] cleanup is dry-run and archived-only by default"
 mkdir -p "$TMP/home-logs/.codex/archived_sessions" "$TMP/home-logs/.codex/sessions" "$TMP/home-logs/.hapi/logs"
 touch "$TMP/home-logs/.codex/archived_sessions/old.jsonl" \
   "$TMP/home-logs/.codex/sessions/live.jsonl" "$TMP/home-logs/.hapi/logs/live.log"
@@ -237,7 +382,7 @@ HOME="$TMP/home-logs" "$ROOT/workers/log-cleanup.sh" --days 1 --include-live --a
 [ ! -e "$TMP/home-logs/.codex/sessions/live.jsonl" ] || fail "explicit live cleanup missed Codex log"
 [ ! -e "$TMP/home-logs/.hapi/logs/live.log" ] || fail "explicit live cleanup missed HAPI log"
 
-echo "[8/9] skill metadata, templates, links, version, license, and graph YAML"
+echo "[10/11] skill metadata, templates, links, version, license, and graph YAML"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import re
@@ -277,7 +422,7 @@ if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git -C "$ROOT" diff --check
 fi
 
-echo "[9/9] platform plugin package and marketplace catalog"
+echo "[11/11] platform plugin package and marketplace catalog"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import json
@@ -300,6 +445,8 @@ required = (
     "skills/agent-taskgraph/references/hapi-runtime.md",
     "skills/agent-taskgraph/scripts/check-update.sh",
     "skills/agent-taskgraph/scripts/open-worker-terminal.sh",
+    "skills/agent-taskgraph/scripts/validate-graph.py",
+    "skills/agent-taskgraph/scripts/validate-state.py",
     "skills/agent-taskgraph/templates/PROJECT.md",
     "skills/agent-taskgraph/workers/parse-worker-log.py",
 )
@@ -320,6 +467,8 @@ for relative in (
     "references/hapi-runtime.md",
     "scripts/check-update.sh",
     "scripts/open-worker-terminal.sh",
+    "scripts/validate-graph.py",
+    "scripts/validate-state.py",
     "agents/openai.yaml",
     "templates/PROJECT.md",
     "templates/STATUS.md",
