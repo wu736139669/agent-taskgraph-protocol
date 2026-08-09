@@ -6,11 +6,22 @@
 
 **面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
-源码版本：[`v0.8.0-beta.9`](VERSION) | 最新已发布版本：`v0.8.0-beta.8` | 许可证：[Apache-2.0](LICENSE)
+源码版本：[`v0.8.0-beta.10`](VERSION) | 最新已发布版本：`v0.8.0-beta.10` | 许可证：[Apache-2.0](LICENSE)
 
 > **Public Beta**：面向已经使用 Claude Code 或 Codex 的用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
 Agent TaskGraph Protocol 解决的不是“怎样同时开更多 Agent”，而是“怎样让复杂 AI coding 可理解、可控制、可验收、可恢复”。
+
+<p align="center">
+  <a href="https://github.com/wu736139669/agent-taskgraph-protocol/releases/download/v0.8.0-beta.10/agent-taskgraph-demo.mp4">
+    <img src="promo/agent-taskgraph-demo.gif" alt="Agent TaskGraph 将模糊需求转化为冻结规格、任务图、持久 Worker 角色、已验证会话和独立 Reviewer 闸门。" width="640">
+  </a>
+</p>
+
+<p align="center">
+  <strong>30 秒协议流程演示</strong><br>
+  <a href="https://github.com/wu736139669/agent-taskgraph-protocol/releases/download/v0.8.0-beta.10/agent-taskgraph-demo.mp4">观看或下载完整画质 MP4</a>
+</p>
 
 - 清晰、低风险的小任务走单 Agent 快速路径。
 - 复杂、模糊或高影响任务先读项目、与用户澄清、冻结规格，再建立任务图。
@@ -472,7 +483,7 @@ GitHub 仓库应始终是唯一主源，其他目录或安装包只指向本仓�
 | 渠道 | 状态 | 推荐用途 |
 |---|---|---|
 | GitHub 仓库 | Public Beta | 唯一主源、源码、Issue、评审和贡献历史 |
-| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | 已发布 `v0.8.0-beta.8` | 版本归档和发布说明 |
+| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | 已发布 `v0.8.0-beta.10` | 版本归档、发布说明和完整演示视频 |
 | Codex / Claude Code 本地安装 | 现在可用 | `./install.sh` 将 checkout 链接到 `~/.codex/skills/agent-taskgraph` 和 `~/.claude/skills/agent-taskgraph` |
 | 团队内部仓库 | 现在可用 | 在受控团队环境中放入或链接到 `.agents/skills/` |
 | [skills.sh](https://skills.sh) | CLI 已兼容；目录收录由第三方维护 | 使用 `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph` 安装；GitHub 仍是主源 |

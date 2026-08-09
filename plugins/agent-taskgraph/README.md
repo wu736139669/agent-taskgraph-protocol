@@ -14,7 +14,7 @@ This directory is the platform-ready package for the `agent-taskgraph` Skill. Th
 | `skills/agent-taskgraph/scripts/hapi-hub-session.py` | Credential-safe Hub probe/catalog, path preflight, spawn, reuse, and Goal-bound verification helper |
 | `LICENSE` | Apache-2.0 license for this package |
 
-The package source version is `0.8.0-beta.9`. Before a release, keep it equal to the root [`VERSION`](../../VERSION), the Skill [`VERSION`](skills/agent-taskgraph/VERSION), and the Git tag.
+The package source version is `0.8.0-beta.10`. Before a release, keep it equal to the root [`VERSION`](../../VERSION), the Skill [`VERSION`](skills/agent-taskgraph/VERSION), and the Git tag.
 
 ## Local validation
 
