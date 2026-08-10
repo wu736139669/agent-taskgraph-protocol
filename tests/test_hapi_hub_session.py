@@ -2,6 +2,7 @@
 """Black-box tests for the HAPI Hub session helper."""
 
 import json
+import os
 import subprocess
 import tempfile
 import threading
@@ -189,6 +190,9 @@ class HapiHubSessionTests(unittest.TestCase):
         self.temp.cleanup()
 
     def run_helper(self, *args, check=True):
+        env = os.environ.copy()
+        for key in ("HAPI_API_URL", "CLI_API_TOKEN", "HAPI_MACHINE_ID", "HAPI_SETTINGS"):
+            env.pop(key, None)
         return subprocess.run(
             [str(SCRIPT), *args, "--settings", str(self.settings)],
             cwd=ROOT,
@@ -196,6 +200,7 @@ class HapiHubSessionTests(unittest.TestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=check,
+            env=env,
         )
 
     def runtime_args(self):

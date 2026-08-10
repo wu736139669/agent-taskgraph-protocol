@@ -31,6 +31,8 @@
 | 编制变更授权 | <每次确认（默认） / 精确预授权条件；新增成本、权限或可见性变化始终重新确认> |
 | 默认 Human Gates | <依赖安装 / 迁移 / 删除 / 权限 / 合并 / 发布等> |
 | 已启用可选适配器 | <无（公开默认） / hapi / 其他名称> |
+| Preferred runtime | <无 / hapi / claude-native / codex-native；只影响推荐，不构成派发授权> |
+| Preferred machine | <无 / HAPI machine ID + name + host / 原生 host> |
 | Runtime 证据策略 | spawn 后、首条 bootstrap 前验证 session/cwd/flavor/model/effort/permission；随后核对 Role/Team/Goal/Context Identity ACK；不匹配保持 inbox 并 fallback |
 | 上下文模式 | <lean（默认） / balanced / deep>；只影响读取广度，不降低验收标准 |
 | Context 必读项上限 | <默认 8；超过必须在 context.md 写 Budget exception，必要时拆 Goal> |
@@ -42,6 +44,7 @@
 | Execution profile | Confirmed value |
 |---|---|
 | Execution profile status | <PENDING / CONFIRMED> |
+| Runtime choice confirmed by/at | <Owner 明确选择 runtime + ISO-8601 时间 + 适用范围；不能用模型/effort/权限确认代替> |
 | Execution profile confirmed by/at | <Owner / ISO-8601 时间 / 适用批次或项目范围> |
 | Execution runtime | <hapi / claude-native / codex-native / 当前宿主真实 runtime ID> |
 | Execution control | <宿主原生工具 / 可见终端 / HAPI spawn 工具 / scripts/hapi-hub-session.py> |
@@ -93,6 +96,6 @@
 
 ## 归档约定
 
-- STATUS.md 只含活跃任务（done 即移除，总览板永远小）
+- STATUS.md 只含 inbox/active/review 热任务（done 即移除，总览板永远小）
 - 已完成任务按月移入 `archive/<YYYY-MM>/`（不压缩不索引，可 grep）
 - 追溯 / 批次总结翻 archive；开工只读本项目热数据，历史不加载

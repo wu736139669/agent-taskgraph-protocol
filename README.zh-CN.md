@@ -6,7 +6,7 @@
 
 **面向 AI Coding 的规格优先 Agent 任务图编排协议。**
 
-源码版本：[`v0.8.0-beta.10`](VERSION) | 最新已发布版本：`v0.8.0-beta.10` | 许可证：[Apache-2.0](LICENSE)
+源码版本：[`v0.8.0-beta.11`](VERSION) | 最新已发布版本：`v0.8.0-beta.11` | 许可证：[Apache-2.0](LICENSE)
 
 > **Public Beta**：面向已经使用 Claude Code 或 Codex 的用户。它现在是一套 protocol-first 的 AI coding 编排 Skill，不是全自动任务队列服务，也不是稳定版 v1.0。
 
@@ -145,7 +145,7 @@ your-project/.agent-taskgraph/
 在我确认 PROJECT.md 前不要派发任务。
 ```
 
-第一次接入时，Agent 会分析技术栈、目录、Git baseline、构建测试命令、共享文件和运行时能力。探测完成后，它只给一张普通语言的 **Execution profile** 选择表，把运行方式/机器、模型策略、权限、可见性和 fallback 一次聊清楚；不会让你连续回答每个 worker 的内部参数。你确认后写入 `.agent-taskgraph/PROJECT.md`，status 不是 `CONFIRMED` 就不能创建会话。复杂任务还必须有可复现 Git baseline 且能创建隔离 worktree。
+第一次接入时，Agent 会分析技术栈、目录、Git baseline、构建测试命令、共享文件和运行时能力。探测完成后，它只给一张普通语言的 **Execution profile** 选择表，把运行方式/机器、模型策略、权限、可见性和 fallback 一次聊清楚；不会让你连续回答每个 worker 的内部参数。runtime 是独立选择：确认模型、effort、yolo 或“开始”都不能被解释成静默选择 native 而不是 HAPI。保存的 Preferred runtime 只改变推荐顺序，不构成派发授权。你确认后写入 `.agent-taskgraph/PROJECT.md`，status 不是 `CONFIRMED` 就不能创建会话。复杂任务还必须有可复现 Git baseline 且能创建隔离 worktree。
 
 模型默认使用 `adaptive-batch`：AI 从所选执行机器的真实模型目录按任务复杂度推荐，并在整批派发预览中一次展示、一次确认。只有你主动选择 `per-worker` 才逐个询问；`fixed` 则固定一个明确组合。Goal 中不会使用 `default/auto` 代替模型或推理强度。
 
@@ -346,7 +346,7 @@ flowchart LR
 
 Agent TaskGraph 把长期 **Role** 与单次 **Goal** 分开。Role 在 `roles/<role-id>/ROLE.md` 中保存一个 worker 的长期职责、边界、能力、当前会话和 handoff 历史；Goal 只保存这一次任务的范围与验收合同。这样前端、后端、数据、研究或报告 worker 可以连续负责相关任务，而不依赖某个聊天窗口的记忆。
 
-持久角色在 `available`、`assigned`、`paused`、`retired` 之间迁移，同一时间不能占用两个 active/review Goal。相关的串行工作应复用角色，并在会话健康时复用会话；并行工作必须建立职责和写入范围明确分开的角色。Reviewer 默认是 task-scoped 独立角色，不能复用作者角色。
+持久角色在 `available`、`reserved`、`assigned`、`paused`、`retired` 之间迁移，同一时间不能占用两个 inbox/active/review Goal。`reserved` 表示 Goal 已准备但会话身份尚未验证。相关的串行工作应复用角色，并在会话健康时复用会话；并行工作必须建立职责和写入范围明确分开的角色。Reviewer 默认是 task-scoped 独立角色，不能复用作者角色。
 
 每次新建、复用或替换 worker 会话，PMO 都会先发送标准 Role bootstrap，其中包含准确 Role 档案、生命周期、Team revision、Goal、Context revision 和连续性 checkpoint，但不会复制整段项目历史。worker 必须返回完全匹配的 `IDENTITY_READY`；只有 worker 名称、过期 revision、复制旧 ACK，或者缺少真实消息/日志证据，都不能进入 `active`。长期身份保存在文件中，因此长期 Role 可以更换新会话，而不需要回放全部聊天。
 
@@ -411,7 +411,7 @@ find .agent-taskgraph/queue -mindepth 2 -maxdepth 2 -type d | sort
 
 当运行时不提供准确 token 指标时，Agent TaskGraph 不能承诺一个固定 token 数，但会强制执行可审计的上下文行为：
 
-- 每个 active/review Goal 都有 `context.md`，只引用源文件和 revision，不复制整份内容。
+- 每个 inbox/active/review Goal 都有 `context.md`，只引用源文件和 revision，不复制整份内容。
 - 默认必读项最多 8 个；超过时必须写明例外理由，或者继续拆小 Goal。
 - Worker 只加载相关的 PROJECT 章节、Role、冻结 spec、当前 graph 节点、Goal、ledger 和直接依赖。其他内容先搜索，再局部读取。
 - Owner 与 Worker 之间只传本轮变化、稳定引用和证据路径，不反复发送完整历史、其他会话、archive 或长日志。
@@ -483,7 +483,7 @@ GitHub 仓库应始终是唯一主源，其他目录或安装包只指向本仓�
 | 渠道 | 状态 | 推荐用途 |
 |---|---|---|
 | GitHub 仓库 | Public Beta | 唯一主源、源码、Issue、评审和贡献历史 |
-| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | 已发布 `v0.8.0-beta.10` | 版本归档、发布说明和完整演示视频 |
+| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | 已发布 `v0.8.0-beta.11` | 版本归档、发布说明和完整演示视频 |
 | Codex / Claude Code 本地安装 | 现在可用 | `./install.sh` 将 checkout 链接到 `~/.codex/skills/agent-taskgraph` 和 `~/.claude/skills/agent-taskgraph` |
 | 团队内部仓库 | 现在可用 | 在受控团队环境中放入或链接到 `.agents/skills/` |
 | [skills.sh](https://skills.sh) | CLI 已兼容；目录收录由第三方维护 | 使用 `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph` 安装；GitHub 仍是主源 |
@@ -529,6 +529,7 @@ claude plugin validate ./plugins/agent-taskgraph
 | `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | 用稳定队列 Goal ref 预览 Claude/Codex 原生 worker 命令 |
 | `./scripts/open-worker-terminal.sh ...` | 在 macOS Terminal.app 打开并验证一个可见 worker |
 | `./scripts/render-dispatch.py --project <dir> --goal task:<id>` | 校验 `dispatch.md`，并为原生、HAPI 或宿主线程生成同一份 Role bootstrap |
+| `./scripts/prepare-task.py --project <dir> --manifest <json>` | 原子生成字段稳定的 inbox 文件、登记准备状态并执行派发前硬门 |
 | `./scripts/hapi-hub-session.py machines` | 即使保存的默认 machine ID 已过期，也能脱敏列出当前在线 runner |
 | `./scripts/hapi-hub-session.py probe [--machine-id <id>]` | 在不输出凭据的前提下认证并选择在线 HAPI runner |
 | `./scripts/hapi-hub-session.py catalog --flavor <claude\|codex>` | 读取所选 runner 被证明可用的模型、effort 和权限目录 |
@@ -538,6 +539,7 @@ claude plugin validate ./plugins/agent-taskgraph
 | `./scripts/verify-hapi-session.py ... --json` | 旧 HAPI 日志诊断/audit；不替代当前 Hub evidence 硬门 |
 | `./scripts/validate-graph.py <graph.yaml>` | 拒绝未知依赖、动态 Goal 路径、缺失生产者祖先、环和并行写冲突 |
 | `./scripts/validate-state.py <project>` | 校验队列、baseline、Frozen 开放问题、请求/实际运行配置、证据和 STATUS 一致 |
+| `./scripts/validate-state.py --phase pre-dispatch <project>` | spawn 前检查 reserved 角色、明确 runtime、待派发身份状态以及真实且干净的 Git worktree |
 | `./workers/watch-worker.sh <log>` | 把 Codex JSONL 或 HAPI 文本日志压缩成进展事件流 |
 | `./workers/log-cleanup.sh` | dry-run 列出 30 天前的 Codex 已归档日志 |
 | `./workers/log-cleanup.sh --apply` | 删除刚才列出的已归档候选 |
@@ -550,9 +552,10 @@ claude plugin validate ./plugins/agent-taskgraph
 
 - Skill 会探测当前环境，不假设每个 Codex 都有 `create_thread`、`wait_threads` 等工具。
 - 可用时优先用户可见、可接管的独立会话。Claude Code 优先使用 `claude`、`claude --bg`、`claude agents` 或 `claude -p`；Codex 优先使用 `codex`、`codex exec` 或 `codex resume`。能力不可用时必须报告实际 fallback，不能假装已经创建 Reviewer。
-- 公开默认是 `auto + native-first`，不启用任何可选 adapter。HAPI 作为[按需启用的运行时适配器](references/hapi-runtime.md)随仓库提供：接入时可以报告已检测到，但只有 Owner 在 `PROJECT.md` 选择后才加载和启用。
+- 不再静默选择 runtime。PMO 必须同时列出真实可用的 native 与可选 adapter；保存的偏好可以优先推荐，但 Owner 必须明确选择 HAPI、Claude native 或 Codex native。HAPI 作为[按需启用的运行时适配器](references/hapi-runtime.md)随仓库提供，只有明确选择后才加载。
 - 选择 HAPI 时要区分 Owner 操作端、PMO 执行端和 runner 执行机器。操作端没有 CLI，或当前 MCP 只有 `inspect_peer`/`ping_peer`，都不能证明 HAPI 无法创建；PMO 必须先探测 `scripts/hapi-hub-session.py` 再考虑已确认的 fallback。helper 私下读取凭据，禁止改成把 token 拼入命令行的内联 `curl`。
-- 首次接入先一次确认 Execution profile。每个批次派发前，Owner 再看到 Role ID、长期职责、本次 Goal、复用方案、依赖、写入、运行时可见性、模型/effort、权限、worktree 和启动命令；整批一次确认，除非 Owner 选择逐 worker 模式。批准 graph 本身不等于授权开启会话。
+- 首次接入先一次确认带独立 runtime 选择证据的 Execution profile。每个批次派发前，Owner 再看到 Role ID、长期职责、本次 Goal、复用方案、依赖、写入、运行时可见性、模型/effort、权限、worktree 和启动命令；整批一次确认，除非 Owner 选择逐 worker 模式。批准 graph 本身不等于授权开启会话。
+- spawn 前由结构化 manifest 生成 Goal/ledger/context/dispatch，pre-dispatch validator 检查字段、reserved Role、requested runtime、branch、baseline 和真实 Git worktree。`STATUS.md` 会显示 inbox 准备进度；5 分钟仍没有首个 Session 必须报告为派发异常。
 - spawn 后任务仍停留在 `inbox`；只有实际模型、effort、权限、工作区、会话身份、idle 状态和进程证据全部匹配派发预览，才发送绑定 revision 的 Role bootstrap，并从真实消息/日志核对精确 `IDENTITY_READY`。复用会话也必须为新 Goal 重新生成 Runtime evidence、Dispatch ID 和 ACK；API 请求字段、返回的 session ID、worker 显示名称或旧证据不能证明本次派发合格。
 - 在 macOS 上，如果 Owner 要求每个 worker/reviewer 都显示独立 CLI，可使用 `scripts/open-worker-terminal.sh`。队列任务传 `--goal task:<id>`，避免 inbox/active 迁移让命令失效。必须先 `--dry-run` 预览并批准图和运行参数，再实际打开；PID 验证成功后才能把任务登记为 active。
 - 默认使用平台标准权限，这会保留运行时弹窗。`yolo` 或 `--dangerously-skip-permissions` 只有在当前项目被明确授权后才能使用。授权范围记录为 `runtime-only` 或 `all-approved-runtimes`；只有后者允许 fallback 沿用同等级策略而不再次询问。

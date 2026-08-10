@@ -9,7 +9,7 @@
 | Origin | <initial:<spec/graph revision> / staffing:<change-id>> |
 | 名称 | <面向 Owner 的岗位名> |
 | 生命周期 | <persistent / task-scoped> |
-| 状态 | <available / assigned / paused / retired> |
+| 状态 | <available / reserved / assigned / paused / retired> |
 | 核心职责 | <长期负责什么> |
 | 负责范围 | <模块、目录、产物或业务域> |
 | 明确不负责 | <职责边界；方案决策和越界修改默认不负责> |
@@ -29,7 +29,8 @@
 ## 职责规则
 
 - 角色负责长期判断边界，Goal 负责单次授权；角色不能扩大 Goal。
-- 同一 persistent 角色不得并发执行多个 active/review Goal。
+- inbox Goal 生成后、Session 身份 ACK 前使用 `reserved`；只有 ACK 完全匹配后才能改为 `assigned`。
+- 同一 persistent 角色不得并发占用多个 inbox/active/review Goal。
 - 同模块串行任务优先复用本角色及其可恢复会话；失败污染、上下文耗尽或隔离要求出现时换会话，但保留同一 Role ID 并写 handoff。
 - 每次新建、复用或替换 Session 都使用当前 Goal 的新 `dispatch.md` 完成 Role/Team/Context 身份 ACK；旧 Goal 的 ACK 不能复用。
 - task-scoped 角色完成后标记 `retired`；persistent 角色完成后回到 `available`。

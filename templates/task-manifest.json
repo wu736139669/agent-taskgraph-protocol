@@ -1,0 +1,56 @@
+{
+  "task_id": "T1-example",
+  "title": "One independently verifiable outcome",
+  "stage": "implementation",
+  "baseline": "FULL_40_CHARACTER_GIT_REVISION",
+  "branch": "agent/t1-example",
+  "worktree": "/absolute/path/to/registered-worktree",
+  "frozen_spec": ".agent-taskgraph/spec.md revision spec-r1",
+  "graph_node": ".agent-taskgraph/graph.yaml#example",
+  "context_revision": "ctx-1",
+  "context_mode": "lean",
+  "context_items": [
+    {
+      "path": ".agent-taskgraph/PROJECT.md",
+      "revision": "profile-r1",
+      "reason": "project rules and confirmed execution profile"
+    }
+  ],
+  "role_id": "example-worker",
+  "role_lifecycle": "persistent",
+  "role_responsibility": "Stable responsibility copied from ROLE.md",
+  "role_continuity": "new role and new session",
+  "runtime_requested": {
+    "runtime": "hapi",
+    "flavor": "codex",
+    "model": "gpt-5.6-sol",
+    "effort": "xhigh",
+    "permission": "yolo",
+    "visibility": "visible"
+  },
+  "objective": "Produce one bounded outcome without expanding the frozen scope.",
+  "needs": [
+    "none"
+  ],
+  "consumes": [
+    ".agent-taskgraph/spec.md"
+  ],
+  "produces": [
+    "path/to/output"
+  ],
+  "writes": [
+    "path/to/owned-scope/"
+  ],
+  "pass_route": "verify-example",
+  "fail_route": "failed",
+  "max_attempts": 2,
+  "acceptance": [
+    "[ ] Run the Goal-specific verification command",
+    "[ ] Record the evidence path and source revision"
+  ],
+  "frozen": [
+    "Do not modify another worker's owned scope",
+    "Do not cross a Human Gate"
+  ],
+  "estimate": "implementation 1h; verification 20m; confidence medium"
+}

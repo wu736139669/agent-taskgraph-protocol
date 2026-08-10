@@ -10,11 +10,12 @@ This directory is the platform-ready package for the `agent-taskgraph` Skill. Th
 | `.claude-plugin/plugin.json` | Claude Code plugin manifest |
 | `skills/agent-taskgraph/` | Self-contained Skill, templates, initializer, workers, and update checker |
 | `skills/agent-taskgraph/references/runtime-profiles.md` | Confirmed runtime, machine, model-policy, permission, visibility, and fallback contract |
-| `skills/agent-taskgraph/references/hapi-runtime.md` | Opt-in HAPI runtime adapter; native Claude/Codex remains the public default |
+| `skills/agent-taskgraph/references/hapi-runtime.md` | Opt-in HAPI runtime adapter with explicit, persisted runtime choice |
 | `skills/agent-taskgraph/scripts/hapi-hub-session.py` | Credential-safe Hub probe/catalog, path preflight, spawn, reuse, and Goal-bound verification helper |
+| `skills/agent-taskgraph/scripts/prepare-task.py` | Structured inbox task generation with reserved-role and real-worktree pre-dispatch validation |
 | `LICENSE` | Apache-2.0 license for this package |
 
-The package source version is `0.8.0-beta.10`. Before a release, keep it equal to the root [`VERSION`](../../VERSION), the Skill [`VERSION`](skills/agent-taskgraph/VERSION), and the Git tag.
+The package source version is `0.8.0-beta.11`. Before a release, keep it equal to the root [`VERSION`](../../VERSION), the Skill [`VERSION`](skills/agent-taskgraph/VERSION), and the Git tag.
 
 ## Local validation
 

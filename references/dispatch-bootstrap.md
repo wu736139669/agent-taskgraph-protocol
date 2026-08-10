@@ -13,11 +13,11 @@
 
 ## 每次派发
 
-1. 在当前任务目录由 `templates/dispatch.md` 生成 `dispatch.md`，填入具体 Role、Team revision、Goal、Context revision、连续性和全新的 Dispatch ID。
+1. beta.11+ 使用 `scripts/prepare-task.py` 从结构化 manifest 原子生成 `dispatch.md`、Goal、context 和 ledger；不得自由改写字段名。Role 此时为 `reserved`。
 2. 从 Skill 根目录运行 `scripts/render-dispatch.py --project <project> --goal task:<id>`。它校验引用并生成 runtime-neutral bootstrap；原生 launcher 会自动调用它，HAPI/宿主线程把同一输出作为首条消息。
 3. runtime 验证通过后发送 bootstrap。不得只发送 worker 名称、模糊任务或裸 Goal ref。
 4. worker 在任何实现动作前输出完全匹配的 `IDENTITY_READY` 状态行；若读取不到引用、revision 不一致或职责冲突，输出 `IDENTITY_BLOCKED` 并停止。
-5. PMO 从真实会话消息、线程事件或日志观察 ACK，把完整行和证据写回 `dispatch.md`、Goal、ledger；然后才完成 `active` 状态事务。
+5. PMO 从真实会话消息、线程事件或日志观察 ACK，把完整行和证据写回 `dispatch.md`、Goal、ledger；角色从 `reserved` 改为 `assigned`，然后才完成 `active` 状态事务。
 
 标准 ACK：
 

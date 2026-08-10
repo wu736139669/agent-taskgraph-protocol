@@ -4,9 +4,9 @@
 
 ## 选择规则
 
-- 公开默认仍是 `auto + native-first`。首次接入可把“检测到 HAPI”列为可选项，但必须让 Owner 决定是否启用。
+- 不再用 `native-first` 静默选择。首次接入把探测到的 HAPI 与真实可用 native 路径放在同一选择表；PROJECT 已记录 Preferred runtime=HAPI 且 Hub READY 时优先推荐 HAPI，但仍由 Owner 明确确认。
 - 选择 HAPI 前说明它会怎样改变会话可见性、远程控制、成本、权限和日志位置；结果写入 `PROJECT.md` 的 Execution profile，并与运行机器、flavor、模型策略、准确 permission 和 fallback 一次确认。
-- HAPI 不满足当前 Goal 所需能力时，只能使用 Execution profile 已确认的 fallback。若 runtime、machine、flavor、权限或可见性变化，先把 profile 改回 `PENDING` 并确认 diff。
+- HAPI 不满足当前 Goal 所需能力时，只能使用 Execution profile 已确认的准确 fallback；fallback=none 时停止并报告，禁止静默换成 native。若 runtime、machine、flavor、权限或可见性变化，先把 profile 改回 `PENDING` 并确认 diff。
 
 ## 能力探测
 

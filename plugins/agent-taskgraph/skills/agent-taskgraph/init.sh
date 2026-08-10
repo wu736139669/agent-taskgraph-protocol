@@ -108,7 +108,7 @@ install_if_missing "$SRC/templates/STATUS.md" "$INSTANCE/STATUS.md"
 install_if_missing "$SRC/templates/DECISIONS.md" "$INSTANCE/DECISIONS.md"
 install_if_missing "$SRC/templates/ROLES.md" "$INSTANCE/ROLES.md"
 
-for name in spec.md graph.yaml goal.md ledger.md report.md role.md context.md dispatch.md staffing-change.md; do
+for name in spec.md graph.yaml goal.md ledger.md report.md role.md context.md dispatch.md staffing-change.md task-manifest.json; do
   install_if_missing "$SRC/templates/$name" "$INSTANCE/templates/$name"
 done
 

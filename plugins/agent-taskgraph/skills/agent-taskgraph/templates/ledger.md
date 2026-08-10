@@ -34,7 +34,7 @@
 | Dispatch bootstrap | <dispatch.md；每次新建/复用/替换 Session 使用新 Dispatch ID> |
 | Dispatch message | <NOT_SENT / SENT: 时间 + 通道 + Dispatch ID + 送达证据> |
 | Identity ACK | <PENDING / VERIFIED: 完整 IDENTITY_READY 行；证据详见 dispatch.md> |
-| 等待归属 | 在等谁：<PMO / worker / Owner>；等什么：<验收 / 指示 / 外部条件>；静默多久算异常：<N 分钟> |
+| 等待归属 | 在等谁：<PMO / worker / Owner>；等什么：<验收 / 指示 / 外部条件>；派发准备未创建首个会话 5 分钟即诊断并告知 Owner，active worker 默认静默 20 分钟告警 |
 
 ## 备注
 

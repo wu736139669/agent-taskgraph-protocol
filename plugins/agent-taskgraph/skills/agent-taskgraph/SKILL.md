@@ -31,7 +31,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 3. 分析测试与构建命令 → 定各岗位验收命令
 4. 识别硬性规范与共享文件锁
 5. 探测 Git/source baseline：仓库根、HEAD、分支/upstream、clean/dirty ownership；无 Git 或无法得到可复现 baseline 时标记 `BLOCKED`，只允许继续澄清/建图，不得派实现 worker
-6. 用用户语言给出一次运行方式选择，不要求 Owner 手写内部参数：①原生可见终端（推荐）②宿主可见线程（若存在）③已检测到的可选 adapter（如 HAPI）④无头后台；模型策略选“AI 推荐并在派发前确认”（推荐）/每个 worker 确认/固定配置
+6. 用用户语言给出一次运行方式选择，不要求 Owner 手写内部参数：①原生可见终端②宿主可见线程（若存在）③已检测到的可选 adapter（如 HAPI）④无头后台；**runtime 是独立确认项**，不能从模型、effort、权限或“开始吧”推断。检测到 PROJECT 的 Preferred runtime 且能力 READY 时把它放第一项并标为推荐，但仍须 Owner 明确选择；模型策略另选“AI 推荐并在派发前确认”（推荐）/每个 worker 确认/固定配置
 7. 从本 Skill 的 `VERSION` 写入当前协议版本，把接入结果、baseline 与选择映射写入 `PROJECT.md`，请 Owner 确认
 
 ## 第 1 节：接入、上下文发现与分诊（必做）
@@ -127,8 +127,8 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 **Role Bootstrap 闭环（强制）**：创建、复用或替换任何 worker 会话前读取 [`references/dispatch-bootstrap.md`](references/dispatch-bootstrap.md)。每次 Role→Session 绑定都在任务目录生成新的 `dispatch.md`，首条消息必须同时包含 Role/Team revision/Goal/Context revision 和连续性引用；worker 在实现前返回完全匹配的 `IDENTITY_READY`。只记录 `SENT`、只说“你是某 worker”或复用上一 Goal 的 ACK 均不得进入 `active`。
 
 **角色生命周期**：
-- `persistent`：稳定模块/领域的长期岗位；状态为 `available → assigned → available`，暂停时 `paused`，明确废止才 `retired`。同一角色同一时间最多绑定一个 active/review Goal，串行相关 Goal 优先复用角色与可恢复会话。
-- `task-scoped`：一次性探索、迁移或独立 reviewer；状态为 `available → assigned → retired`。Reviewer 默认使用此类型，并与被审 worker 分离。
+- `persistent`：稳定模块/领域的长期岗位；状态为 `available → reserved → assigned → available`，暂停时 `paused`，明确废止才 `retired`。`reserved` 表示 inbox Goal 已绑定但会话尚未完成身份 ACK；同一角色同一时间最多绑定一个 inbox/active/review Goal。串行相关 Goal 优先复用角色与可恢复会话。
+- `task-scoped`：一次性探索、迁移或独立 reviewer；状态为 `available → reserved → assigned → retired`。Reviewer 默认使用此类型，并与被审 worker 分离。
 - 需要并行处理同一职责时，创建两个明确区分写入范围的 Role ID，不能把一个 persistent 角色同时派给两个 Goal。换 session 不等于换角色；必须把旧 session 的结论、未决项和证据写进 ROLE.md 连续性历史。
 
 **初始组队协议（最小可行团队）**：
@@ -151,11 +151,12 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 3. **负载均衡**：都合适时给最闲的
 
 **运行时选择与适配器合同**：
-- 第一次接入或 runtime/machine/model-policy/permission/visibility/fallback 变化时，读取 [`references/runtime-profiles.md`](references/runtime-profiles.md)。先只读探测，再把这些选择合成一张普通语言短表让 Owner **整体确认一次**，写入 `PROJECT.md` 的 Execution profile；status 不是 `CONFIRMED` 时禁止 spawn/resume/send。公开默认只展示 `auto + native-first + optional adapters: none` 的可用路径；发现 adapter 已安装只能作为能力提示，不能自动启用。
+- 第一次接入或 runtime/machine/model-policy/permission/visibility/fallback 变化时，读取 [`references/runtime-profiles.md`](references/runtime-profiles.md)。先只读探测，再把这些选择合成一张普通语言短表让 Owner **整体确认一次**，写入 `PROJECT.md` 的 Execution profile；status 不是 `CONFIRMED` 时禁止 spawn/resume/send。runtime 必须记录独立的 `Runtime choice confirmed by/at`；确认 model、effort、permission、yolo 或“开始”都不能隐含选择 native/HAPI。
+- `PROJECT.md` 可记录 Preferred runtime/machine。偏好只决定推荐顺序，不是授权；偏好为 HAPI 且 Hub READY 时必须把具体 runner 放在选择表第一项。未记录偏好时展示所有真实可用路径，不得以 `native-first` 静默选定 runtime。发现 adapter 已安装只能作为能力提示，Owner 明确选择后才启用。
 - 面向 Owner 不得连续逐项追问。一次选择表只显示真实可用路径、模型策略、权限结果与 fallback，例如“Claude 原生可见终端 / HAPI 某 runner / 无头后台”和“标准权限（仍会弹窗）/ 自动接受编辑 / 项目 yolo”。AI 把答案映射到准确 runtime/machine/flavor/permission/scope 字段；不得要求普通用户输入 adapter ID、命令行 flags、PID 或 Goal 路径。
-- `auto` 优先当前宿主真实提供的 Claude/Codex 原生命令或可见线程。Owner 明确选择已启用的可选 adapter 后，才加载对应 reference；选择 HAPI 时读取 [`references/hapi-runtime.md`](references/hapi-runtime.md)，未选择时不要加载其细节。
+- `auto` 只能生成推荐，不能写入已确认 Execution runtime。Owner 明确选择已启用的可选 adapter 后，才加载对应 reference；选择 HAPI 时读取 [`references/hapi-runtime.md`](references/hapi-runtime.md)，未选择时不要加载其细节。
 - HAPI 拓扑必须区分 `操作端 / PMO 会话执行端 / runner 执行机器`。操作端没有 `hapi` CLI 不代表远端 runner 不可用；当前 MCP 列表没有 spawn 工具也不代表 HAPI 控制面不能创建。选择 HAPI 后从**当前 Skill 根目录**先运行 `scripts/hapi-hub-session.py machines`；即使 saved machine ID 已过期也能列在线候选。用 Owner 选择的准确 ID 执行 `probe --machine-id <id>`，再运行 `catalog --machine-id <id> --flavor <claude|codex>`；只从该目录推荐 model/effort，并把 machine ID/名称/host、控制路径和目录证据写入 Execution profile。只有正式控制面、宿主工具和已确认 fallback 都失败才报告 HAPI 不可用。
-- 任何运行时必须按语义提供本 Goal 所需的 `spawn / resume / send / observe-wait / stop / identity-evidence` 能力；命令存在不等于控制面可创建会话。缺少必需能力时该运行时不合格，按已确认 fallback 降级；若降级改变成本、权限或可见性，先请 Owner 决定。
+- 任何运行时必须按语义提供本 Goal 所需的 `spawn / resume / send / observe-wait / stop / identity-evidence` 能力；命令存在不等于控制面可创建会话。缺少必需能力时该运行时不合格。只有 Owner 已明确确认**准确 fallback** 才可降级；HAPI 被选择而 fallback 未确认时必须停下报告，禁止静默改为 native。
 - 每个 Goal/ledger 分开记录 `Runtime requested` 与 `Runtime observed`，并记录会话标识、进程/线程标识、证据路径和派发消息状态。请求参数、API 返回值、短暂子进程或仅有退出码 0 都不是实际配置证据。
 - **运行时证据闸**：spawn 后任务仍在 `inbox`，且不得发送任务授权。先从运行时真实日志/线程设置验证 session、cwd/worktree、flavor、model、effort、permission 和存活状态全部等于派发预览；记录 `Runtime verification: VERIFIED` 后才允许发送 task-bearing Role bootstrap。事后改配置只能记为恢复审计，不能倒推派发合格。
 
@@ -176,7 +177,11 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 
 **派发预览闸（每批次强制）**：图批准不等于会话授权，Execution profile 确认也不等于某批 Goal 已批准。PMO 必须先展示一张短表：`Role ID | worker/reviewer | 长期职责 | 本次 Goal | 生命周期/复用方式 | needs | writes | runtime/可见性 | model/effort | 权限 | worktree | Goal ref | 完整启动方式`，并给出自己的职责（监督、验收、状态记录，不写实现）。默认整张表一次确认，不按 worker 连续询问；Owner 可调整角色、模型与推理强度。明确批准后才可 spawn。“批准 graph”不能被解释成批准未展示的后台子 agent。若 PROJECT 已记录完全相同的批次级预授权，也仍要展示表，但可按预授权继续。
 
-派发动作：Execution profile=`CONFIRMED` → 图校验通过并获批 → 创建/确认 Role 档案并绑定 Goal → 写 Goal/context/dispatch 到 `queue/inbox/<task-id>/` → 建隔离 worktree → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn/reuse worker（仍为 inbox）→ **重新校验目录并验证实际运行配置** → 写入当前 Goal 专属会话/目录/模型/effort/权限/idle/watermark 证据 → 用 `scripts/render-dispatch.py` 生成并发送 Role bootstrap → 从真实会话观察并核对 `IDENTITY_READY` → 写完整 ACK 与证据 → 角色标记 assigned、目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；配置不匹配时不得靠 Owner 逐次点允许继续，先停止/重配本次新建且未派发的会话，或按已确认 fallback 重建。spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
+**结构化任务准备（beta.11+ 强制）**：不得自由手写 Goal/ledger/context/dispatch 的字段名。先从 `templates/task-manifest.json` 生成每个任务的结构化 manifest；Role 档案设为 `reserved`、当前 Goal 绑定且 Session=`PENDING`，建好真实 worktree 后，由 PMO 运行 `scripts/prepare-task.py --project <project> --manifest <manifest.json>`。脚本原子生成 inbox 文件、登记 STATUS，并调用 `scripts/validate-state.py --phase pre-dispatch <project>`；任何错误都回滚新任务。manifest 和命令是内部实现，普通 Owner 不需要填写。
+
+派发动作：Execution profile=`CONFIRMED` 且 `Runtime choice confirmed by/at` 明确 → 图校验通过并获批 → 创建/确认 Role 档案并设为 `reserved` → 建隔离 worktree → 结构化生成 Goal/context/ledger/dispatch → **pre-dispatch validator 通过** → 展示/确认派发预览（可见终端用稳定 `--goal task:<task-id>` 先 dry-run）→ spawn/reuse worker（仍为 inbox）→ **重新校验目录并验证实际运行配置** → 写入当前 Goal 专属会话/目录/模型/effort/权限/idle/watermark 证据 → 用 `scripts/render-dispatch.py` 生成并发送 Role bootstrap → 从真实会话观察并核对 `IDENTITY_READY` → 写完整 ACK 与证据 → 角色从 `reserved` 改为 `assigned`、目录移入 `active/` → 同步 ledger/STATUS → 运行 `scripts/validate-state.py <project>`。任一步失败都停止在最早边界；配置不匹配时不得靠 Owner 逐次点允许继续，先停止/重配本次新建且未派发的会话，或按已确认 fallback 重建。spawn 后的状态事务失败必须先停止新 worker，再回滚/修正为 inbox，不能留下“会话在跑、台账未开工”。并发受 worker 池上限约束（默认 3）+ reviewer 1，总活跃会话 ≤ 5。
+
+**time-to-first-worker**：派发预览获批后立即在 STATUS 显示 `准备任务 X/N | 已创建会话 Y/N | Identity ACK Z/N`。5 分钟仍未创建首个会话即视为派发异常，PMO 必须诊断并向 Owner 报告最早失败边界；真实 Session ID 尚未落盘时不得说“正式派发”或“worker 已开始”。
 
 **默认原生命令适配**：
 - **Claude Code**：Owner 入口先 `cd <project>`，再使用 `claude --plugin-dir <plugin-dir>`（或已安装 Skill）；需要后台任务时，仅在 Claude 原生支持 `claude --bg`/`claude agents` 的环境使用这组命令，并记录返回的任务标识。`claude -p` 是无头 fallback。普通 Skill Bash 不得把 `claude ...` 子进程冒充成用户可见独立会话。
@@ -196,7 +201,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 ## 第 8 节：会话与中间状态管理
 
 **上下文预算合同（保证行为，不虚构 token 数）**：运行时不一定暴露准确 token 占用，因此不得承诺固定 token 消耗；必须保证以下可审计行为：
-1. 每个 active/review Goal 都有任务目录内的 `context.md`（模板见 `templates/context.md`），只保存路径/稳定引用、revision、用途和最近 delta，不复制源文档。Goal 与 ledger 记录相同 context revision。
+1. 每个 inbox/active/review Goal 都有任务目录内的 `context.md`（模板见 `templates/context.md`），只保存路径/稳定引用、revision、用途和最近 delta，不复制源文档。Goal 与 ledger 记录相同 context revision。
 2. 启动只读 `PROJECT` 相关章节、Role、冻结 spec、graph 当前节点、Goal/ledger 和直接依赖产物；默认必读项不超过 8 个。超过时先拆 Goal；确实不可拆才在 manifest 写 `Budget exception`。
 3. 其他内容执行 **search → 定位 symbol/标题/行段 → 局部读取**；禁止为了“了解项目”全量读取仓库、archive、其他 worker 聊天或长日志。二进制、大文件、测试全输出只传路径/hash/摘要，诊断时再读取必要尾部。
 4. 对话每轮只处理 delta：把用户消息分成 `新事实 / 决策 / 纠正 / 新问题 / 非约束讨论`。事实和纠正更新 spec/Goal；关键决策写 DECISIONS；进展/阻塞写 ledger/context 最近 Delta。已回答且未被推翻的问题不得重复询问或重复转发给 worker。
@@ -226,7 +231,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 项目级（常驻，PMO 维护）：
 - `PROJECT.md`：项目恒定信息（技术栈/硬性规范/共享文件锁/岗位工作区映射）——所有 worker 与专家的"先读"文件
 - `ROLES.md` + `roles/<role-id>/ROLE.md`：长期职责注册、边界、占用状态、会话与 handoff；角色身份不依赖聊天记忆
-- `STATUS.md`：任务总览板（**轻量视图**，格式见 `templates/STATUS.md`）——从队列目录 + ledger 派生，线程状态只作观察信号；**只含活跃任务**，done 即移除
+- `STATUS.md`：任务总览板（**轻量视图**，格式见 `templates/STATUS.md`）——从队列目录 + ledger 派生，线程状态只作观察信号；包含 inbox/active/review，inbox 展示准备/会话/ACK 计数，done 即移除
 - `DECISIONS.md`：团队决策记录（格式见 `templates/DECISIONS.md`，追加式只增不改）——分配决策、方案关键决定、Owner 指示。防"换会话就忘"。**按主题分区（标题带模块名）**，PMO 开工扫标题选读
 
 规格级（B/C/D 类，或任一敏感度高的 A 类）：
@@ -291,7 +296,7 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 **会话绑定与加载范围协议（对话即项目）**：
 - **一个 PMO 会话只服务一个项目**：换项目 = 开新会话或明确声明切换（"切换到 X 项目"）；禁止混合批次
 - **开工按 context manifest 读取**：PROJECT 相关章节 + Role + 本批次冻结 spec/graph 当前节点 + 本节点 goal/ledger + 直接依赖产物 + 决策记录相关标题；先检索再局部读，**无关历史不加载**
-- **STATUS.md 只含活跃任务**：任务 done 立即从总览板移除；已完成任务按月挪入 `archive/<YYYY-MM>/`（不压缩、不做索引，能 grep 即可）
+- **STATUS.md 只含热任务**：保留 inbox/active/review，让 Owner 看见派发准备；任务 done 立即从总览板移除；已完成任务按月挪入 `archive/<YYYY-MM>/`（不压缩、不做索引，能 grep 即可）
 - **批次总结**：收尾汇报需要已完成任务 → 翻当月 `archive/`（可接受的小代价）
 
 **文档更新机制（绑定动作，不靠记忆）**——动作绑定的文档（goal/ledger/STATUS/report）随派发、验收、状态变化自动滚动；知识驱动的文档用三条补丁防过期：
@@ -394,14 +399,14 @@ description: "多 agent AI coding 团队协作编排。先分诊并只读理解�
 - worker 不临场改方案，发现方案问题上报 PMO（由 PMO 决定退回专家或现场授权）
 - 专家产出物不合格（spec 缺不做清单/用户冻结、技术方案缺风险清单）→ 退回重写，不进派发
 - 一任务一 worktree；台账在文件系统，只有 PMO 能改状态
-- 一任务绑定一个 Role；一个 persistent Role 同时最多绑定一个 active/review Goal；换会话必须记录 handoff
+- 一任务绑定一个 Role；一个 persistent Role 同时最多绑定一个 inbox/active/review Goal；inbox 用 reserved、ACK 后用 assigned；换会话必须记录 handoff
 - worker 说完成不算，验收命令输出才算
 - 冲突由 PMO 派发前分析解决，不在 worker 间现场解决
 - 自动 merge 前保留 reviewer gate
 - 不频繁打扰 worker：只在完成、失败、卡住、要决策四个时点交互
 - **监控靠机制不靠意愿**：任何"每 X 分钟做 Y"的规则必须挂真实定时器或事件流（tail -f / cron / hooks），只写进规则而没有机制 = 不会发生
 - **PMO 开工必须创建监控机制并登记证据**（automation ID / 后台任务 / cron 行），写不出机制证据 = 未开工
-- **对话即项目**：一个 PMO 会话只服务一个项目（换项目开新会话）；开工只读本次范围（PROJECT + STATUS + 相关 goal/决策标题），历史不加载；STATUS 只含活跃任务，done 即移除
+- **对话即项目**：一个 PMO 会话只服务一个项目（换项目开新会话）；开工只读本次范围（PROJECT + STATUS + 相关 goal/决策标题），历史不加载；STATUS 保留 inbox/active/review 热任务，done 即移除
 - **上下文是 manifest + delta，不是聊天回放**：必读默认 ≤8；长日志只传证据路径；已回答问题不重复问；checkpoint 后可从文件恢复
 - **PMO 关键节点例行汇报**：新 worker 开工 / 故障处理完 / 里程碑 / 卡住时，一句话 ping Owner（现在做什么/为什么/下一步）
 - **文档更新绑定动作**：决策必写（DECISIONS 是决策动作的一部分）、PROJECT 开工前查完整性（缺模板字段即补录）、reviewer 验收顺带核对台账一致性——文档随迭代滚动，不靠记忆

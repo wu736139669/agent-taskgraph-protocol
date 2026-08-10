@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Validate queue, runtime evidence, ledger, and STATUS consistency."""
 
+import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,11 +17,11 @@ GOAL_BASELINE = re.compile(r'^>\s*Baseline:\s*(.+?)\s*$')
 GOAL_CONTEXT = re.compile(r'^>\s*Context manifest:\s*`?([^`]+?)`?\s*$')
 GOAL_CONTEXT_REVISION = re.compile(r'^>\s*Context revision:\s*`?([^`]+?)`?\s*$')
 GOAL_ASSIGNMENT = re.compile(
-    r'^-\s*(Role ref|角色职责|角色生命周期|连续性|Runtime requested|Runtime observed|Runtime verification|Session evidence|Dispatch bootstrap|Dispatch message|Identity ACK)[：:]\s*(.*?)\s*$'
+    r'^-\s*(Role ref|角色职责|角色生命周期|连续性|工作区|Runtime requested|Runtime observed|Runtime verification|Session evidence|Dispatch bootstrap|Dispatch message|Identity ACK)[：:]\s*(.*?)\s*$'
 )
 ROLE_REF = re.compile(r'^role:([a-z0-9][a-z0-9-]*)$')
 ROLE_LIFECYCLES = {"persistent", "task-scoped"}
-ROLE_STATES = {"available", "assigned", "paused", "retired"}
+ROLE_STATES = {"available", "reserved", "assigned", "paused", "retired"}
 SPEC_STATUS = re.compile(r'^>\s*Status:\s*(DRAFT|FROZEN)\s*$', re.IGNORECASE)
 SPEC_FROZEN_BY = re.compile(r'^>\s*Frozen by:\s*(.*?)\s*$', re.IGNORECASE)
 RUNTIME_KEYS = ("runtime", "flavor", "model", "effort", "permission", "visibility")
@@ -48,6 +50,9 @@ PLACEHOLDER_TOKENS = (
     "tbd",
 )
 PROTOCOL_VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$", re.IGNORECASE)
+WORKTREE_VALUE = re.compile(
+    r'^`([^`]+)`\s*[（(]分支[：:]\s*`([^`]+)`[）)]$'
+)
 
 
 def ledger_fields(path):
@@ -88,7 +93,11 @@ def goal_metadata(path):
             metadata["context_revision"] = match.group(1).strip()
         match = GOAL_ASSIGNMENT.match(raw)
         if match:
-            metadata["assignments"][match.group(1)] = match.group(2).strip().strip("`")
+            key = match.group(1)
+            value = match.group(2).strip()
+            metadata["assignments"][key] = (
+                value if key == "工作区" else value.strip("`")
+            )
     return metadata
 
 
@@ -148,8 +157,7 @@ def validate_context(task_id, task_dir, fields, goal_data):
     return errors
 
 
-def identity_bootstrap_required(project_fields):
-    """Preserve batches explicitly pinned pre-beta.9 while hardening new revisions."""
+def protocol_at_least(project_fields, beta):
     raw = project_fields.get("Agent TaskGraph 协议版本", "").strip().strip("`")
     if is_placeholder(raw):
         return True
@@ -159,8 +167,13 @@ def identity_bootstrap_required(project_fields):
     release = tuple(int(match.group(index)) for index in (1, 2, 3))
     if release != (0, 8, 0):
         return release > (0, 8, 0)
-    beta = match.group(4)
-    return beta is None or int(beta) >= 9
+    current_beta = match.group(4)
+    return current_beta is None or int(current_beta) >= beta
+
+
+def identity_bootstrap_required(project_fields):
+    """Preserve batches explicitly pinned pre-beta.9 while hardening new revisions."""
+    return protocol_at_least(project_fields, 9)
 
 
 def dispatch_expected_ack(dispatch):
@@ -172,7 +185,7 @@ def dispatch_expected_ack(dispatch):
 
 
 def validate_dispatch_bootstrap(
-    task_id, task_dir, fields, goal_assignments, team_revision
+    task_id, task_dir, fields, goal_assignments, team_revision, pending=False
 ):
     errors = []
     dispatch_ref = fields.get("Dispatch bootstrap", "")
@@ -204,11 +217,7 @@ def validate_dispatch_bootstrap(
         "Context manifest",
         "Context revision",
         "Continuity",
-        "Session ID",
         "Expected identity ACK",
-        "Delivery",
-        "Identity ACK",
-        "ACK evidence",
     )
     missing = [key for key in required if is_placeholder(dispatch.get(key, ""))]
     if missing:
@@ -229,8 +238,9 @@ def validate_dispatch_bootstrap(
         "Context manifest": fields.get("Context manifest", ""),
         "Context revision": fields.get("Context revision", ""),
         "Continuity": fields.get("Role continuity", ""),
-        "Session ID": fields.get("Session ID", ""),
     }
+    if not pending:
+        expected_values["Session ID"] = fields.get("Session ID", "")
     for key, expected in expected_values.items():
         if dispatch.get(key, "") != expected:
             errors.append(
@@ -246,6 +256,50 @@ def validate_dispatch_bootstrap(
     expected_ack = dispatch_expected_ack(dispatch)
     if dispatch.get("Expected identity ACK", "") != expected_ack:
         errors.append("{}: Expected identity ACK does not match dispatch metadata".format(task_id))
+
+    if pending:
+        pending_values = {
+            "Session ID": "PENDING",
+            "Delivery": "NOT_SENT",
+            "Identity ACK": "PENDING",
+            "ACK evidence": "PENDING",
+        }
+        for key, expected in pending_values.items():
+            if dispatch.get(key, "") != expected:
+                errors.append(
+                    "{}: pre-dispatch {} must be {}".format(task_id, key, expected)
+                )
+        ledger_pending = {
+            "Runtime observed": "PENDING",
+            "Runtime verification": "PENDING",
+            "Session ID": "PENDING",
+            "Runtime evidence": "PENDING",
+            "Dispatch message": "NOT_SENT",
+            "Identity ACK": "PENDING",
+        }
+        for key, expected in ledger_pending.items():
+            if fields.get(key, "") != expected:
+                errors.append(
+                    "{}: pre-dispatch ledger {} must be {}".format(
+                        task_id, key, expected
+                    )
+                )
+        goal_pending = {
+            "Runtime observed": "PENDING",
+            "Runtime verification": "PENDING",
+            "Session evidence": "PENDING",
+            "Dispatch message": "NOT_SENT",
+            "Identity ACK": "PENDING",
+        }
+        for key, expected in goal_pending.items():
+            if goal_assignments.get(key, "").strip("`") != expected:
+                errors.append(
+                    "{}: pre-dispatch Goal {} must be {}".format(
+                        task_id, key, expected
+                    )
+                )
+        return errors
+
     verified_ack = "VERIFIED: {}".format(expected_ack)
     if dispatch.get("Identity ACK", "") != verified_ack:
         errors.append("{}: dispatch Identity ACK must exactly match Expected identity ACK".format(task_id))
@@ -312,13 +366,20 @@ def runtime_value_is_placeholder(key, value):
     return key in {"model", "effort"} and value.strip().lower() in RUNTIME_PLACEHOLDERS
 
 
-def validate_execution_profile(fields):
+def validate_execution_profile(fields, require_runtime_choice=False):
     errors = []
     if fields.get("Execution profile status", "") != "CONFIRMED":
         errors.append("PROJECT.md: Execution profile status must be CONFIRMED before dispatch")
     for key in EXECUTION_PROFILE_KEYS:
         if is_placeholder(fields.get(key, "")):
             errors.append("PROJECT.md: {} must be concrete".format(key))
+    if require_runtime_choice and is_placeholder(
+        fields.get("Runtime choice confirmed by/at", "")
+    ):
+        errors.append(
+            "PROJECT.md: Runtime choice confirmed by/at must be explicit; "
+            "model/effort/permission approval cannot imply a runtime choice"
+        )
 
     runtime = fields.get("Execution runtime", "").strip().lower()
     flavor = fields.get("Execution flavor", "").strip().lower()
@@ -338,6 +399,10 @@ def validate_execution_profile(fields):
             errors.append("PROJECT.md: HAPI Execution machine must include an exact id=")
         if "hapi" not in fields.get("Execution control", "").lower():
             errors.append("PROJECT.md: HAPI Execution control must name the verified HAPI path")
+        if require_runtime_choice and "hapi" not in fields.get(
+            "已启用可选适配器", ""
+        ).lower():
+            errors.append("PROJECT.md: HAPI must be listed in 已启用可选适配器")
 
     if policy == "fixed":
         fixed = runtime_config(fields.get("Fixed model/effort", ""))
@@ -347,6 +412,85 @@ def validate_execution_profile(fields):
                     "PROJECT.md: fixed model policy requires concrete {}".format(key)
                 )
     return errors
+
+
+def registered_worktrees(project):
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project), "worktree", "list", "--porcelain"],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return {}
+
+    worktrees = {}
+    current = {}
+    for raw in result.stdout.splitlines() + [""]:
+        if not raw:
+            if current.get("path"):
+                worktrees[str(Path(current["path"]).resolve())] = current
+            current = {}
+        elif raw.startswith("worktree "):
+            current["path"] = raw.split(" ", 1)[1]
+        elif raw.startswith("HEAD "):
+            current["head"] = raw.split(" ", 1)[1]
+        elif raw.startswith("branch refs/heads/"):
+            current["branch"] = raw[len("branch refs/heads/") :]
+    return worktrees
+
+
+def validate_goal_worktree(task_id, goal_data, worktrees):
+    value = goal_data["assignments"].get("工作区", "")
+    match = WORKTREE_VALUE.fullmatch(value)
+    if not match:
+        return [
+            "{}: Goal 工作区 must be `absolute-path`（分支：`branch`）".format(
+                task_id
+            )
+        ], ""
+
+    raw_path, branch = match.groups()
+    path = Path(raw_path)
+    errors = []
+    if not path.is_absolute():
+        errors.append("{}: Goal worktree path must be absolute".format(task_id))
+        return errors, str(path)
+    resolved = str(path.resolve())
+    actual = worktrees.get(resolved)
+    if not path.is_dir() or not actual:
+        errors.append(
+            "{}: Goal worktree is not a registered Git worktree: {}".format(
+                task_id, raw_path
+            )
+        )
+        return errors, resolved
+    if actual.get("branch") != branch:
+        errors.append(
+            "{}: Goal worktree branch mismatch: {!r} != {!r}".format(
+                task_id, branch, actual.get("branch", "")
+            )
+        )
+    baseline_match = re.search(r"\b[0-9a-fA-F]{7,40}\b", goal_data.get("baseline", ""))
+    if not baseline_match:
+        errors.append("{}: Goal baseline must contain a Git revision".format(task_id))
+    elif not actual.get("head", "").startswith(baseline_match.group(0).lower()):
+        errors.append("{}: Goal baseline does not match worktree HEAD".format(task_id))
+    try:
+        dirty = subprocess.run(
+            ["git", "-C", resolved, "status", "--porcelain"],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        dirty = "git-status-failed"
+    if dirty:
+        errors.append("{}: pre-dispatch worktree must be clean".format(task_id))
+    return errors, resolved
 
 
 def validate_task_against_execution_profile(task_id, requested, project_fields):
@@ -379,7 +523,14 @@ def validate_task_against_execution_profile(task_id, requested, project_fields):
 
 
 def validate_role(
-    task_id, state, instance, fields, goal_assignments, registered_roles, team_revision
+    task_id,
+    state,
+    instance,
+    fields,
+    goal_assignments,
+    registered_roles,
+    team_revision,
+    predispatch=False,
 ):
     errors = []
     role_ref = fields.get("Role ref", "")
@@ -412,7 +563,7 @@ def validate_role(
             )
         if profile.get("Role ID", "") != role_id:
             errors.append("{}: role profile Role ID must be {}".format(task_id, role_id))
-        if state in VISIBLE_STATES:
+        if state in VISIBLE_STATES or predispatch:
             if is_placeholder(team_revision):
                 errors.append("{}: ROLES.md requires a concrete Team revision".format(task_id))
             if profile.get("Team revision", "") != team_revision:
@@ -448,6 +599,13 @@ def validate_role(
                 errors.append("{}: role profile Current Goal must reference this task".format(task_id))
             if profile.get("当前 Session ID", "") != fields.get("Session ID", ""):
                 errors.append("{}: role profile Current Session ID differs from ledger".format(task_id))
+        elif predispatch:
+            if role_state != "reserved":
+                errors.append("{}: inbox role must be reserved before spawn".format(task_id))
+            if profile.get("当前 Goal", "") != "task:{}".format(task_id):
+                errors.append("{}: reserved role Current Goal must reference this task".format(task_id))
+            if profile.get("当前 Session ID", "") != "PENDING":
+                errors.append("{}: reserved role Session ID must be PENDING".format(task_id))
         elif state == "done" and lifecycle == "task-scoped":
             if role_state != "retired":
                 errors.append("{}: completed task-scoped role must be retired".format(task_id))
@@ -696,7 +854,7 @@ def status_rows(path):
     return rows, duplicates
 
 
-def validate(project):
+def validate(project, predispatch=False):
     instance = project / ".agent-taskgraph"
     queue = instance / "queue"
     status_path = instance / "STATUS.md"
@@ -715,11 +873,16 @@ def validate(project):
                 )
             )
 
+    strict_inbox = predispatch or protocol_at_least(project_fields, 11)
+    worktrees = registered_worktrees(project)
+    worktree_assignments = {}
+
     tasks = {}
     persistent_assignments = {}
     registered_roles = role_registry(instance / "ROLES.md")
     team_revision = role_team_revision(instance / "ROLES.md")
     active_or_review = False
+    has_gated_inbox = False
     for state in STATES:
         state_dir = queue / state
         if not state_dir.is_dir():
@@ -735,6 +898,9 @@ def validate(project):
                 errors.append("task appears in multiple states: {}".format(child.name))
                 continue
             tasks[child.name] = state
+            inbox_gated = state == "inbox" and strict_inbox
+            if inbox_gated:
+                has_gated_inbox = True
             if state in VISIBLE_STATES:
                 active_or_review = True
             goal = child / "goal.md"
@@ -759,16 +925,18 @@ def validate(project):
             runtime_evidence_required = state in VISIBLE_STATES or (
                 state == "done" and "Runtime requested" in fields
             )
-            role_required = state in VISIBLE_STATES or (
+            role_required = inbox_gated or state in VISIBLE_STATES or (
                 state == "done" and "Role ref" in fields
             )
-            context_required = state in VISIBLE_STATES or (
+            context_required = inbox_gated or state in VISIBLE_STATES or (
                 state == "done" and "Context manifest" in fields
             )
             dispatch_required = identity_bootstrap_required(project_fields) and (
-                state in VISIBLE_STATES or (state == "done" and "Role ref" in fields)
+                inbox_gated
+                or state in VISIBLE_STATES
+                or (state == "done" and "Role ref" in fields)
             )
-            if runtime_evidence_required and is_placeholder(goal_data["baseline"]):
+            if (runtime_evidence_required or inbox_gated) and is_placeholder(goal_data["baseline"]):
                 errors.append("{}: evidence-bearing Goal requires a concrete baseline".format(child.name))
             if duplicate_fields:
                 errors.append(
@@ -800,6 +968,7 @@ def validate(project):
                         goal_assignments,
                         registered_roles,
                         team_revision,
+                        inbox_gated,
                     )
                 )
                 errors.extend(
@@ -808,7 +977,7 @@ def validate(project):
                     )
                 )
                 role_ref = fields.get("Role ref", "")
-                if state in VISIBLE_STATES and fields.get("Role lifecycle", "") == "persistent":
+                if (state in VISIBLE_STATES or inbox_gated) and fields.get("Role lifecycle", "") == "persistent":
                     persistent_assignments.setdefault(role_ref, []).append(child.name)
 
             if context_required:
@@ -822,8 +991,39 @@ def validate(project):
                         fields,
                         goal_data["assignments"],
                         team_revision,
+                        inbox_gated,
                     )
                 )
+
+            if inbox_gated:
+                requested = runtime_config(fields.get("Runtime requested", ""))
+                missing_requested = [
+                    key
+                    for key in RUNTIME_KEYS
+                    if runtime_value_is_placeholder(key, requested.get(key, ""))
+                ]
+                if missing_requested:
+                    errors.append(
+                        "{}: Runtime requested missing concrete fields: {}".format(
+                            child.name, ", ".join(missing_requested)
+                        )
+                    )
+                goal_requested = runtime_config(
+                    goal_data["assignments"].get("Runtime requested", "")
+                )
+                if goal_requested != requested:
+                    errors.append("{}: Goal and ledger Runtime requested differ".format(child.name))
+                errors.extend(
+                    validate_task_against_execution_profile(
+                        child.name, requested, project_fields
+                    )
+                )
+                worktree_errors, worktree_path = validate_goal_worktree(
+                    child.name, goal_data, worktrees
+                )
+                errors.extend(worktree_errors)
+                if worktree_path:
+                    worktree_assignments.setdefault(worktree_path, []).append(child.name)
 
             if runtime_evidence_required:
                 requested_raw = fields.get("Runtime requested", "")
@@ -909,9 +1109,18 @@ def validate(project):
                 )
             )
 
-    if active_or_review:
+    for worktree_path, task_ids in sorted(worktree_assignments.items()):
+        if len(task_ids) > 1:
+            errors.append(
+                "worktree assigned to multiple inbox tasks: {} ({})".format(
+                    worktree_path, ", ".join(sorted(task_ids))
+                )
+            )
+
+    dispatch_gated = active_or_review or has_gated_inbox
+    if dispatch_gated:
         if not project_path.is_file():
-            errors.append("active/review tasks require PROJECT.md")
+            errors.append("dispatch-gated tasks require PROJECT.md")
         else:
             protocol_version = project_fields.get("Agent TaskGraph 协议版本", "")
             if is_placeholder(protocol_version):
@@ -921,13 +1130,20 @@ def validate(project):
             source_baseline = project_fields.get("Source baseline", "")
             if not source_baseline.upper().startswith("READY:") or is_placeholder(source_baseline):
                 errors.append("PROJECT.md: Source baseline must start with READY: before dispatch")
-            errors.extend(validate_execution_profile(project_fields))
+            errors.extend(
+                validate_execution_profile(
+                    project_fields, require_runtime_choice=strict_inbox
+                )
+            )
         errors.extend(validate_frozen_spec(instance))
 
     rows, duplicate_rows = status_rows(status_path)
     for task_id in sorted(duplicate_rows):
         errors.append("{}: duplicate STATUS.md row".format(task_id))
-    expected_visible = {task_id: state for task_id, state in tasks.items() if state in VISIBLE_STATES}
+    tracked_states = VISIBLE_STATES | ({"inbox"} if strict_inbox else set())
+    expected_visible = {
+        task_id: state for task_id, state in tasks.items() if state in tracked_states
+    }
     for task_id, state in expected_visible.items():
         if task_id not in rows:
             errors.append("{}: missing from STATUS.md".format(task_id))
@@ -944,14 +1160,25 @@ def validate(project):
 
 
 def main(argv):
-    if len(argv) != 2:
-        print("Usage: validate-state.py <project-directory>", file=sys.stderr)
-        return 2
-    project = Path(argv[1]).resolve()
+    parser = argparse.ArgumentParser(
+        description="Validate Agent TaskGraph queue and dispatch evidence"
+    )
+    parser.add_argument(
+        "--phase",
+        choices=("current", "pre-dispatch"),
+        default="current",
+        help="pre-dispatch applies the strict inbox gate even to older project versions",
+    )
+    parser.add_argument("project_directory")
+    try:
+        args = parser.parse_args(argv[1:])
+    except SystemExit as exc:
+        return int(exc.code)
+    project = Path(args.project_directory).resolve()
     if not project.is_dir():
         print("Project directory does not exist: {}".format(project), file=sys.stderr)
         return 2
-    errors = validate(project)
+    errors = validate(project, predispatch=args.phase == "pre-dispatch")
     if errors:
         for error in errors:
             print("ERROR: {}".format(error), file=sys.stderr)

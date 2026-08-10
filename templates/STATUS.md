@@ -2,10 +2,12 @@
 
 > PMO 维护。状态从队列目录 + ledger 派生；线程状态、运行时消息和日志只提供实时观察信号，不能直接覆盖任务状态。
 > Owner 要进度时，直接贴这张表（或贴线程状态）。
-> 只列 queue/active 与 queue/review。任务 ID 必须等于队列目录名；状态只允许 active / review。
+> 列出 queue/inbox、queue/active 与 queue/review。任务 ID 必须等于队列目录名；inbox 行必须在卡点列显示 `准备任务 / 已创建会话 / 已完成身份 ACK`，让 Owner 看见 time-to-first-worker。
 
 | 任务 ID | 标题 | 状态 | 负责人 | 轮次 | 最后更新 | 卡点 |
 |---|---|---|---|---|---|---|
+
+> 派发准备 SLA：批次批准后 5 分钟仍未创建首个会话，PMO 必须诊断并向 Owner 报告；拿到真实 Session ID 前不得声称“已正式派发”。
 
 ## 当前批次总结
 

@@ -18,12 +18,12 @@ PMO 先只读探测，再用一张短表让 Owner 一次确认以下内容：
 
 | Owner 看到的选择 | 内部记录 |
 |---|---|
-| 在哪里运行、是否可见 | runtime/control/machine/flavor/visibility |
+| 在哪里运行、是否可见（独立确认，不能从其他行推断） | Runtime choice confirmed by/at + runtime/control/machine/flavor/visibility |
 | 模型由 AI 按任务推荐、固定，还是逐个选择 | model selection policy |
 | 标准询问、自动接受编辑，还是 yolo | exact permission + scope |
 | 首选路径失败怎么办 | exact fallback |
 
-不要逐项连续追问，也不要让普通用户输入 adapter ID、machine UUID 或 CLI flags。AI 只展示探测后真实存在的选项，并把普通语言选择映射为准确字段。推荐默认是 `adaptive-batch + 每批一次确认`；只有 Owner 明确选择 `per-worker` 才逐个确认模型。
+不要逐项连续追问，也不要让普通用户输入 adapter ID、machine UUID 或 CLI flags。AI 只展示探测后真实存在的选项，并把普通语言选择映射为准确字段。runtime 必须由 Owner 明确选择；模型、effort、权限或 yolo 的确认不能代替 runtime 选择。PROJECT 的 Preferred runtime 只改变推荐顺序。推荐默认是 `adaptive-batch + 每批一次确认`；只有 Owner 明确选择 `per-worker` 才逐个确认模型。
 
 标准权限会在工具、命令或写入时继续弹窗，确认页必须直说这个结果。Owner 若明确希望批次内不再逐次点击，可选择当前项目 yolo；同时保留依赖安装、迁移、删除、权限扩大、合并和发布等 Human Gates。
 
@@ -61,9 +61,11 @@ PROJECT 记录 runtime 的准确 mode，不只写“标准”或“yolo”：
 派发前顺序固定：
 
 1. Execution profile 为 `CONFIRMED`。
-2. 生成一张包含所有 worker/reviewer 明确 model/effort/permission 的批次预览。
-3. Owner 一次批准该批；预授权批次仍展示表。
-4. spawn 或 reuse 前重新读取目录并校验参数。
-5. 实际会话配置匹配后写当前 Goal 专属 evidence，才发送 Goal。
+2. `Runtime choice confirmed by/at` 明确记录 Owner 选择与适用范围。
+3. 生成一张包含所有 worker/reviewer 明确 model/effort/permission 的批次预览。
+4. Owner 一次批准该批；预授权批次仍展示表。
+5. 结构化生成 inbox 任务并运行 `validate-state.py --phase pre-dispatch`。
+6. spawn 或 reuse 前重新读取目录并校验参数。
+7. 实际会话配置匹配后写当前 Goal 专属 evidence，才发送 Goal。
 
 runtime、control、machine、flavor、permission、scope、visibility 或 fallback 变化时，将 profile 改回 `PENDING`，展示旧值/新值/影响，重新确认。模型目录内容变化只重审受影响的派发行；model selection policy 变化则重审整个 profile。

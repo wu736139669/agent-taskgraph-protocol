@@ -14,12 +14,13 @@ assert_file() { [ -f "$1" ] || fail "missing file: $1"; }
 assert_dir() { [ -d "$1" ] || fail "missing directory: $1"; }
 assert_link_to() { [ -L "$1" ] && [ "$(readlink "$1")" = "$2" ] || fail "unexpected symlink: $1"; }
 
-echo "[1/12] shell and Python syntax"
+echo "[1/13] shell and Python syntax"
 bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" \
   "$ROOT/scripts/open-worker-terminal.sh" "$ROOT/workers/watch-worker.sh" \
   "$ROOT/workers/log-cleanup.sh" "$ROOT/tests/smoke.sh"
 python3 - "$ROOT/workers/parse-worker-log.py" \
-  "$ROOT/scripts/render-dispatch.py" "$ROOT/scripts/validate-graph.py" "$ROOT/scripts/validate-state.py" \
+  "$ROOT/scripts/render-dispatch.py" "$ROOT/scripts/prepare-task.py" \
+  "$ROOT/scripts/validate-graph.py" "$ROOT/scripts/validate-state.py" \
   "$ROOT/scripts/verify-hapi-session.py" "$ROOT/scripts/hapi-hub-session.py" <<'PY'
 from pathlib import Path
 import sys
@@ -29,12 +30,12 @@ for filename in sys.argv[1:]:
     compile(source, filename, "exec")
 PY
 
-echo "[2/12] Codex log parser fixtures"
+echo "[2/13] Codex log parser fixtures"
 python3 "$ROOT/workers/parse-worker-log.py" --format jsonl \
   < "$ROOT/tests/fixtures/codex-events.jsonl" > "$TMP/parser.out"
 diff -u "$ROOT/tests/fixtures/codex-events.expected" "$TMP/parser.out"
 
-echo "[3/12] update checker states"
+echo "[3/13] update checker states"
 git init --bare "$TMP/update-remote.git" >/dev/null
 git init "$TMP/update-local" >/dev/null
 git -C "$TMP/update-local" checkout -b main >/dev/null
@@ -48,7 +49,7 @@ git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
 git -C "$TMP/update-local" push -u origin main >/dev/null
 
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
-grep -q 'version: 0.8.0-beta.10' "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.11' "$TMP/update-current.out"
 grep -q 'Update status: current' "$TMP/update-current.out"
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
 [ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
@@ -75,13 +76,13 @@ cp "$ROOT/VERSION" "$TMP/update-not-git/VERSION"
 AGENT_TASKGRAPH_ROOT="$TMP/update-not-git" "$ROOT/scripts/check-update.sh" > "$TMP/update-unavailable.out"
 grep -q 'Update status: unavailable' "$TMP/update-unavailable.out"
 
-echo "[4/12] install, status, conflict, force, and uninstall"
+echo "[4/13] install, status, conflict, force, and uninstall"
 HOME="$TMP/home-install" "$ROOT/install.sh" > "$TMP/install.out"
 assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
-grep -q 'Version: 0.8.0-beta.10' "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.11' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -118,7 +119,7 @@ find "$TMP/home-conflict/.claude/skills" -maxdepth 1 -name 'agent-taskgraph.back
   > "$TMP/backups.out"
 [ -s "$TMP/backups.out" ] || fail "forced install did not create a backup"
 
-echo "[5/12] project initialization preserves existing files"
+echo "[5/13] project initialization preserves existing files"
 mkdir -p "$TMP/project"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/init.out"
 for state in inbox active review done failed; do
@@ -159,7 +160,7 @@ fi
 assert_dir "$TMP/project-both/.agent-queue"
 assert_dir "$TMP/project-both/.agent-taskgraph"
 
-echo "[6/12] visible Terminal launcher dry-run and permission gates"
+echo "[6/13] visible Terminal launcher dry-run and permission gates"
 mkdir -p "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test"
 cat > "$TMP/terminal-project/.agent-taskgraph/queue/inbox/T1-test/goal.md" <<'MD'
 # Goal: launcher test
@@ -297,7 +298,7 @@ if kill -0 "$VISIBLE_PID" 2>/dev/null; then
   fail "launcher test worker was not cleaned up"
 fi
 
-echo "[7/12] HAPI runtime evidence must match before dispatch"
+echo "[7/13] HAPI runtime evidence must match before dispatch"
 mkdir -p "$TMP/hapi-worktree"
 cat > "$TMP/hapi-verified.log" <<LOG
 [10:00:00.000] Starting hapi CLI with args:  ["bun","/hapi","claude","--started-by","runner"]
@@ -351,7 +352,7 @@ grep -q 'pre-dispatch verification must pass before the first Goal message' \
 grep -q 'HAPI runtime verification passed' "$TMP/hapi-audit.out"
 python3 "$ROOT/tests/test_hapi_hub_session.py" -v
 
-echo "[8/12] graph validator rejects broken dependencies and write conflicts"
+echo "[8/13] graph validator rejects broken dependencies and write conflicts"
 cat > "$TMP/graph-valid.yaml" <<'YAML'
 version: 1
 nodes:
@@ -429,7 +430,7 @@ if "$ROOT/scripts/validate-graph.py" "$TMP/graph-write-overlap.yaml" \
 fi
 grep -q 'parallel write overlap' "$TMP/graph-write-overlap.out"
 
-echo "[9/12] state validator keeps queue, ledger, Goal, and STATUS atomic"
+echo "[9/13] state validator keeps queue, ledger, Goal, and STATUS atomic"
 mkdir -p "$TMP/state-valid"
 "$ROOT/init.sh" "$TMP/state-valid" > "$TMP/state-init.out"
 mkdir -p "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui"
@@ -963,7 +964,156 @@ if "$ROOT/scripts/validate-state.py" "$TMP/state-frozen-open" \
 fi
 grep -q 'FROZEN requires 开放问题 to be exactly 无' "$TMP/state-frozen-open.out"
 
-echo "[10/12] cleanup is dry-run and archived-only by default"
+echo "[10/13] structured task preparation validates runtime and real worktrees"
+mkdir -p "$TMP/prepare-project"
+git -C "$TMP/prepare-project" init >/dev/null
+git -C "$TMP/prepare-project" checkout -b main >/dev/null
+git -C "$TMP/prepare-project" config user.name "Agent TaskGraph Tests"
+git -C "$TMP/prepare-project" config user.email "tests@example.invalid"
+printf 'baseline\n' > "$TMP/prepare-project/README.md"
+git -C "$TMP/prepare-project" add README.md
+git -C "$TMP/prepare-project" commit -m baseline >/dev/null
+"$ROOT/init.sh" "$TMP/prepare-project" >/dev/null
+PREPARE_HEAD="$(git -C "$TMP/prepare-project" rev-parse HEAD)"
+git -C "$TMP/prepare-project" worktree add -b agent/T1-prepare \
+  "$TMP/prepare-worktree" "$PREPARE_HEAD" >/dev/null
+cat > "$TMP/prepare-project/.agent-taskgraph/PROJECT.md" <<MD
+# Project
+
+| 配置 | 项目选择 |
+|---|---|
+| Agent TaskGraph 协议版本 | 0.8.0-beta.11 |
+| Source baseline | READY: repo=$TMP/prepare-project; HEAD=$PREPARE_HEAD; branch=main; clean |
+| 已启用可选适配器 | 无 |
+| Preferred runtime | codex-native |
+| Preferred machine | local test host |
+
+| Execution profile | Confirmed value |
+|---|---|
+| Execution profile status | CONFIRMED |
+| Runtime choice confirmed by/at | Owner / 2026-08-10T10:00:00Z / test batch / codex-native |
+| Execution profile confirmed by/at | Owner / 2026-08-10T10:00:00Z / test batch |
+| Execution runtime | codex-native |
+| Execution control | host spawn tool |
+| Execution machine | local: host=test.local |
+| Execution flavor | codex |
+| Model selection policy | fixed |
+| Fixed model/effort | model=gpt-5.6-sol; effort=xhigh |
+| Model catalog evidence | test catalog / 2026-08-10T09:59:00Z |
+| Execution permission | yolo |
+| Permission scope | runtime-only |
+| Execution visibility | headless |
+| Execution fallback | none |
+MD
+cat > "$TMP/prepare-project/.agent-taskgraph/spec.md" <<'MD'
+# Spec
+> Status: FROZEN
+> Frozen by: Owner / 2026-08-10
+
+## 开放问题
+
+无
+MD
+cat > "$TMP/prepare-project/.agent-taskgraph/ROLES.md" <<'MD'
+# Roles
+> Team revision: `rev-1`
+
+| Role ID | 名称 | 生命周期 | 状态 | 核心职责 | 当前 Goal | Session ID | 最后更新 |
+|---|---|---|---|---|---|---|---|
+| prepare-worker | Prepare Worker | persistent | reserved | Prepare one output | task:T1-prepare | PENDING | now |
+MD
+mkdir -p "$TMP/prepare-project/.agent-taskgraph/roles/prepare-worker"
+cat > "$TMP/prepare-project/.agent-taskgraph/roles/prepare-worker/ROLE.md" <<'MD'
+# Role
+
+| 字段 | 值 |
+|---|---|
+| Role ID | prepare-worker |
+| Team revision | rev-1 |
+| Origin | initial:graph-r1 |
+| 生命周期 | persistent |
+| 状态 | reserved |
+| 当前 Goal | task:T1-prepare |
+| 当前 Session ID | PENDING |
+MD
+cat > "$TMP/prepare-manifest.json" <<MD
+{
+  "task_id": "T1-prepare",
+  "title": "Prepare one output",
+  "stage": "implementation",
+  "baseline": "$PREPARE_HEAD",
+  "branch": "agent/T1-prepare",
+  "worktree": "$TMP/prepare-worktree",
+  "frozen_spec": ".agent-taskgraph/spec.md revision spec-r1",
+  "graph_node": ".agent-taskgraph/graph.yaml#prepare",
+  "context_revision": "ctx-1",
+  "context_mode": "lean",
+  "context_items": [
+    {"path": ".agent-taskgraph/PROJECT.md", "revision": "profile-r1", "reason": "runtime contract"}
+  ],
+  "role_id": "prepare-worker",
+  "role_lifecycle": "persistent",
+  "role_responsibility": "Prepare one bounded output",
+  "role_continuity": "new role and new session",
+  "runtime_requested": {
+    "runtime": "codex-native",
+    "flavor": "codex",
+    "model": "gpt-5.6-sol",
+    "effort": "xhigh",
+    "permission": "yolo",
+    "visibility": "headless"
+  },
+  "objective": "Create one bounded output.",
+  "needs": ["none"],
+  "consumes": [".agent-taskgraph/spec.md"],
+  "produces": ["docs/output.md"],
+  "writes": ["docs/"],
+  "pass_route": "done",
+  "fail_route": "failed",
+  "max_attempts": 1,
+  "acceptance": ["[ ] output exists"],
+  "frozen": ["Do not edit another scope"],
+  "estimate": "20 minutes"
+}
+MD
+"$ROOT/scripts/prepare-task.py" --project "$TMP/prepare-project" \
+  --manifest "$TMP/prepare-manifest.json" > "$TMP/prepare-task.out"
+assert_file "$TMP/prepare-project/.agent-taskgraph/queue/inbox/T1-prepare/task-manifest.json"
+grep -q '| T1-prepare | Prepare one output | inbox |' \
+  "$TMP/prepare-project/.agent-taskgraph/STATUS.md"
+"$ROOT/scripts/validate-state.py" --phase pre-dispatch "$TMP/prepare-project" \
+  > "$TMP/prepare-state.out"
+cp "$TMP/prepare-project/.agent-taskgraph/PROJECT.md" "$TMP/prepare-project.md"
+sed -i.bak '/Runtime choice confirmed by\/at/d' \
+  "$TMP/prepare-project/.agent-taskgraph/PROJECT.md"
+if "$ROOT/scripts/validate-state.py" --phase pre-dispatch "$TMP/prepare-project" \
+  > "$TMP/prepare-missing-runtime-choice.out" 2>&1; then
+  fail "pre-dispatch validator inferred runtime approval from other settings"
+fi
+grep -q 'Runtime choice confirmed by/at must be explicit' \
+  "$TMP/prepare-missing-runtime-choice.out"
+cp "$TMP/prepare-project.md" "$TMP/prepare-project/.agent-taskgraph/PROJECT.md"
+cp "$TMP/prepare-project/.agent-taskgraph/roles/prepare-worker/ROLE.md" \
+  "$TMP/prepare-role.md"
+sed -i.bak 's/| 状态 | reserved |/| 状态 | assigned |/' \
+  "$TMP/prepare-project/.agent-taskgraph/roles/prepare-worker/ROLE.md"
+if "$ROOT/scripts/validate-state.py" --phase pre-dispatch "$TMP/prepare-project" \
+  > "$TMP/prepare-assigned-too-early.out" 2>&1; then
+  fail "pre-dispatch validator accepted assigned before identity ACK"
+fi
+grep -q 'inbox role must be reserved before spawn' \
+  "$TMP/prepare-assigned-too-early.out"
+cp "$TMP/prepare-role.md" \
+  "$TMP/prepare-project/.agent-taskgraph/roles/prepare-worker/ROLE.md"
+sed -i.bak "s@$TMP/prepare-worktree@$TMP/missing-worktree@" \
+  "$TMP/prepare-project/.agent-taskgraph/queue/inbox/T1-prepare/goal.md"
+if "$ROOT/scripts/validate-state.py" --phase pre-dispatch "$TMP/prepare-project" \
+  > "$TMP/prepare-wrong-worktree.out" 2>&1; then
+  fail "pre-dispatch validator accepted a nonexistent Goal worktree"
+fi
+grep -q 'not a registered Git worktree' "$TMP/prepare-wrong-worktree.out"
+
+echo "[11/13] cleanup is dry-run and archived-only by default"
 mkdir -p "$TMP/home-logs/.codex/archived_sessions" "$TMP/home-logs/.codex/sessions" "$TMP/home-logs/.hapi/logs"
 touch "$TMP/home-logs/.codex/archived_sessions/old.jsonl" \
   "$TMP/home-logs/.codex/sessions/live.jsonl" "$TMP/home-logs/.hapi/logs/live.log"
@@ -991,14 +1141,14 @@ HOME="$TMP/home-logs" "$ROOT/workers/log-cleanup.sh" --days 1 --include-live --a
 [ ! -e "$TMP/home-logs/.codex/sessions/live.jsonl" ] || fail "explicit live cleanup missed Codex log"
 [ ! -e "$TMP/home-logs/.hapi/logs/live.log" ] || fail "explicit live cleanup missed HAPI log"
 
-echo "[11/12] skill metadata, templates, links, version, license, and graph YAML"
+echo "[12/13] skill metadata, templates, links, version, license, and graph YAML"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import re
 import sys
 
 root = Path(sys.argv[1])
-assert (root / "VERSION").read_text().strip() == "0.8.0-beta.10"
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.11"
 assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
@@ -1040,7 +1190,7 @@ if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git -C "$ROOT" diff --check
 fi
 
-echo "[12/12] platform plugin package and marketplace catalog"
+echo "[13/13] platform plugin package and marketplace catalog"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import json
@@ -1066,6 +1216,7 @@ required = (
     "skills/agent-taskgraph/scripts/check-update.sh",
     "skills/agent-taskgraph/scripts/hapi-hub-session.py",
     "skills/agent-taskgraph/scripts/open-worker-terminal.sh",
+    "skills/agent-taskgraph/scripts/prepare-task.py",
     "skills/agent-taskgraph/scripts/render-dispatch.py",
     "skills/agent-taskgraph/scripts/validate-graph.py",
     "skills/agent-taskgraph/scripts/validate-state.py",
@@ -1076,6 +1227,7 @@ required = (
     "skills/agent-taskgraph/templates/dispatch.md",
     "skills/agent-taskgraph/templates/role.md",
     "skills/agent-taskgraph/templates/staffing-change.md",
+    "skills/agent-taskgraph/templates/task-manifest.json",
     "skills/agent-taskgraph/workers/parse-worker-log.py",
 )
 for relative in required:
@@ -1098,6 +1250,7 @@ for relative in (
     "scripts/check-update.sh",
     "scripts/hapi-hub-session.py",
     "scripts/open-worker-terminal.sh",
+    "scripts/prepare-task.py",
     "scripts/render-dispatch.py",
     "scripts/validate-graph.py",
     "scripts/validate-state.py",
@@ -1116,6 +1269,7 @@ for relative in (
     "templates/report.md",
     "templates/role.md",
     "templates/staffing-change.md",
+    "templates/task-manifest.json",
     "workers/log-cleanup.sh",
     "workers/parse-worker-log.py",
     "workers/watch-worker.sh",

@@ -6,7 +6,7 @@
 
 **Spec-first graph orchestration for AI coding agents.**
 
-Source version: [`v0.8.0-beta.10`](VERSION) | Latest published release: `v0.8.0-beta.10` | License: [Apache-2.0](LICENSE)
+Source version: [`v0.8.0-beta.11`](VERSION) | Latest published release: `v0.8.0-beta.11` | License: [Apache-2.0](LICENSE)
 
 > **Public Beta** for users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
 
@@ -144,7 +144,7 @@ Report confirmed facts, explicit inferences, and decisions only I can make.
 Do not dispatch work until I approve PROJECT.md.
 ```
 
-On first use, the agent inspects the stack, directories, Git baseline, build and test commands, shared files, and runtime capabilities. It then presents one plain-language **Execution profile** covering runtime/machine, model policy, permission, visibility, and fallback; it does not make the owner answer internal settings worker by worker. The confirmed profile is stored in `.agent-taskgraph/PROJECT.md`, and no session can be created while its status is not `CONFIRMED`. Complex work also requires a reproducible Git baseline and isolated worktrees.
+On first use, the agent inspects the stack, directories, Git baseline, build and test commands, shared files, and runtime capabilities. It then presents one plain-language **Execution profile** covering runtime/machine, model policy, permission, visibility, and fallback; it does not make the owner answer internal settings worker by worker. Runtime is an independent choice: approving a model, effort, yolo, or "start" never silently selects native instead of HAPI. A saved preferred runtime changes recommendation order but is not launch authorization. The confirmed profile is stored in `.agent-taskgraph/PROJECT.md`, and no session can be created while its status is not `CONFIRMED`. Complex work also requires a reproducible Git baseline and isolated worktrees.
 
 The default model policy is `adaptive-batch`: the agent recommends combinations from the selected machine's real model catalog, then shows and confirms the whole dispatch batch once. `per-worker` asks individually only when the owner selects it; `fixed` records one concrete combination. A Goal never uses `default/auto` as a substitute for an explicit model or reasoning effort.
 
@@ -353,7 +353,7 @@ This is primarily a **delivery task graph**, not a code knowledge graph. A futur
 
 Agent TaskGraph separates a durable **Role** from a one-off **Goal**. A Role records a worker's long-term responsibility, boundaries, capabilities, current session, and handoff history in `roles/<role-id>/ROLE.md`. A Goal records only the scope and acceptance contract for one task. This lets a frontend, backend, data, research, or reporting worker keep responsibility across sequential tasks without relying on chat memory.
 
-Persistent roles move between `available`, `assigned`, `paused`, and `retired`; one persistent role cannot own two active/review Goals concurrently. Related sequential work should reuse the role and, when healthy, its session. Parallel work needs separate roles with non-overlapping writes. Reviewers are normally task-scoped independent roles and never reuse the author role.
+Persistent roles move between `available`, `reserved`, `assigned`, `paused`, and `retired`; one persistent role cannot own two inbox/active/review Goals concurrently. `reserved` means a Goal is prepared but its session identity is not verified yet. Related sequential work should reuse the role and, when healthy, its session. Parallel work needs separate roles with non-overlapping writes. Reviewers are normally task-scoped independent roles and never reuse the author role.
 
 Every new, reused, or replacement worker session receives a generated Role bootstrap before implementation. It names the exact Role profile, lifecycle, Team revision, Goal, Context revision, and continuity checkpoint without copying the full project history. The worker must return the matching `IDENTITY_READY` line; a bare worker name, stale revision, copied ACK, or missing message/log evidence cannot enter `active`. The durable identity lives in files, so a long-lived Role can move to a fresh session without replaying its entire chat.
 
@@ -419,7 +419,7 @@ Never store API keys, account credentials, private keys, or user data in these f
 
 Agent TaskGraph cannot promise an exact token count when a runtime does not expose one. It does enforce auditable context behavior:
 
-- Every active/review Goal has a `context.md` that references source files and revisions instead of copying them.
+- Every inbox/active/review Goal has a `context.md` that references source files and revisions instead of copying them.
 - The default required-reading set is at most eight items. Larger sets require a documented exception or a smaller Goal.
 - Workers load the project sections, Role, frozen spec, current graph node, Goal, ledger, and direct dependencies they actually need. Everything else is searched first and read in a narrow range.
 - Owner and worker messages carry deltas, stable references, and evidence paths. Full history, unrelated chats, archives, and long logs are not retransmitted.
@@ -491,7 +491,7 @@ Keep GitHub as the canonical source and point every other listing to a tag or co
 | Channel | Availability | Recommended use |
 |---|---|---|
 | GitHub repository | Public Beta | Canonical source, issues, reviews, and contributor history |
-| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | `v0.8.0-beta.10` published | Versioned archives, release notes, and the full demo video |
+| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | `v0.8.0-beta.11` published | Versioned archives, release notes, and the full demo video |
 | Codex / Claude Code local install | Available now | `./install.sh` links this checkout into `~/.codex/skills/agent-taskgraph` and `~/.claude/skills/agent-taskgraph` |
 | Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |
 | [skills.sh](https://skills.sh) | CLI-compatible; directory listing is third-party | Install with `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`; keep GitHub as the source of truth |
@@ -537,6 +537,7 @@ These are maintainer/PMO commands run from the Skill checkout. Normal owners can
 | `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | Preview a native Claude/Codex worker command with a stable queue Goal ref |
 | `./scripts/open-worker-terminal.sh ...` | Open and verify one worker in a visible macOS Terminal.app window |
 | `./scripts/render-dispatch.py --project <dir> --goal task:<id>` | Validate `dispatch.md` and render the same Role bootstrap for native, HAPI, or host-thread delivery |
+| `./scripts/prepare-task.py --project <dir> --manifest <json>` | Atomically generate schema-stable inbox files, register preparing status, and run the pre-dispatch gate |
 | `./scripts/hapi-hub-session.py machines` | List online runners safely even when the saved default machine ID is stale |
 | `./scripts/hapi-hub-session.py probe [--machine-id <id>]` | Authenticate without printing credentials and select an online HAPI runner |
 | `./scripts/hapi-hub-session.py catalog --flavor <claude\|codex>` | Read models, efforts, and permissions proven available on the selected runner |
@@ -546,6 +547,7 @@ These are maintainer/PMO commands run from the Skill checkout. Normal owners can
 | `./scripts/verify-hapi-session.py ... --json` | Diagnose/audit legacy HAPI logs; it does not replace the current Hub evidence gate |
 | `./scripts/validate-graph.py <graph.yaml>` | Reject unknown dependencies, dynamic Goal paths, missing producer ancestry, cycles, and parallel write conflicts |
 | `./scripts/validate-state.py <project>` | Verify queue state, baseline, Frozen questions, requested/observed runtime settings, evidence, and STATUS agree |
+| `./scripts/validate-state.py --phase pre-dispatch <project>` | Before spawn, require reserved roles, explicit runtime choice, pending identity state, and a clean registered Git worktree |
 | `./workers/watch-worker.sh <log>` | Compact Codex JSONL or HAPI text logs into progress events |
 | `./workers/log-cleanup.sh` | Dry-run archived Codex logs older than 30 days |
 | `./workers/log-cleanup.sh --apply` | Delete the archived candidates just listed |
@@ -558,9 +560,10 @@ Live directories are scanned only with `--include-live`; deletion occurs only wi
 
 - The skill probes the current environment; it does not assume every Codex exposes `create_thread`, `wait_threads`, or similar tools.
 - Visible, owner-controllable sessions are preferred when available. Use Claude native commands (`claude`, `claude --bg`, `claude agents`, or `claude -p`) for Claude Code and Codex native commands (`codex`, `codex exec`, or `codex resume`) for Codex. Missing capabilities require an explicit fallback, not a fictional reviewer.
-- The public default is `auto + native-first` with no optional adapter enabled. HAPI support ships as an [opt-in runtime adapter](references/hapi-runtime.md): detection may be reported during onboarding, but it is not loaded or activated until the owner selects it in `PROJECT.md`.
+- No runtime is silently selected. The PMO lists the real native and optional adapter paths; a saved preference may be recommended first, but the owner explicitly chooses HAPI, Claude native, or Codex native. HAPI support ships as an [opt-in runtime adapter](references/hapi-runtime.md) and is loaded only after that choice.
 - HAPI selection separates the owner control device, PMO execution host, and runner machine. A missing local CLI or an MCP that exposes only `inspect_peer`/`ping_peer` does not prove HAPI spawning is unavailable; the PMO probes `scripts/hapi-hub-session.py` before considering a confirmed fallback. The helper reads credentials privately and must never be replaced with an inline token-bearing `curl` command.
-- Onboarding confirms one Execution profile. Before every batch, the owner then sees each Role ID, durable responsibility, one-off Goal, reuse plan, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands; the whole table is confirmed once unless per-worker mode was chosen. Graph approval alone is not session authorization.
+- Onboarding confirms one Execution profile with separate runtime-choice evidence. Before every batch, the owner then sees each Role ID, durable responsibility, one-off Goal, reuse plan, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands; the whole table is confirmed once unless per-worker mode was chosen. Graph approval alone is not session authorization.
+- Before spawn, structured task manifests generate Goal/ledger/context/dispatch files and a pre-dispatch validator checks exact fields, the reserved Role, requested runtime, branch, baseline, and real registered worktree. `STATUS.md` exposes inbox preparation; five minutes without the first session is a reportable dispatch failure.
 - A spawned session stays in `inbox` until its observed model, effort, permission, workspace, identity, idle state, and process evidence match that preview. It then receives a revision-bound Role bootstrap and must return an exact `IDENTITY_READY` with real message/log evidence. Reused sessions require both fresh runtime evidence and a fresh Dispatch ID/ACK bound to the new Goal. API request fields, a returned session ID, a worker display name, or old evidence are not proof that this dispatch is valid.
 - On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Queue work uses `--goal task:<id>` so inbox/active moves do not invalidate the command. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
 - Platform-standard permissions are the default and retain runtime prompts. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project. The authorization scope is recorded as `runtime-only` or `all-approved-runtimes`; only the latter can carry the same approved policy into a fallback without asking again.
