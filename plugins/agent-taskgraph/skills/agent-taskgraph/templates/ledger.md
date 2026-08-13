@@ -17,6 +17,7 @@
 | Reviewer Role profile | <active 前写 PENDING；review/done 写 roles/<reviewer-role-id>/ROLE.md> |
 | Frozen spec | <spec.md 路径 + revision> |
 | Graph node | <graph.yaml#node-id；快速任务写“不适用”> |
+| 编排模式 | <lite / governed> |
 | 依赖/路由 | needs: <node-id>；PASS → <node-id/done>；FAIL → <node-id/failed> |
 | 状态 | <inbox / active / review / done / failed 中唯一当前值> |
 | 负责人 | <会话 ID / 岗位名> |
@@ -25,6 +26,10 @@
 | 开始时间 | |
 | 最后更新 | |
 | 验收结果 | ✅ / ❌（附命令输出） |
+| Failure class | <PENDING / PRODUCT_FAIL / HARNESS_INVALID / DISPATCH_INVALID / RUNTIME_INVALID / OWNER_DECISION> |
+| Failure boundary | <稳定失败边界 ID；INVALID 原地重跑，不新建 Goal> |
+| Harness attempt | <0；只对 HARNESS_INVALID 递增> |
+| Batch approved at | <ISO-8601；Lite/已批准派发时间> |
 | 日志指针 | <当前运行时的会话日志、rollout JSONL、Terminal metadata 或等价证据路径——watch 监视器的输入> |
 | Runtime requested | runtime=<Execution profile runtime>; flavor=<claude/codex>; model=<批次确认且目录中存在的准确 id>; effort=<该模型支持的明确 level>; permission=<准确 mode>; visibility=<visible/headless> |
 | Runtime observed | runtime=<name>; flavor=<claude/codex/native>; model=<id>; effort=<level>; permission=<mode>; visibility=<visible/headless> |

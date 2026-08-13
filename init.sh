@@ -6,13 +6,15 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 TARGET="."
 TARGET_SET=0
 MIGRATE=0
+LEGACY_QUEUE=0
 
 usage() {
   cat <<'EOF'
-Usage: ./init.sh [--migrate] [project-directory]
+Usage: ./init.sh [--migrate] [--legacy-queue] [project-directory]
 
   --migrate  Rename an existing .agent-queue instance to .agent-taskgraph.
              Refuses to run when both directories already exist.
+  --legacy-queue  Also install the pre-beta.15 queue/role/ledger compatibility layout.
 EOF
 }
 
@@ -20,6 +22,9 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --migrate)
       MIGRATE=1
+      ;;
+    --legacy-queue)
+      LEGACY_QUEUE=1
       ;;
     -h|--help)
       usage
@@ -93,30 +98,39 @@ touch_if_missing() {
 }
 
 mkdir -p \
-  "$INSTANCE/templates" \
-  "$INSTANCE/roles" \
-  "$INSTANCE/staffing" \
-  "$INSTANCE/queue/inbox" \
-  "$INSTANCE/queue/active" \
-  "$INSTANCE/queue/review" \
-  "$INSTANCE/queue/done" \
-  "$INSTANCE/queue/failed" \
+  "$INSTANCE/tasks" \
   "$INSTANCE/archive"
 
 install_if_missing "$SRC/templates/PROJECT.md" "$INSTANCE/PROJECT.md"
+install_if_missing "$SRC/templates/PLAN.md" "$INSTANCE/PLAN.md"
+install_if_missing "$SRC/templates/TEAM.md" "$INSTANCE/TEAM.md"
 install_if_missing "$SRC/templates/STATUS.md" "$INSTANCE/STATUS.md"
 install_if_missing "$SRC/templates/DECISIONS.md" "$INSTANCE/DECISIONS.md"
-install_if_missing "$SRC/templates/ROLES.md" "$INSTANCE/ROLES.md"
+install_if_missing "$SRC/templates/task.md" "$INSTANCE/tasks/TEMPLATE.md"
 
-for name in spec.md graph.yaml goal.md ledger.md report.md role.md context.md dispatch.md staffing-change.md task-manifest.json; do
-  install_if_missing "$SRC/templates/$name" "$INSTANCE/templates/$name"
-done
+if [ "$LEGACY_QUEUE" -eq 1 ]; then
+  mkdir -p \
+    "$INSTANCE/templates" \
+    "$INSTANCE/roles" \
+    "$INSTANCE/staffing" \
+    "$INSTANCE/queue/inbox" \
+    "$INSTANCE/queue/active" \
+    "$INSTANCE/queue/review" \
+    "$INSTANCE/queue/done" \
+    "$INSTANCE/queue/failed"
+  install_if_missing "$SRC/templates/ROLES.md" "$INSTANCE/ROLES.md"
+  for name in spec.md graph.yaml goal.md ledger.md report.md role.md context.md dispatch.md staffing-change.md task-manifest.json; do
+    install_if_missing "$SRC/templates/$name" "$INSTANCE/templates/$name"
+  done
+  for state in inbox active review done failed; do
+    touch_if_missing "$INSTANCE/queue/$state/.gitkeep"
+  done
+fi
 
-for state in inbox active review done failed; do
-  touch_if_missing "$INSTANCE/queue/$state/.gitkeep"
-done
+touch_if_missing "$INSTANCE/tasks/.gitkeep"
 touch_if_missing "$INSTANCE/archive/.gitkeep"
 
 echo
 echo "agent-taskgraph initialized at $INSTANCE"
-echo "Existing files were preserved. Ask the agent to analyze the project and fill PROJECT.md."
+echo "Native Codex/Claude team state is ready. Existing files were preserved."
+echo "Ask the agent to analyze the project and fill PROJECT.md; use --legacy-queue only for compatibility tests."

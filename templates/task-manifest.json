@@ -1,6 +1,7 @@
 {
   "task_id": "T1-example",
   "title": "One independently verifiable outcome",
+  "orchestration_mode": "lite",
   "stage": "implementation",
   "baseline": "FULL_40_CHARACTER_GIT_REVISION",
   "branch": "agent/t1-example",
@@ -44,6 +45,7 @@
   "pass_route": "verify-example",
   "fail_route": "failed",
   "max_attempts": 2,
+  "failure_policy": "PRODUCT_FAIL returns to worker; HARNESS_INVALID reuses reviewer; DISPATCH_INVALID/RUNTIME_INVALID repair control plane in place",
   "acceptance": [
     "[ ] Run the Goal-specific verification command",
     "[ ] Record the evidence path and source revision"

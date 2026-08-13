@@ -1,7 +1,7 @@
 {
   "name": "agent-taskgraph",
-  "version": "0.8.0-beta.11",
-  "description": "Spec-first graph orchestration for complex AI coding work in Codex.",
+  "version": "0.8.0-beta.15",
+  "description": "Native Codex multi-session orchestration with isolated Agent contexts and document handoffs.",
   "author": {
     "name": "wu736139669"
   },
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Agent TaskGraph",
     "shortDescription": "Plan and verify complex AI coding work.",
-    "longDescription": "Agent TaskGraph turns complex coding requests into a clarified specification, approved task graph, verified worker work, and human-owned gates.",
+    "longDescription": "Agent TaskGraph keeps the current session as PMO, starts native Agent sessions only when useful, limits each Agent to its own context, and verifies document-based handoffs.",
     "developerName": "wu736139669",
     "category": "Developer Tools",
     "capabilities": [],

@@ -9,8 +9,9 @@
 1. `PROJECT.md` 的 Execution profile 定义 Owner 已批准的边界。
 2. 每批派发预览为具体 Goal 选择明确 model/effort。
 3. runtime evidence 证明会话实际配置与前两者一致。
+4. monitoring profile 把 wait、observe 和 targets 绑定到同一个 runtime/control。
 
-三者不一致时停止派发，不能用逐次点击权限、事后改设置或复制旧证据继续。
+这些合同不一致时停止派发，不能用逐次点击权限、事后改设置、复制旧证据或切换不兼容 wait 工具继续。
 
 ## 一次确认协议
 
@@ -22,6 +23,7 @@ PMO 先只读探测，再用一张短表让 Owner 一次确认以下内容：
 | 模型由 AI 按任务推荐、固定，还是逐个选择 | model selection policy |
 | 标准询问、自动接受编辑，还是 yolo | exact permission + scope |
 | 首选路径失败怎么办 | exact fallback |
+| 怎样等待、检查哪些会话 | monitoring wait primitive + observe primitive + target evidence |
 
 不要逐项连续追问，也不要让普通用户输入 adapter ID、machine UUID 或 CLI flags。AI 只展示探测后真实存在的选项，并把普通语言选择映射为准确字段。runtime 必须由 Owner 明确选择；模型、effort、权限或 yolo 的确认不能代替 runtime 选择。PROJECT 的 Preferred runtime 只改变推荐顺序。推荐默认是 `adaptive-batch + 每批一次确认`；只有 Owner 明确选择 `per-worker` 才逐个确认模型。
 
@@ -37,6 +39,19 @@ PMO 先只读探测，再用一张短表让 Owner 一次确认以下内容：
 - 原生 runtime：优先使用宿主/CLI 的真实模型目录能力。若无法发现目录，只能复用已观察到的明确模型组合，或让 Owner 明确指定并在 spawn 后验证；不得编造可用列表。
 
 模型 ID 必须原样传递。方括号属于 ID，例如 `deepseek-v4-flash[1m]`；缺少右括号、shell 展开后的值或 UI 标签都不是同一个模型。
+
+## 监控配置
+
+PMO 宿主与 worker runtime 是两件事。监控配置以 worker/control 为准：
+
+| runtime/control | Wait | Observe |
+|---|---|---|
+| native `spawn_agent` | `wait_agent` | agent tree + ledger/log |
+| native thread | `wait_threads` | list/read thread + ledger |
+| HAPI | HAPI event；周期兜底用 timer-cell + `functions.wait(real cell_id)` | `inspect_peer`/session metadata/log + ledger |
+| CLI/Terminal | owned timer/process wait | PID/log + ledger |
+
+`wait_agent` 不认识独立 HAPI peer，`wait_threads` 不认识 HAPI session ID。`functions.wait` 不能独立创建 timer，只能恢复刚由本会话启动并返回真实 `cell_id` 的 timer/observe cell。误路由时保留同一 runtime，修复 monitoring profile；不能为了得到某种 UI 卡片静默换工具。
 
 ## 模型策略
 

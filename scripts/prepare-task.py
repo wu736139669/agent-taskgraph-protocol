@@ -14,6 +14,7 @@ from pathlib import Path
 
 TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 RUNTIME_KEYS = ("runtime", "flavor", "model", "effort", "permission", "visibility")
+ORCHESTRATION_MODES = {"lite", "governed"}
 
 
 class PrepareError(RuntimeError):
@@ -126,6 +127,7 @@ def render_files(data, team_revision, worktree):
         "goal=task:{} context_revision={}"
     ).format(dispatch_id, role_ref, team_revision, task_id, context_revision)
     runtime = runtime_string(data["runtime_requested"])
+    orchestration_mode = data["orchestration_mode"]
     route = "needs: {}; PASS -> {}; FAIL -> {}; max_attempts={}".format(
         ", ".join(data["needs"]),
         data["pass_route"],
@@ -146,6 +148,7 @@ def render_files(data, team_revision, worktree):
 > Context manifest: {tick}context.md{tick}
 > Context revision: {tick}{context_revision}{tick}
 > Legal terminal: **{task_id} candidate ready** 或 **{task_id} redesign required: <最早失败边界>**
+> Orchestration mode: {orchestration_mode}
 
 ## Objective
 
@@ -158,6 +161,7 @@ def render_files(data, team_revision, worktree):
 - 必须产出（produces）：{produces}
 - 唯一写入范围（writes）：{writes}
 - 路由：PASS -> {pass_route}；FAIL -> {fail_route}；最大尝试 {max_attempts}
+- 失败策略：{failure_policy}
 
 ## 分配记录
 
@@ -206,6 +210,7 @@ def render_files(data, team_revision, worktree):
             "now": now,
             "worktree": worktree,
             "runtime": runtime,
+            "orchestration_mode": orchestration_mode,
             "role_ref": role_ref,
             "lifecycle": lifecycle,
             "acceptance": markdown_list(data["acceptance"]),
@@ -235,6 +240,7 @@ def render_files(data, team_revision, worktree):
 | Reviewer Role profile | PENDING |
 | Frozen spec | {frozen_spec} |
 | Graph node | {graph_node} |
+| 编排模式 | {orchestration_mode} |
 | 依赖/路由 | {route} |
 | 状态 | inbox |
 | 负责人 | {role_id} |
@@ -243,6 +249,10 @@ def render_files(data, team_revision, worktree):
 | 开始时间 | {now} |
 | 最后更新 | {now} |
 | 验收结果 | PENDING |
+| Failure class | PENDING |
+| Failure boundary | {task_id} |
+| Harness attempt | 0 |
+| Batch approved at | {now} |
 | 日志指针 | PENDING |
 | Runtime requested | {runtime} |
 | Runtime observed | PENDING |
@@ -275,6 +285,7 @@ Prepared from task-manifest.json. Do not hand-edit field names.
         route=route,
         now=now,
         runtime=runtime,
+        orchestration_mode=orchestration_mode,
     )
 
     context_rows = "\n".join(
@@ -373,9 +384,18 @@ def load_manifest(path):
         raise PrepareError("cannot read manifest: {}".format(exc)) from exc
     if not isinstance(data, dict):
         raise PrepareError("manifest root must be an object")
+    # Older beta manifests remain usable; new tasks are rendered with explicit
+    # defaults so the failure policy cannot disappear from the ledger.
+    data.setdefault("orchestration_mode", "lite")
+    data.setdefault(
+        "failure_policy",
+        "PRODUCT_FAIL returns to worker; HARNESS_INVALID reuses reviewer; "
+        "DISPATCH_INVALID/RUNTIME_INVALID repair control plane in place",
+    )
     for key in (
         "task_id",
         "title",
+        "orchestration_mode",
         "stage",
         "baseline",
         "branch",
@@ -391,6 +411,7 @@ def load_manifest(path):
         "objective",
         "pass_route",
         "fail_route",
+        "failure_policy",
         "estimate",
     ):
         required(data, key)
@@ -409,6 +430,8 @@ def load_manifest(path):
         raise PrepareError("context_mode must be lean, balanced, or deep")
     if data["role_lifecycle"] not in {"persistent", "task-scoped"}:
         raise PrepareError("role_lifecycle must be persistent or task-scoped")
+    if data["orchestration_mode"] not in ORCHESTRATION_MODES:
+        raise PrepareError("orchestration_mode must be lite or governed")
     if not isinstance(data.get("max_attempts"), int) or data["max_attempts"] < 1:
         raise PrepareError("max_attempts must be a positive integer")
     if not TASK_ID.fullmatch(data["task_id"]):
@@ -421,6 +444,24 @@ def prepare(project, manifest_path):
     instance = project / ".agent-taskgraph"
     if not instance.is_dir():
         raise PrepareError("project is not initialized with .agent-taskgraph")
+    health_script = Path(__file__).with_name("check-operational-health.py")
+    health = subprocess.run(
+        [str(health_script), str(project), "--json"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if health.returncode:
+        try:
+            details = json.loads(health.stdout)
+            reason = "; ".join(details.get("reasons", []))
+        except (json.JSONDecodeError, TypeError):
+            reason = health.stderr.strip() or health.stdout.strip()
+        raise PrepareError(
+            "operational health is CIRCUIT_OPEN; no new task may be prepared{}".format(
+                ": " + reason if reason else ""
+            )
+        )
     data = load_manifest(manifest_path)
     baseline = required(data, "baseline")
     if not re.fullmatch(r"[0-9a-fA-F]{40}", baseline):

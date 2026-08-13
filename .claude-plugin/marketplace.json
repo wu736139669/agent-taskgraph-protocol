@@ -8,8 +8,8 @@
     {
       "name": "agent-taskgraph",
       "source": "./plugins/agent-taskgraph",
-      "description": "Spec-first graph orchestration for complex AI coding work.",
-      "version": "0.8.0-beta.11",
+      "description": "Native Codex and Claude Code multi-session orchestration with isolated Agent contexts and document handoffs.",
+      "version": "0.8.0-beta.15",
       "license": "Apache-2.0"
     }
   ]

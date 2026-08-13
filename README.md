@@ -1,73 +1,29 @@
-![Agent TaskGraph Protocol](promo/agent-taskgraph-hero.svg)
+![Agent TaskGraph](promo/agent-taskgraph-hero.svg)
 
 [English](README.md) | [中文](README.zh-CN.md)
 
 # Agent TaskGraph Protocol
 
-**Spec-first graph orchestration for AI coding agents.**
+**Native multi-session task orchestration for Codex and Claude Code.**
 
-Source version: [`v0.8.0-beta.11`](VERSION) | Latest published release: `v0.8.0-beta.11` | License: [Apache-2.0](LICENSE)
+Source version: [`v0.8.0-beta.15`](VERSION) | License: [Apache-2.0](LICENSE)
 
-> **Public Beta** for users who already work with Claude Code or Codex. Agent TaskGraph Protocol is currently a protocol-first AI coding orchestration skill, not an unattended queue service or a stable v1.0 runtime.
+Agent TaskGraph is a lightweight graph-engineering protocol for complex AI coding. The current Codex or Claude Code session acts as the **PMO**: it understands the request, asks only the decisions that cannot be inferred from the repository, creates a small task graph, starts native Agent sessions when parallel work is real, and verifies the result.
 
-Agent TaskGraph Protocol is not about opening more agents. It is about making complex AI coding understandable, controlled, verifiable, and recoverable.
+It is a protocol and skill, not a hosted scheduler. HAPI is an optional adapter for users who explicitly need cross-machine control. It is disabled in the normal workflow.
 
-<p align="center">
-  <a href="https://github.com/wu736139669/agent-taskgraph-protocol/releases/download/v0.8.0-beta.10/agent-taskgraph-demo.mp4">
-    <img src="promo/agent-taskgraph-demo.gif" alt="Agent TaskGraph turns a vague request into a frozen specification, task graph, durable worker roles, verified sessions, and an independent review gate." width="640">
-  </a>
-</p>
+## What It Solves
 
-<p align="center">
-  <strong>30-second protocol walkthrough</strong><br>
-  <a href="https://github.com/wu736139669/agent-taskgraph-protocol/releases/download/v0.8.0-beta.10/agent-taskgraph-demo.mp4">Watch or download the full-quality MP4</a>
-</p>
-
-- Clear, low-risk work keeps the single-agent fast path.
-- Complex, vague, or high-impact work starts with repository discovery and owner clarification, then freezes a specification and task graph.
-- Workers execute in isolated worktrees; reviewers verify from independent context.
-- Specifications, topology, state, and evidence live in project files instead of one chat's memory.
-
-**One sentence can start intake. It does not automatically authorize complex implementation.**
-
-## Who It Is For
-
-| Good fit | Not yet a good fit |
-|---|---|
-| Claude Code or Codex users delegating complex work to multiple agents | Anyone expecting an unattended scheduler immediately after install |
-| Multiple requirements, cross-module features, refactors, or release preparation | A one-off completion or tiny single-file edit |
-| Teams that need explicit scope, parallel boundaries, evidence, and recovery | Work where every unanswered product question should be guessed silently |
-| Owners who retain gates for migrations, deletion, permissions, merge, and release | Treating prompts, worktrees, or reviewers as a security sandbox |
-
-## Contents
-
-- [Quick Start](#quick-start)
-- [Five Common Workflows](#five-common-workflows)
-- [When the Owner Is Asked](#when-the-owner-is-asked)
-- [How Tasks Are Triaged](#how-tasks-are-triaged)
-- [Graph Engineering](#graph-engineering-for-ai-coding)
-- [Checking Progress](#checking-progress)
-- [Context Efficiency](#context-efficiency)
-- [Install, Update, and Uninstall](#install-update-and-uninstall)
-- [Version and Update Notices](#version-and-update-notices)
-- [Distribution Channels](#distribution-channels)
-- [Public Beta Feedback](#public-beta-feedback)
-- [Helper Commands](#helper-commands)
-- [FAQ](#faq)
-- [License](#license)
-- [Beta Boundaries](#beta-boundaries)
+- Complex requests are clarified before implementation starts.
+- Each worker is a separate native Codex thread or Claude Code session with its own context.
+- Workers receive one role, one task, one write boundary, and a short context contract.
+- Workers hand off through project documents, not copied chat history.
+- The PMO owns planning, dispatch, supervision, integration, acceptance, and the user report.
+- Small tasks stay in the current session, so multi-agent overhead is not added without benefit.
 
 ## Quick Start
 
-### 0. Prerequisites
-
-- Git
-- Bash
-- Python 3
-- A working Claude Code or Codex installation
-- Optional network access for update checks
-
-### 1. Clone and install
+### Install
 
 ```bash
 git clone https://github.com/wu736139669/agent-taskgraph-protocol.git
@@ -76,575 +32,115 @@ cd agent-taskgraph-protocol
 ./install.sh --status
 ```
 
-The installer safely links the same checkout into:
+The installer links the skill into both supported hosts:
 
 - Claude Code: `~/.claude/skills/agent-taskgraph`
 - Codex: `~/.codex/skills/agent-taskgraph`
 
-Existing paths are refused by default. Do not begin with `--force`; inspect the conflict with `--status` first.
+Existing non-symlink paths are refused. Use `./install.sh --check-update` to check the configured remote without changing files.
 
-`--status` is local-only. Run `./install.sh --check-update` when you want to check the configured Git remote; the check never changes the working tree, pulls, or merges code.
-
-### 2. Initialize the target project
-
-From the Agent TaskGraph Protocol checkout:
+### Initialize a project
 
 ```bash
 ./init.sh /path/to/your-project
 ```
 
-Or from the target project through the installed Codex link:
-
-```bash
-cd /path/to/your-project
-~/.codex/skills/agent-taskgraph/init.sh .
-```
-
-Use `.claude` instead of `.codex` for the Claude Code link.
-
-Initialization creates:
+The new lightweight state is:
 
 ```text
-your-project/.agent-taskgraph/
-├── PROJECT.md
-├── ROLES.md
-├── STATUS.md
-├── DECISIONS.md
-├── roles/<role-id>/ROLE.md
-├── staffing/<change-id>.md
-├── templates/
-├── queue/{inbox,active,review,done,failed}/
-└── archive/
+.agent-taskgraph/
+├── PROJECT.md       # stable project facts, commands, constraints
+├── PLAN.md          # current task graph and dependencies
+├── TEAM.md          # durable roles and native session/thread IDs
+├── STATUS.md        # progress, blockers, next action
+├── DECISIONS.md     # owner and PMO decisions
+├── tasks/<id>.md    # one task and handoff per worker
+└── archive/         # completed task records
 ```
 
-Running it again preserves existing files.
+Initialization preserves existing files. Existing beta queue projects can be initialized with the compatibility layout using `./init.sh --legacy-queue <project>`; do not use that option for a new project unless an old validator or migration requires it.
 
-Existing Agent Queue beta projects are never moved implicitly. Review their state, then migrate explicitly:
+### Start the skill
 
-```bash
-./init.sh --migrate /path/to/your-project
-```
-
-When upgrading from beta.7 or earlier, do not rewrite completed historical evidence; the validator keeps read-only compatibility. Before the next active/review Goal, let the agent probe the runtime, add the confirmed Execution profile to `PROJECT.md`, and generate fresh evidence for that Goal. Remaining in `inbox` while the profile is unconfirmed is an intentional guard.
-
-### 3. Start a session in the target project
-
-Open a new Claude Code or Codex session. Normal users do not need to run validator scripts, write Goal paths, or choose internal runtime flags. Use `$agent-taskgraph` where a skill picker is available, or simply say:
+Open Codex or Claude Code in the target project and say:
 
 ```text
-Use agent-taskgraph to help me add team member management.
+Use agent-taskgraph. Understand this project and request first. If parallel work is worthwhile, act as PMO and create native Codex/Claude sessions with separate contexts, shared-document handoffs, and final acceptance. Otherwise finish in the current session. Show me the understanding and team split before starting.
 ```
 
-That one sentence starts intake; it does not skip clarification. For tighter control, you can say:
+That is enough. The PMO reads the repository first, then reports:
 
 ```text
-Use agent-taskgraph for this project.
-First inspect the repository read-only and complete project onboarding.
-Report confirmed facts, explicit inferences, and decisions only I can make.
-Do not dispatch work until I approve PROJECT.md.
+Understanding: ...
+Decisions needed: ... (0-3 blocking questions)
+Plan: current session / PMO + N native Agents
 ```
 
-On first use, the agent inspects the stack, directories, Git baseline, build and test commands, shared files, and runtime capabilities. It then presents one plain-language **Execution profile** covering runtime/machine, model policy, permission, visibility, and fallback; it does not make the owner answer internal settings worker by worker. Runtime is an independent choice: approving a model, effort, yolo, or "start" never silently selects native instead of HAPI. A saved preferred runtime changes recommendation order but is not launch authorization. The confirmed profile is stored in `.agent-taskgraph/PROJECT.md`, and no session can be created while its status is not `CONFIRMED`. Complex work also requires a reproducible Git baseline and isolated worktrees.
+After the user confirms, the PMO creates the sessions and begins dispatch. Users do not need to provide Goal IDs, session IDs, worktree paths, wait commands, or HAPI settings.
 
-The default model policy is `adaptive-batch`: the agent recommends combinations from the selected machine's real model catalog, then shows and confirms the whole dispatch batch once. `per-worker` asks individually only when the owner selects it; `fixed` records one concrete combination. A Goal never uses `default/auto` as a substitute for an explicit model or reasoning effort.
+## How A Batch Works
 
-### 4. Use visible HAPI sessions (optional)
+1. **Discover**: PMO reads project rules, relevant code, tests, and build commands.
+2. **Clarify**: unresolved product or risk decisions are presented with a recommended default.
+3. **Plan**: PMO writes `PROJECT.md`, `PLAN.md`, `TEAM.md`, and one `tasks/<id>.md` per worker.
+4. **Preview**: the user sees each role, responsibility, task, dependencies, model/effort recommendation, permission mode, and write scope once.
+5. **Dispatch**: Codex uses native Agent threads/worktrees; Claude Code uses native subagents or Agent Teams when enabled.
+6. **Handoff**: a worker writes a short result, changed paths, revision/diff, verification, and risks into its task file.
+7. **Accept**: PMO checks the diff and runs the project verification commands. An independent reviewer is added only for risky or cross-module work.
+8. **Report**: PMO updates status, archives completed task files, and summarizes the result to the user.
 
-Choose HAPI in the owner session; normal users should not call the Hub API themselves:
+## Context Isolation
 
-```text
-Use agent-taskgraph for this project and use HAPI for every worker and reviewer.
-Run them on the runner named <machine name>. Before dispatch, show me each role,
-responsibility, model, effort, permission, worktree, and HAPI dry-run preview.
-After I approve, create and verify the sessions automatically. If this MCP only exposes
-inspect/ping, probe the formal HAPI Hub helper; do not ask me to create sessions manually
-unless both the host spawn tool and Hub helper are unavailable.
-```
+Every Agent has an independent conversation context. A worker reads only:
 
-The owner control device, PMO execution host, and HAPI runner can be different machines. The control device does not need a local `hapi` command. The PMO host needs access to configured HAPI settings or equivalent environment variables. The PMO reads the exact machine ID/name/host, discovers that runner's real model/effort catalog, checks the worktree path, and then shows a dry-run. A session remains in `inbox` until its PID, workspace, flavor, model, effort, permission, active/running state, idle/not-thinking state, and zero-message watermark are verified. Brackets are part of a model ID; a missing trailing `]` is rejected before spawn.
+- applicable `AGENTS.md` or `CLAUDE.md`
+- the relevant part of `.agent-taskgraph/PROJECT.md`
+- its own `.agent-taskgraph/tasks/<id>.md`
+- direct dependency handoffs
+- source files found by targeted search
 
-A durable Role may reuse its HAPI session, but never its old evidence. Every new Goal rechecks idle state and actual configuration, then writes a fresh verification ID, `task:<id>`, and message watermark. A thinking session is not redispatched.
-
-When multiple runners are online, name the desired execution machine instead of saying "local." Standard permissions still produce runtime prompts. If yolo is explicitly authorized, also choose whether it is `runtime-only` or applies to `all-approved-runtimes`; Human Gates for deletion, migration, privilege expansion, merge, and release remain in force either way.
-
-### 5. Require visible native worker terminals on macOS
-
-This is optional. Tell the owner session how workers must run before approving `PROJECT.md`:
-
-```text
-Use native Claude CLI for this batch; do not use HAPI.
-Every worker and reviewer must open in a separate visible Terminal.app window.
-Before dispatch, show each role, responsibility, dependency, model, effort,
-permission mode, Goal path, and dry-run command. Wait for my approval before opening any window.
-```
-
-The PMO generates and runs the internal command; the owner does not have to construct it. Nothing opens during the dry-run preview. After the owner approves the graph and the separate dispatch preview, the PMO launches each worker in its own named Terminal window and registers it only after PID verification. Use `plan` for read-only exploration and `acceptEdits` only for an approved implementation Goal. `bypassPermissions` requires both explicit project authorization and `--allow-dangerous`.
-
-## Five Common Workflows
-
-### 1. Small task: use the fast path
-
-```text
-Use agent-taskgraph to fix the disabled state of the login button and add a regression test.
-Acceptance: submission is blocked while required fields are empty, enabled when valid,
-and the existing login flow must still pass.
-```
-
-Expected behavior: after a read-only check, a local, clear, low-risk, indivisible task exits PMO mode and stays with the current coding agent. Multi-agent overhead is not created for its own sake.
-
-### 2. Complex feature: clarify before implementation
-
-```text
-Use agent-taskgraph to add team member management.
-First inspect current users, roles, permissions, data models, and related UI.
-Clarify invitations, removal, role changes, and permission boundaries with me.
-Do not implement until I approve the frozen spec and task graph.
-```
-
-Expected behavior:
-
-1. The agent reads the project before asking questions the code can answer.
-2. It reports confirmed facts, explicit inferences, and owner decisions.
-3. Each round asks only a few blocking questions with recommended defaults and tradeoffs.
-4. Once open questions are resolved, it presents a `spec.md` summary for approval.
-5. After the spec is frozen, it validates and presents a `graph.yaml` summary for approval.
-6. It then shows a dispatch preview: every worker/reviewer, responsibility, dependencies, writes, visible runtime, model, effort, permissions, worktree, and full launch command.
-7. Only after that preview is approved can it open sessions and mark work active.
-
-A complete conversation looks roughly like this:
-
-```text
-Owner: Add team member management. Understand the project before coding.
-
-PMO:
-Confirmed: the project currently has owner/member roles; member data comes from ...;
-the existing settings surface is ...
-Inference: invitations may reuse the email service, but no product rule exists.
-Decisions for you:
-1. Who can invite? Recommendation: owner only, to prevent privilege spread.
-2. Keep or transfer removed members' content? Recommendation: keep it and mark them as left.
-3. Include invitation email copy? Recommendation: yes, without changing notifications.
-
-Owner: Owner only; keep history; include email copy; do not change notifications.
-
-PMO: Here is spec revision 1: <outcome / scope / non-goals / edges / acceptance>.
-Open questions: none. Approve freeze?
-
-Owner: Freeze spec revision 1. Show the graph, but do not execute.
-
-PMO: Graph revision 1 has five nodes: data contract, backend and UI in parallel,
-independent verification, then merge gate. The merge node owns shared writes;
-failures return to the backend or UI repair node. Approve?
-
-Owner: Approve graph revision 1. Show the dispatch preview.
-
-PMO: The graph validator passed. Proposed batch:
-backend-team | persistent backend responsibility | Goal: team API | new visible Claude session | Sonnet/high
-frontend-team | persistent UI responsibility | Goal: team settings | new visible Claude session | Sonnet/high
-review-team-batch-1 | task-scoped independent review | Goal: verify backend+UI | separate visible session | strongest available/high
-I will supervise, reconcile state, and run final acceptance; I will not implement.
-The preview also records dependencies, non-overlapping writes, isolated worktrees,
-standard permissions, and full launch commands. Approve launch?
-
-Owner: Approve this dispatch. Merge still requires my approval.
-```
-
-The point is not to ask exactly three questions. The PMO first uses repository evidence to reduce uncertainty, then asks the owner only for product choices the code cannot answer.
-
-### 3. Multiple requirements: model before parallelizing
-
-```text
-Use agent-taskgraph for these five requirements:
-1. ...
-2. ...
-3. ...
-4. ...
-5. ...
-
-Identify shared files, real dependencies, parallel nodes, and work that must remain serial.
-Show me the spec and graph summary before dispatching anything.
-```
-
-The PMO must not reduce this to “one requirement, one agent.” An edge exists only when downstream work consumes upstream output, and parallel nodes require non-overlapping write scopes.
-
-### 4. Resume after interruption
-
-```text
-Use agent-taskgraph to resume the current batch.
-Read .agent-taskgraph/PROJECT.md, STATUS.md, the frozen spec and graph,
-and active/review ledgers. Reconcile them with current sessions, branches,
-and worktrees. Report differences before dispatching, and do not duplicate finished or running nodes.
-```
-
-The queue and ledgers are the dynamic source of truth. The frozen spec and graph are the static source of truth. Chat and thread status are observation signals only.
-
-### 5. Change scope during execution
-
-```text
-This is a scope change: <new requirement>.
-Pause affected nodes and show a spec/graph diff: retained, invalidated, and new nodes,
-plus cost and risk changes. Do not add it to the running batch until I approve.
-```
-
-New ideas must not silently enter an active Goal.
-
-## When the Owner Is Asked
-
-The agent should discover project facts itself and ask only for choices it cannot infer safely.
-
-| Stage | What the agent presents | What the owner does |
-|---|---|---|
-| First onboarding | Stack, acceptance commands, shared locks, runtime and permission policy | Confirm `PROJECT.md` |
-| Complex clarification | Confirmed facts, inferences, and a few decisions with defaults | Decide behavior or scope |
-| Spec freeze | One-page scope, non-goals, edge cases, acceptance, and open questions | Approve or request revision |
-| Graph approval | Nodes, dependencies, parallel work, writes, failure routes, and gates | Approve before execution |
-| Human Gate | Exact irreversible action, evidence, risk, and rollback | Allow or reject that action |
-| Closeout | Changes, command evidence, reviewer result, and residual risk | Final review or a new batch |
-
-Useful approval phrases:
-
-```text
-I approve the PROJECT.md policy.
-Freeze spec revision 1; there are no open questions. Generate the graph, but do not execute yet.
-I approve graph revision 1. Execute it; each Human Gate still requires separate approval.
-I approve this Human Gate only: <exact action>.
-Stop this batch. Dispatch no new nodes; preserve state and give me recovery instructions.
-```
-
-“Continue” or “use your judgment” is not unlimited authorization for migrations, deletion, elevation, merge, or release.
-
-## How Tasks Are Triaged
-
-| Type | Typical shape | Default path |
-|---|---|---|
-| A. Clear small task | Local, low-risk, reversible, clear acceptance | Current agent implements and self-tests |
-| B. Decomposable goal | One outcome with independently verifiable parts | Freeze spec, build graph, execute in stages |
-| C. Multiple requirements | Several jobs in one repository | Analyze conflicts and dependencies, then graph |
-| D. Mixed batch | Features, fixes, research, and release work together | Classify, then combine into one batch graph |
-
-High ambiguity, architecture sensitivity, permissions, privacy, payment, migration, deletion, or release impact always requires clarification and appropriate Human Gates.
-
-## Graph Engineering for AI Coding
-
-```mermaid
-flowchart LR
-    R[Owner outcome] --> D[Read-only discovery]
-    D --> S[Frozen specification]
-    S --> G[Approved task graph]
-    G --> W1[Worker node]
-    G --> W2[Worker node]
-    W1 --> V[Independent verifier]
-    W2 --> V
-    V -->|pass| H[Human gate / closeout]
-    V -->|fail| F[Smallest repair node]
-    F --> V
-```
-
-- **Task graph**: nodes are independently verifiable jobs; edges are real artifact dependencies.
-- **Ownership graph**: one writer owns each artifact; parallel write scopes cannot overlap.
-- **State graph**: `inbox -> active -> review -> done/failed`.
-- **Evidence graph**: frozen input, artifacts, commands, reviewer, and handoff remain traceable.
-- **Failure graph**: bounded repair returns to the earliest failed boundary.
-- **Human-gate graph**: migrations, deletion, permissions, merge, release, and subjective decisions remain human-owned.
-
-This is primarily a **delivery task graph**, not a code knowledge graph. A future code graph can improve repository discovery, but it cannot replace clarification, ownership, acceptance, or evidence.
+The PMO does not paste its full conversation into worker prompts. Stable facts live in documents; task files stay short. This keeps long projects from repeatedly paying for the same context and makes a worker resumable.
 
 ## Roles
 
-Agent TaskGraph separates a durable **Role** from a one-off **Goal**. A Role records a worker's long-term responsibility, boundaries, capabilities, current session, and handoff history in `roles/<role-id>/ROLE.md`. A Goal records only the scope and acceptance contract for one task. This lets a frontend, backend, data, research, or reporting worker keep responsibility across sequential tasks without relying on chat memory.
+The PMO defines roles from the actual project instead of using a fixed team. Typical roles include frontend, backend, data, test, research, or reviewer. A durable role may be recorded in `TEAM.md` and reused across tasks, but each new task still gets a fresh scope and handoff. No Agent is created without a current task.
 
-Persistent roles move between `available`, `reserved`, `assigned`, `paused`, and `retired`; one persistent role cannot own two inbox/active/review Goals concurrently. `reserved` means a Goal is prepared but its session identity is not verified yet. Related sequential work should reuse the role and, when healthy, its session. Parallel work needs separate roles with non-overlapping writes. Reviewers are normally task-scoped independent roles and never reuse the author role.
+The PMO itself does not implement product code while the team is running. It coordinates, resolves dependencies, reviews evidence, and accepts or rejects work.
 
-Every new, reused, or replacement worker session receives a generated Role bootstrap before implementation. It names the exact Role profile, lifecycle, Team revision, Goal, Context revision, and continuity checkpoint without copying the full project history. The worker must return the matching `IDENTITY_READY` line; a bare worker name, stale revision, copied ACK, or missing message/log evidence cannot enter `active`. The durable identity lives in files, so a long-lived Role can move to a fresh session without replaying its entire chat.
+## Codex And Claude Code
 
-The initial team is proposed only after the spec and graph expose real responsibilities. The PMO shows Role IDs, durable boundaries, current Goals, session reuse, model/effort, permissions, visibility, and concurrency; the owner approves or changes that smallest viable team before any session starts.
+### Codex
 
-Adding people later is a versioned staffing change, not an informal extra agent. The PMO must show evidence of a responsibility gap or critical-path bottleneck, the serial alternative, graph/write-scope changes, added sessions and cost, handoff, and rollback. The owner approves `ADD`, `SPLIT`, `TEMP_AUGMENT`, `REPLACE`, `PAUSE`, or `RETIRE` unless `PROJECT.md` contains an exact applicable pre-authorization. Temporary help is task-scoped by default and retires after its Goal. “More agents might be faster” is not sufficient evidence.
+Use Codex's native subagent/thread capability. In the CLI, `/agent` shows and switches Agent threads. Independent write tasks should use Codex worktrees or non-overlapping paths. Durable recurring roles can be defined in `.codex/agents/` when needed.
 
-| Role | Does | Does not |
-|---|---|---|
-| PMO / Secretary | Onboarding, clarification, spec/graph, dispatch, monitoring, routing, closeout | Write implementation code after multi-agent mode starts |
-| Expert, on demand | Produce product, technical, design, data, or domain contracts | Silently decide owner scope |
-| Worker | Hold a durable responsibility and execute one assigned Goal in an isolated worktree | Change the plan, exceed the Goal, or own concurrent Goals under one persistent role |
-| Reviewer | Independently inspect the diff and rerun acceptance as a task-scoped role | Reuse the author role or repair while reviewing |
-| Owner | Freeze scope, take Human Gates, final review | Manually maintain routine queue state |
+### Claude Code
 
-## Checking Progress
+Use native subagents by default. Claude Agent Teams provide separate interactive sessions and direct team communication when the experimental feature is enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). When Agent Teams are unavailable, the skill uses subagents or the single-session path; it does not silently switch to HAPI.
 
-Ask the PMO:
+If the host cannot create or observe native Agents, the skill clearly falls back to one current session.
 
-```text
-Report the current batch: node status, owner, latest evidence, blocker,
-wait ownership, and the single next action. Use ledgers and current runtime state;
-do not ping every worker just to answer.
-```
+## When To Use One Agent
 
-Or inspect project files directly:
+Stay in the current session for a small bug, one file, one module, sequential work, or work with overlapping write scope. Use multiple sessions only when at least two tasks can proceed independently and be verified independently. More sessions are not automatically better.
 
-```bash
-cat .agent-taskgraph/STATUS.md
-find .agent-taskgraph/queue -mindepth 2 -maxdepth 2 -type d | sort
-```
+## HAPI: Optional Advanced Adapter
 
-States:
+HAPI is not required and is not probed or configured by default. Request it explicitly only for cross-machine control, remote terminals, or a unified external control plane. If HAPI is unavailable or fails, return to native Codex/Claude or the single-session path instead of entering a HAPI recovery loop.
 
-- `inbox`: defined, not dispatched
-- `active`: worker executing
-- `review`: candidate under independent verification
-- `done`: evidence gate passed
-- `failed`: retries exhausted or owner decision required
+## Updates
 
-An `idle` thread or a chat message saying “done” cannot by itself move work to `done`.
-
-## Durable Project State
-
-| File | Purpose | Primary maintainer |
-|---|---|---|
-| `.agent-taskgraph/PROJECT.md` | Facts, rules, shared files, permissions, runtime policy | PMO; owner confirms |
-| `.agent-taskgraph/ROLES.md` | Registry of durable and task-scoped roles | PMO |
-| `.agent-taskgraph/roles/<role-id>/ROLE.md` | Responsibility, boundaries, occupancy, session, and handoff history | PMO |
-| `.agent-taskgraph/staffing/<change-id>.md` | Approved team revision, responsibility transfer, cost, handoff, and rollback | PMO; owner approves |
-| `.agent-taskgraph/STATUS.md` | Lightweight active-task view | PMO derives it from queue/ledgers |
-| `.agent-taskgraph/DECISIONS.md` | Append-only decision history | PMO |
-| `spec.md` | Owner-approved outcome, scope, edges, and acceptance | PMO and owner |
-| `graph.yaml` | Approved static nodes, dependencies, routes, and gates | PMO and owner |
-| `goal.md` | Execution contract for one node | PMO creates; worker returns evidence |
-| `context.md` | Minimal path/revision manifest, on-demand search scope, and latest deltas | PMO; worker reads it first |
-| `ledger.md` | Dynamic status, owner, attempt, and evidence pointers | PMO alone transitions state |
-| `report.md` | Accepted completion report | PMO |
-
-Never store API keys, account credentials, private keys, or user data in these files. Whether `.agent-taskgraph/` is committed is a team decision; review machine-local log paths, session IDs, and privacy fields before committing.
-
-## Context Efficiency
-
-Agent TaskGraph cannot promise an exact token count when a runtime does not expose one. It does enforce auditable context behavior:
-
-- Every inbox/active/review Goal has a `context.md` that references source files and revisions instead of copying them.
-- The default required-reading set is at most eight items. Larger sets require a documented exception or a smaller Goal.
-- Workers load the project sections, Role, frozen spec, current graph node, Goal, ledger, and direct dependencies they actually need. Everything else is searched first and read in a narrow range.
-- Owner and worker messages carry deltas, stable references, and evidence paths. Full history, unrelated chats, archives, and long logs are not retransmitted.
-- Decisions and corrections are written once to spec/Goal/DECISIONS/ledger; answered questions are not asked again unless the underlying decision changes.
-- Checkpoints are updated before dispatch, review, failure, and session handoff, so a new session resumes from files instead of replaying the conversation.
-
-This reduces repeated context and makes recovery deterministic, but it does not weaken tests, reviewer independence, or acceptance criteria.
-
-## Install, Update, and Uninstall
-
-### Status
-
-```bash
-./install.sh --status
-```
-
-### Version and Update Notices
-
-The current protocol version is stored in [`VERSION`](VERSION). Check for a newer commit without changing the checkout:
+The owner session may run:
 
 ```bash
 ./install.sh --check-update
 ```
 
-The command fetches remote metadata only (Git may refresh `.git/FETCH_HEAD`). It reports one of these states:
-
-- `current`: local checkout matches the configured branch
-- `Update available`: fast-forwardable commits exist; review, then run `git pull --ff-only`
-- `Update warning`: local and remote history diverged; reconcile manually
-- `unavailable`: no network, Git checkout, or remote access; continue without blocking work
-
-When the Skill is used, the PMO checks once at the start of the Owner's entry session with `--quiet`. An available update is shown to the Owner, never applied automatically. Worker and reviewer sessions do not repeat the check, and an active frozen batch stays on the protocol version recorded in its `PROJECT.md`. Set `AGENT_TASKGRAPH_SKIP_UPDATE_CHECK=1` for an offline environment.
-
-### Update
-
-```bash
-cd /path/to/agent-taskgraph-protocol
-git remote set-url origin https://github.com/wu736139669/agent-taskgraph-protocol.git
-git pull --ff-only
-./install.sh --status
-./tests/smoke.sh
-```
-
-Normal updates require no reinstall because the skill directories are symlinks.
-
-For the Agent Queue → Agent TaskGraph rename, run `./install.sh` once after updating. It creates the new `agent-taskgraph` links and removes old `agent-queue` links only when they point to this checkout. Migrate each project's state separately with `./init.sh --migrate <project>`.
-
-### Resolve a name conflict
-
-```bash
-./install.sh --status
-./install.sh --force
-```
-
-`--force` moves each conflict to a timestamped backup before linking. Backups are not automatically deleted or restored.
-
-### Uninstall
-
-```bash
-./install.sh --uninstall
-```
-
-Uninstall removes only current or legacy skill links that point to this checkout. It does not remove the checkout or any project's `.agent-taskgraph/`.
-
-## Distribution Channels
-
-Keep GitHub as the canonical source and point every other listing to a tag or commit from this repository.
-
-| Channel | Availability | Recommended use |
-|---|---|---|
-| GitHub repository | Public Beta | Canonical source, issues, reviews, and contributor history |
-| [GitHub Releases](https://github.com/wu736139669/agent-taskgraph-protocol/releases) | `v0.8.0-beta.11` published | Versioned archives, release notes, and the full demo video |
-| Codex / Claude Code local install | Available now | `./install.sh` links this checkout into `~/.codex/skills/agent-taskgraph` and `~/.claude/skills/agent-taskgraph` |
-| Team repository | Available now | Vendor or symlink the skill under `.agents/skills/` for a controlled team environment |
-| [skills.sh](https://skills.sh) | CLI-compatible; directory listing is third-party | Install with `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`; keep GitHub as the source of truth |
-| OpenAI / Codex plugin directory | Submitted; platform review pending | The package passed local validation; the public directory listing remains unavailable until platform approval |
-| Claude Code plugin marketplace | Submitted; platform review pending | The package and catalog passed local validation; the public directory listing remains unavailable until platform approval |
-
-The release order is: public GitHub repository, tagged GitHub release, `skills.sh` discovery, OpenAI/Codex package submission, then Claude Code marketplace submission. The current standalone folder remains the simplest installation path for beta users. Platform directories may approve or update packages on their own schedule; none is a second canonical repository.
-
-The Git-based checker applies to standalone clones and symlink installs. Plugin marketplaces have their own package update lifecycle; keep the GitHub repository and release tag as the canonical version reference.
-
-### Platform packages
-
-The repository includes a self-contained package at [`plugins/agent-taskgraph`](plugins/agent-taskgraph) with both platform manifests:
-
-- Codex: [`plugins/agent-taskgraph/.codex-plugin/plugin.json`](plugins/agent-taskgraph/.codex-plugin/plugin.json)
-- Claude Code: [`plugins/agent-taskgraph/.claude-plugin/plugin.json`](plugins/agent-taskgraph/.claude-plugin/plugin.json)
-- Claude marketplace catalog: [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)
-
-Both the Claude Code and OpenAI/Codex packages have been submitted for review; neither is claimed to be publicly listed yet. To test either package locally, run:
-
-```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py" \
-  plugins/agent-taskgraph
-claude plugin validate ./plugins/agent-taskgraph
-```
-
-For a standalone install, use `./install.sh`. For a directory-based install, use `npx skills add wu736139669/agent-taskgraph-protocol --skill agent-taskgraph`. Both paths resolve to the same Skill content and version.
-
-## Public Beta Feedback
-
-The repository's Issues are enabled for public feedback. Start with the pinned [Public Beta feedback thread](https://github.com/wu736139669/agent-taskgraph-protocol/issues/1), or choose the [Usage feedback](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=usage-feedback.md), [Bug report](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=bug-report.md), or [Feature/workflow proposal](https://github.com/wu736139669/agent-taskgraph-protocol/issues/new?template=feature-request.md) template.
-
-Please remove secrets, tokens, credentials, private paths, session IDs, customer data, and other personal information before posting. Public Beta feedback is most useful when it includes the runtime, protocol version, task shape, workflow stages used, expected result, and observed result.
-
-## Helper Commands
-
-These are maintainer/PMO commands run from the Skill checkout. Normal owners can use natural language only.
-
-| Command | Purpose |
-|---|---|
-| `./init.sh <project>` | Initialize project state while preserving existing files |
-| `./init.sh --migrate <project>` | Explicitly rename legacy `.agent-queue/` state and add missing current templates |
-| `./scripts/open-worker-terminal.sh ... --goal task:<id> --dry-run` | Preview a native Claude/Codex worker command with a stable queue Goal ref |
-| `./scripts/open-worker-terminal.sh ...` | Open and verify one worker in a visible macOS Terminal.app window |
-| `./scripts/render-dispatch.py --project <dir> --goal task:<id>` | Validate `dispatch.md` and render the same Role bootstrap for native, HAPI, or host-thread delivery |
-| `./scripts/prepare-task.py --project <dir> --manifest <json>` | Atomically generate schema-stable inbox files, register preparing status, and run the pre-dispatch gate |
-| `./scripts/hapi-hub-session.py machines` | List online runners safely even when the saved default machine ID is stale |
-| `./scripts/hapi-hub-session.py probe [--machine-id <id>]` | Authenticate without printing credentials and select an online HAPI runner |
-| `./scripts/hapi-hub-session.py catalog --flavor <claude\|codex>` | Read models, efforts, and permissions proven available on the selected runner |
-| `./scripts/hapi-hub-session.py spawn ... --dry-run` | Preview the exact HAPI machine, runtime, model, effort, and permission without creating a session |
-| `./scripts/hapi-hub-session.py spawn ... --evidence-output <path>` | Create one runner-backed HAPI session and write verified pre-dispatch evidence |
-| `./scripts/hapi-hub-session.py reuse ... --goal-ref task:<id>` | Recheck idle/config and write fresh watermark evidence before reusing a durable Role session |
-| `./scripts/verify-hapi-session.py ... --json` | Diagnose/audit legacy HAPI logs; it does not replace the current Hub evidence gate |
-| `./scripts/validate-graph.py <graph.yaml>` | Reject unknown dependencies, dynamic Goal paths, missing producer ancestry, cycles, and parallel write conflicts |
-| `./scripts/validate-state.py <project>` | Verify queue state, baseline, Frozen questions, requested/observed runtime settings, evidence, and STATUS agree |
-| `./scripts/validate-state.py --phase pre-dispatch <project>` | Before spawn, require reserved roles, explicit runtime choice, pending identity state, and a clean registered Git worktree |
-| `./workers/watch-worker.sh <log>` | Compact Codex JSONL or HAPI text logs into progress events |
-| `./workers/log-cleanup.sh` | Dry-run archived Codex logs older than 30 days |
-| `./workers/log-cleanup.sh --apply` | Delete the archived candidates just listed |
-| `./workers/log-cleanup.sh --include-live` | Also preview live Codex/HAPI logs; still no deletion |
-| `./tests/smoke.sh` | Validate install, init, launch preview, graph/state guards, parser, cleanup safety, and packaging |
-
-Live directories are scanned only with `--include-live`; deletion occurs only with `--apply`. Preserve logs referenced by Goals, ledgers, or reports.
-
-## Runtime and Permission Model
-
-- The skill probes the current environment; it does not assume every Codex exposes `create_thread`, `wait_threads`, or similar tools.
-- Visible, owner-controllable sessions are preferred when available. Use Claude native commands (`claude`, `claude --bg`, `claude agents`, or `claude -p`) for Claude Code and Codex native commands (`codex`, `codex exec`, or `codex resume`) for Codex. Missing capabilities require an explicit fallback, not a fictional reviewer.
-- No runtime is silently selected. The PMO lists the real native and optional adapter paths; a saved preference may be recommended first, but the owner explicitly chooses HAPI, Claude native, or Codex native. HAPI support ships as an [opt-in runtime adapter](references/hapi-runtime.md) and is loaded only after that choice.
-- HAPI selection separates the owner control device, PMO execution host, and runner machine. A missing local CLI or an MCP that exposes only `inspect_peer`/`ping_peer` does not prove HAPI spawning is unavailable; the PMO probes `scripts/hapi-hub-session.py` before considering a confirmed fallback. The helper reads credentials privately and must never be replaced with an inline token-bearing `curl` command.
-- Onboarding confirms one Execution profile with separate runtime-choice evidence. Before every batch, the owner then sees each Role ID, durable responsibility, one-off Goal, reuse plan, dependencies, writes, runtime visibility, model/effort, permissions, worktrees, and launch commands; the whole table is confirmed once unless per-worker mode was chosen. Graph approval alone is not session authorization.
-- Before spawn, structured task manifests generate Goal/ledger/context/dispatch files and a pre-dispatch validator checks exact fields, the reserved Role, requested runtime, branch, baseline, and real registered worktree. `STATUS.md` exposes inbox preparation; five minutes without the first session is a reportable dispatch failure.
-- A spawned session stays in `inbox` until its observed model, effort, permission, workspace, identity, idle state, and process evidence match that preview. It then receives a revision-bound Role bootstrap and must return an exact `IDENTITY_READY` with real message/log evidence. Reused sessions require both fresh runtime evidence and a fresh Dispatch ID/ACK bound to the new Goal. API request fields, a returned session ID, a worker display name, or old evidence are not proof that this dispatch is valid.
-- On macOS, owners who require a separate visible CLI for every worker/reviewer can use `scripts/open-worker-terminal.sh`. Queue work uses `--goal task:<id>` so inbox/active moves do not invalidate the command. Preview with `--dry-run`, approve the graph and runtime parameters, then launch; PID-backed verification is required before the ledger marks the worker active.
-- Platform-standard permissions are the default and retain runtime prompts. `yolo` or `--dangerously-skip-permissions` requires explicit authorization for the current project. The authorization scope is recorded as `runtime-only` or `all-approved-runtimes`; only the latter can carry the same approved policy into a fallback without asking again.
-- Frozen scope, worktrees, and reviewers are quality controls, not security sandboxes.
-- Dependency installs, migrations, deletion, privilege expansion, merge, and release should retain Human Gates defined in `PROJECT.md`.
-
-## FAQ
-
-### Does every request spawn multiple agents?
-
-No. Small work stays with the current agent. Multi-agent mode is reserved for decomposable, parallel, or independently reviewed work.
-
-### Is a one-sentence request enough?
-
-It is enough to begin intake. The agent reads and triages first; complex work continues through clarification until the spec can be frozen.
-
-### Is HAPI required?
-
-No. Claude/Codex native runtimes are the default. HAPI is an opt-in adapter for owners who want its visible remote-control workflow. When selected, a missing local CLI or missing MCP spawn tool is not enough to reject it: the PMO checks the formal Hub helper and exact runner machine first. HAPI is never activated silently, and a native fallback must be confirmed in `PROJECT.md`.
-
-### Why approve a graph after approving the spec?
-
-The spec defines what to build and what counts as done. The graph defines who does each job, what it consumes and writes, how it is verified, and where failure returns.
-
-### What if a session dies or work is interrupted?
-
-Use the resume prompt above. The PMO reconciles file state, branches, worktrees, and sessions before deciding whether to resume, retry the smallest node, or wait for the owner.
-
-### Can merge or release be automatic?
-
-Only when `PROJECT.md` or the frozen batch explicitly authorizes it and the reviewer plus corresponding Human Gate have passed. The skill text itself is not authorization.
-
-## License
-
-Agent TaskGraph Protocol is released under the [Apache License 2.0](LICENSE). Copyright 2026 wu736139669. See the license text for the permissions, patent grant, notice requirements, warranty disclaimer, and liability limits.
+The check is read-only. An update notice recommends a command; it never pulls code, replaces a live skill, or restarts a running session. Finish the current batch on its recorded protocol version, then update before the next batch.
 
 ## Beta Boundaries
 
-Ready now:
+This is a public beta. It depends on the native multi-agent capabilities exposed by the installed Codex or Claude Code version. It does not provide an unattended cloud queue, guarantee identical UI behavior across hosts, or bypass project permission gates. Review migrations, deletion, privilege expansion, merges, and releases as human-owned gates.
 
-- Project onboarding, requirement clarification, spec freeze, and graph approval
-- Deterministic graph validation plus queue/ledger/STATUS consistency checks
-- Goal decomposition, queue/ledger protocol, and bounded failure routing
-- Worker self-test, independent reviewer, and owner final review
-- Conflict-safe install, project init, current Codex log parsing, and conservative cleanup
-- Local smoke tests and GitHub Actions
+## License
 
-Not yet implemented or guaranteed:
-
-- No `dispatch.sh` or `run-worker.sh`; the active agent still invokes runtime tools
-- No deterministic ready-node calculator or queue-transition CLI
-- Cross-runtime quality still depends on actual tool capabilities and adherence to `SKILL.md`
-- No stable-version guarantee; v1.0 still needs broader non-game and native Codex validation plus a stable release policy
-
-## Repository Layout
-
-```text
-agent-taskgraph-protocol/
-├── SKILL.md
-├── VERSION
-├── LICENSE
-├── agents/openai.yaml
-├── install.sh
-├── init.sh
-├── scripts/
-├── templates/
-├── queue/
-├── workers/
-├── tests/
-├── plugins/agent-taskgraph/  # platform package; root remains canonical
-├── .claude-plugin/marketplace.json
-└── .github/workflows/test.yml
-```
-
-The repository ships the operating protocol, deterministic helpers, templates, and an empty example queue. Real project state lives in that project's `.agent-taskgraph/`.
-
-## Roadmap
-
-- Deterministic ready-node calculation
-- Safe queue-transition CLI with consistency checks
-- Runtime adapters for Codex, HAPI, and Claude
-- Metrics for retry count, pass rate, latency, and token cost
-- Sanitized case studies from a non-game project and a Codex-only environment
-- Platform review and public listing for the OpenAI/Codex and Claude Code packages
+Apache License 2.0. See [LICENSE](LICENSE).

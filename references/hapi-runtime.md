@@ -77,6 +77,14 @@ scripts/hapi-hub-session.py reuse \
 - 聊天只作为控制通道。Goal、冻结规格、图节点、验收和长期状态仍必须落盘。
 - `active/idle`、runner 存活或聊天里的“完成”都不是验收证据；仍需 legal terminal、revision、测试证据和独立 reviewer。
 
+## HAPI 监控适配器
+
+- HAPI session 是独立 peer，不属于 Codex `spawn_agent` tree 或 native thread list。`wait_agent`/`wait_threads` 不能等待 HAPI 完成，禁止因为 PMO 自身运行在 Codex 中就选择它们。
+- 主事件路径：Goal 要求 worker 在完成、失败、阻塞时向 PMO HAPI session 发消息；PMO 收到后用 `inspect_peer`/Hub metadata 核对消息与 session，再对账 ledger/产物。
+- 周期兜底：PROJECT 记录 `Monitoring wait primitive = HAPI event + timer-cell/functions.wait(real cell_id)`，`Monitoring observe primitive = inspect_peer/session metadata/log + ledger`，targets 从 active/review ledger 的 HAPI Session ID 解析。PMO 必须先实际启动 timer/observe cell；只有工具返回真实 `cell_id` 才能用 `functions.wait` 恢复。
+- `functions.wait` 本身不是观察，但成功恢复并完成 `inspect_peer`/日志读取的 cell 构成一次合格监控周期。`cell not found` 记为 `WAIT_TOOL_MISROUTE`，停止猜 ID，并重建 HAPI timer/observe cell；不得切换到 `wait_agent`。
+- Owner 要求“可见等待”时，HAPI 会话本身仍在侧栏可见；若宿主不能为 HAPI target 生成原生等待卡片，应如实说明，不能用一个看不见 HAPI 的原生 wait 卡片冒充监控。
+
 ## 监督与清理
 
 - 使用当前版本真实提供的 wait/observe 能力或 HAPI 日志作为观察信号；队列目录和 ledger 仍是动态事实源。

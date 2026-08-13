@@ -26,6 +26,14 @@ SPEC_STATUS = re.compile(r'^>\s*Status:\s*(DRAFT|FROZEN)\s*$', re.IGNORECASE)
 SPEC_FROZEN_BY = re.compile(r'^>\s*Frozen by:\s*(.*?)\s*$', re.IGNORECASE)
 RUNTIME_KEYS = ("runtime", "flavor", "model", "effort", "permission", "visibility")
 RUNTIME_PLACEHOLDERS = {"default", "auto", "pending", "待确认"}
+FAILURE_CLASSES = {
+    "PENDING",
+    "PRODUCT_FAIL",
+    "HARNESS_INVALID",
+    "DISPATCH_INVALID",
+    "RUNTIME_INVALID",
+    "OWNER_DECISION",
+}
 EXECUTION_PROFILE_KEYS = (
     "Execution profile confirmed by/at",
     "Execution runtime",
@@ -39,6 +47,11 @@ EXECUTION_PROFILE_KEYS = (
     "Permission scope",
     "Execution visibility",
     "Execution fallback",
+)
+MONITORING_PROFILE_KEYS = (
+    "Monitoring wait primitive",
+    "Monitoring observe primitive",
+    "Monitoring target evidence",
 )
 PLACEHOLDER_TOKENS = (
     "<",
@@ -366,7 +379,59 @@ def runtime_value_is_placeholder(key, value):
     return key in {"model", "effort"} and value.strip().lower() in RUNTIME_PLACEHOLDERS
 
 
-def validate_execution_profile(fields, require_runtime_choice=False):
+def validate_monitoring_profile(fields):
+    errors = []
+    for key in MONITORING_PROFILE_KEYS:
+        if is_placeholder(fields.get(key, "")):
+            errors.append("PROJECT.md: {} must be concrete".format(key))
+
+    runtime = fields.get("Execution runtime", "").strip().lower()
+    control = fields.get("Execution control", "").strip().lower()
+    wait_primitive = fields.get("Monitoring wait primitive", "").strip().lower()
+    observe_primitive = fields.get("Monitoring observe primitive", "").strip().lower()
+
+    if runtime == "hapi":
+        if "wait_agent" in wait_primitive or "wait_threads" in wait_primitive:
+            errors.append(
+                "PROJECT.md: HAPI monitoring cannot use wait_agent/wait_threads; "
+                "those primitives only target native agent/thread trees"
+            )
+        if not any(
+            token in wait_primitive
+            for token in ("hapi event", "hapi-event", "timer cell", "timer-cell", "runtime event")
+        ):
+            errors.append(
+                "PROJECT.md: HAPI Monitoring wait primitive must use HAPI events "
+                "and/or a runtime timer cell"
+            )
+        if not any(
+            token in observe_primitive
+            for token in ("inspect_peer", "hapi", "session metadata", "session log")
+        ):
+            errors.append(
+                "PROJECT.md: HAPI Monitoring observe primitive must inspect the HAPI peer/session"
+            )
+    elif "spawn_agent" in control and "wait_agent" not in wait_primitive:
+        errors.append(
+            "PROJECT.md: spawn_agent control requires wait_agent for its native agent tree"
+        )
+    elif "thread" in control and "wait_threads" not in wait_primitive:
+        errors.append(
+            "PROJECT.md: native thread control requires wait_threads"
+        )
+
+    if "functions.wait" in wait_primitive and not any(
+        token in wait_primitive for token in ("cell_id", "real cell", "timer cell", "timer-cell")
+    ):
+        errors.append(
+            "PROJECT.md: functions.wait is only valid with a real timer/observe cell_id"
+        )
+    return errors
+
+
+def validate_execution_profile(
+    fields, require_runtime_choice=False, require_monitoring=False
+):
     errors = []
     if fields.get("Execution profile status", "") != "CONFIRMED":
         errors.append("PROJECT.md: Execution profile status must be CONFIRMED before dispatch")
@@ -380,6 +445,8 @@ def validate_execution_profile(fields, require_runtime_choice=False):
             "PROJECT.md: Runtime choice confirmed by/at must be explicit; "
             "model/effort/permission approval cannot imply a runtime choice"
         )
+    if require_monitoring:
+        errors.extend(validate_monitoring_profile(fields))
 
     runtime = fields.get("Execution runtime", "").strip().lower()
     flavor = fields.get("Execution flavor", "").strip().lower()
@@ -957,6 +1024,24 @@ def validate(project, predispatch=False):
             if fields.get("Goal current path", "") != expected_path:
                 errors.append("{}: Goal current path must be {}".format(child.name, expected_path))
 
+            failure_class = fields.get("Failure class", "").strip().upper()
+            if failure_class and failure_class not in FAILURE_CLASSES:
+                errors.append(
+                    "{}: Failure class must be one of {}".format(
+                        child.name, ", ".join(sorted(FAILURE_CLASSES))
+                    )
+                )
+            if failure_class == "HARNESS_INVALID":
+                harness_attempt = fields.get("Harness attempt", "")
+                if not harness_attempt.isdigit():
+                    errors.append("{}: HARNESS_INVALID requires numeric Harness attempt".format(child.name))
+            if failure_class in {"DISPATCH_INVALID", "RUNTIME_INVALID"} and state in {"active", "review"}:
+                errors.append(
+                    "{}: {} must remain inbox until the control plane is repaired".format(
+                        child.name, failure_class
+                    )
+                )
+
             if role_required:
                 goal_assignments = goal_data["assignments"]
                 errors.extend(
@@ -1132,7 +1217,9 @@ def validate(project, predispatch=False):
                 errors.append("PROJECT.md: Source baseline must start with READY: before dispatch")
             errors.extend(
                 validate_execution_profile(
-                    project_fields, require_runtime_choice=strict_inbox
+                    project_fields,
+                    require_runtime_choice=strict_inbox,
+                    require_monitoring=protocol_at_least(project_fields, 12),
                 )
             )
         errors.extend(validate_frozen_spec(instance))

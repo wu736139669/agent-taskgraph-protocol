@@ -49,7 +49,7 @@ git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
 git -C "$TMP/update-local" push -u origin main >/dev/null
 
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
-grep -q 'version: 0.8.0-beta.11' "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.15' "$TMP/update-current.out"
 grep -q 'Update status: current' "$TMP/update-current.out"
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
 [ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
@@ -82,7 +82,7 @@ assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
-grep -q 'Version: 0.8.0-beta.11' "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.15' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -122,19 +122,13 @@ find "$TMP/home-conflict/.claude/skills" -maxdepth 1 -name 'agent-taskgraph.back
 echo "[5/13] project initialization preserves existing files"
 mkdir -p "$TMP/project"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/init.out"
-for state in inbox active review done failed; do
-  assert_dir "$TMP/project/.agent-taskgraph/queue/$state"
-done
 assert_file "$TMP/project/.agent-taskgraph/PROJECT.md"
-assert_file "$TMP/project/.agent-taskgraph/ROLES.md"
-assert_file "$TMP/project/.agent-taskgraph/templates/role.md"
-assert_dir "$TMP/project/.agent-taskgraph/roles"
-assert_file "$TMP/project/.agent-taskgraph/templates/spec.md"
-assert_file "$TMP/project/.agent-taskgraph/templates/graph.yaml"
-assert_file "$TMP/project/.agent-taskgraph/templates/context.md"
-assert_file "$TMP/project/.agent-taskgraph/templates/dispatch.md"
-assert_file "$TMP/project/.agent-taskgraph/templates/staffing-change.md"
-assert_dir "$TMP/project/.agent-taskgraph/staffing"
+for file in PLAN.md TEAM.md STATUS.md DECISIONS.md tasks/TEMPLATE.md; do
+  assert_file "$TMP/project/.agent-taskgraph/$file"
+done
+assert_dir "$TMP/project/.agent-taskgraph/tasks"
+assert_dir "$TMP/project/.agent-taskgraph/archive"
+grep -q 'PMO 维护' "$TMP/project/.agent-taskgraph/STATUS.md"
 echo sentinel > "$TMP/project/.agent-taskgraph/PROJECT.md"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/reinit.out"
 grep -qx sentinel "$TMP/project/.agent-taskgraph/PROJECT.md" || fail "init overwrote PROJECT.md"
@@ -147,7 +141,7 @@ if "$ROOT/init.sh" "$TMP/project-legacy" > "$TMP/legacy-init-refusal.out" 2>&1; 
 fi
 assert_file "$TMP/project-legacy/.agent-queue/PROJECT.md"
 [ ! -e "$TMP/project-legacy/.agent-taskgraph" ] || fail "legacy state moved without --migrate"
-"$ROOT/init.sh" --migrate "$TMP/project-legacy" > "$TMP/legacy-migrate.out"
+"$ROOT/init.sh" --migrate --legacy-queue "$TMP/project-legacy" > "$TMP/legacy-migrate.out"
 [ ! -e "$TMP/project-legacy/.agent-queue" ] || fail "legacy state remained after migration"
 grep -qx legacy-sentinel "$TMP/project-legacy/.agent-taskgraph/PROJECT.md" || fail "migration overwrote PROJECT.md"
 grep -qx active-sentinel "$TMP/project-legacy/.agent-taskgraph/queue/active/task-1" || fail "migration lost active state"
@@ -432,7 +426,7 @@ grep -q 'parallel write overlap' "$TMP/graph-write-overlap.out"
 
 echo "[9/13] state validator keeps queue, ledger, Goal, and STATUS atomic"
 mkdir -p "$TMP/state-valid"
-"$ROOT/init.sh" "$TMP/state-valid" > "$TMP/state-init.out"
+"$ROOT/init.sh" --legacy-queue "$TMP/state-valid" > "$TMP/state-init.out"
 mkdir -p "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui"
 cat > "$TMP/state-valid/.agent-taskgraph/queue/active/P5-ui/goal.md" <<'MD'
 # Goal: Build UI
@@ -973,7 +967,7 @@ git -C "$TMP/prepare-project" config user.email "tests@example.invalid"
 printf 'baseline\n' > "$TMP/prepare-project/README.md"
 git -C "$TMP/prepare-project" add README.md
 git -C "$TMP/prepare-project" commit -m baseline >/dev/null
-"$ROOT/init.sh" "$TMP/prepare-project" >/dev/null
+"$ROOT/init.sh" --legacy-queue "$TMP/prepare-project" >/dev/null
 PREPARE_HEAD="$(git -C "$TMP/prepare-project" rev-parse HEAD)"
 git -C "$TMP/prepare-project" worktree add -b agent/T1-prepare \
   "$TMP/prepare-worktree" "$PREPARE_HEAD" >/dev/null
@@ -982,28 +976,31 @@ cat > "$TMP/prepare-project/.agent-taskgraph/PROJECT.md" <<MD
 
 | 配置 | 项目选择 |
 |---|---|
-| Agent TaskGraph 协议版本 | 0.8.0-beta.11 |
+| Agent TaskGraph 协议版本 | 0.8.0-beta.15 |
 | Source baseline | READY: repo=$TMP/prepare-project; HEAD=$PREPARE_HEAD; branch=main; clean |
-| 已启用可选适配器 | 无 |
-| Preferred runtime | codex-native |
-| Preferred machine | local test host |
+| 已启用可选适配器 | hapi |
+| Preferred runtime | hapi |
+| Preferred machine | id=machine-1; name=Test Runner; host=test.local |
 
 | Execution profile | Confirmed value |
 |---|---|
 | Execution profile status | CONFIRMED |
-| Runtime choice confirmed by/at | Owner / 2026-08-10T10:00:00Z / test batch / codex-native |
+| Runtime choice confirmed by/at | Owner / 2026-08-10T10:00:00Z / test batch / hapi |
 | Execution profile confirmed by/at | Owner / 2026-08-10T10:00:00Z / test batch |
-| Execution runtime | codex-native |
-| Execution control | host spawn tool |
-| Execution machine | local: host=test.local |
+| Execution runtime | hapi |
+| Execution control | HAPI Hub helper spawn/inspect/message |
+| Execution machine | id=machine-1; name=Test Runner; host=test.local |
 | Execution flavor | codex |
 | Model selection policy | fixed |
 | Fixed model/effort | model=gpt-5.6-sol; effort=xhigh |
 | Model catalog evidence | test catalog / 2026-08-10T09:59:00Z |
 | Execution permission | yolo |
 | Permission scope | runtime-only |
-| Execution visibility | headless |
+| Execution visibility | visible |
 | Execution fallback | none |
+| Monitoring wait primitive | HAPI event + timer-cell/functions.wait(real cell_id) |
+| Monitoring observe primitive | inspect_peer + HAPI session metadata/log + ledger |
+| Monitoring target evidence | active/review ledger Session ID; inbox Goal ref before spawn |
 MD
 cat > "$TMP/prepare-project/.agent-taskgraph/spec.md" <<'MD'
 # Spec
@@ -1040,6 +1037,7 @@ cat > "$TMP/prepare-manifest.json" <<MD
 {
   "task_id": "T1-prepare",
   "title": "Prepare one output",
+  "orchestration_mode": "lite",
   "stage": "implementation",
   "baseline": "$PREPARE_HEAD",
   "branch": "agent/T1-prepare",
@@ -1056,12 +1054,12 @@ cat > "$TMP/prepare-manifest.json" <<MD
   "role_responsibility": "Prepare one bounded output",
   "role_continuity": "new role and new session",
   "runtime_requested": {
-    "runtime": "codex-native",
+    "runtime": "hapi",
     "flavor": "codex",
     "model": "gpt-5.6-sol",
     "effort": "xhigh",
     "permission": "yolo",
-    "visibility": "headless"
+    "visibility": "visible"
   },
   "objective": "Create one bounded output.",
   "needs": ["none"],
@@ -1071,6 +1069,7 @@ cat > "$TMP/prepare-manifest.json" <<MD
   "pass_route": "done",
   "fail_route": "failed",
   "max_attempts": 1,
+  "failure_policy": "PRODUCT_FAIL returns to worker; HARNESS_INVALID reuses reviewer; DISPATCH_INVALID/RUNTIME_INVALID repair control plane in place",
   "acceptance": ["[ ] output exists"],
   "frozen": ["Do not edit another scope"],
   "estimate": "20 minutes"
@@ -1084,6 +1083,16 @@ grep -q '| T1-prepare | Prepare one output | inbox |' \
 "$ROOT/scripts/validate-state.py" --phase pre-dispatch "$TMP/prepare-project" \
   > "$TMP/prepare-state.out"
 cp "$TMP/prepare-project/.agent-taskgraph/PROJECT.md" "$TMP/prepare-project.md"
+sed -i.bak \
+  's@HAPI event + timer-cell/functions.wait(real cell_id)@wait_agent(90000)@' \
+  "$TMP/prepare-project/.agent-taskgraph/PROJECT.md"
+if "$ROOT/scripts/validate-state.py" --phase pre-dispatch "$TMP/prepare-project" \
+  > "$TMP/prepare-hapi-wait-agent.out" 2>&1; then
+  fail "pre-dispatch validator allowed wait_agent to monitor a HAPI peer"
+fi
+grep -q 'HAPI monitoring cannot use wait_agent/wait_threads' \
+  "$TMP/prepare-hapi-wait-agent.out"
+cp "$TMP/prepare-project.md" "$TMP/prepare-project/.agent-taskgraph/PROJECT.md"
 sed -i.bak '/Runtime choice confirmed by\/at/d' \
   "$TMP/prepare-project/.agent-taskgraph/PROJECT.md"
 if "$ROOT/scripts/validate-state.py" --phase pre-dispatch "$TMP/prepare-project" \
@@ -1141,6 +1150,37 @@ HOME="$TMP/home-logs" "$ROOT/workers/log-cleanup.sh" --days 1 --include-live --a
 [ ! -e "$TMP/home-logs/.codex/sessions/live.jsonl" ] || fail "explicit live cleanup missed Codex log"
 [ ! -e "$TMP/home-logs/.hapi/logs/live.log" ] || fail "explicit live cleanup missed HAPI log"
 
+echo "[11b/13] operational health opens the circuit on repeated control failures"
+mkdir -p "$TMP/health-project/.agent-taskgraph/queue/failed" \
+  "$TMP/health-project/.agent-taskgraph/queue/active" \
+  "$TMP/health-project/.agent-taskgraph/queue/inbox"
+git -C "$TMP/health-project" init -q
+git -C "$TMP/health-project" config user.name "Agent TaskGraph Tests"
+git -C "$TMP/health-project" config user.email "tests@example.invalid"
+printf 'baseline\n' > "$TMP/health-project/README.md"
+git -C "$TMP/health-project" add README.md
+git -C "$TMP/health-project" commit -qm baseline
+"$ROOT/init.sh" --legacy-queue "$TMP/health-project" >/dev/null
+for n in 1 2; do
+  task="$TMP/health-project/.agent-taskgraph/queue/failed/T1-review-R$n"
+  mkdir -p "$task"
+  cat > "$task/ledger.md" <<MD
+# Ledger
+| 任务 ID | T1-review-R$n |
+| 状态 | failed |
+| 最后更新 | 2026-08-13T00:0${n}:00+00:00 |
+| 验收结果 | INVALID_HARNESS |
+| Failure class | HARNESS_INVALID |
+| Failure boundary | T1-review |
+| Harness attempt | 1 |
+MD
+done
+if "$ROOT/scripts/check-operational-health.py" "$TMP/health-project" > "$TMP/health.out" 2>&1; then
+  fail "operational health accepted repeated control failures"
+fi
+grep -q 'CIRCUIT_OPEN' "$TMP/health.out"
+grep -q 'consecutive control-plane INVALID' "$TMP/health.out"
+
 echo "[12/13] skill metadata, templates, links, version, license, and graph YAML"
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
@@ -1148,14 +1188,16 @@ import re
 import sys
 
 root = Path(sys.argv[1])
-assert (root / "VERSION").read_text().strip() == "0.8.0-beta.11"
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.15"
 assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
 assert "description:" in skill.split("---", 2)[1]
-for phrase in ("一句话足以发起需求", "spec.md", "graph.yaml", "Human Gate"):
+for phrase in ("一句话可以开始", "PROJECT.md", "PLAN.md", "TEAM.md", "Human Gate", "独立上下文"):
     assert phrase in skill, phrase
 assert "references/hapi-runtime.md" in skill
+assert "HAPI 默认关闭" in skill
+assert "当前会话直接完成" in skill
 for adapter_detail in ("HAPI 派发硬门", "hapi runner list", "hapi resume <id>"):
     assert adapter_detail not in skill, f"HAPI detail leaked into core skill: {adapter_detail}"
 hapi_reference = (root / "references/hapi-runtime.md").read_text()
@@ -1164,15 +1206,15 @@ for phrase in ("只在", "native-first", "派发硬门", "不得自动启用", "
 for phrase in ("verify-hapi-session.py", "RUNTIME_CONFIG_MISMATCH", "先不要 `ping_peer`"):
     assert phrase in hapi_reference, phrase
 project_template = (root / "templates/PROJECT.md").read_text()
-for phrase in ("Execution profile status", "Execution runtime", "Model selection policy", "Execution fallback"):
+for phrase in ("原生宿主", "模型/推理", "HAPI", "Human Gates"):
     assert phrase in project_template, phrase
 runtime_profiles = (root / "references/runtime-profiles.md").read_text()
 for phrase in ("一次确认协议", "adaptive-batch", "Permission scope", "目录探测"):
     assert phrase in runtime_profiles, phrase
-for path in ("templates/ROLES.md", "templates/role.md", "templates/context.md", "templates/dispatch.md", "templates/staffing-change.md"):
+for path in ("templates/ROLES.md", "templates/role.md", "templates/context.md", "templates/dispatch.md", "templates/staffing-change.md", "templates/PLAN.md", "templates/TEAM.md", "templates/task.md"):
     assert (root / path).is_file(), path
-for phrase in ("Role 与 Goal 分离", "初始组队协议", "动态编制协议", "persistent", "task-scoped", "上下文预算合同"):
-    assert phrase in skill, phrase
+assert "Agent thread/session" in skill
+assert "TASK_READY" in skill
 
 for readme_name in ("README.md", "README.zh-CN.md"):
     readme = (root / readme_name).read_text()
@@ -1210,10 +1252,12 @@ required = (
     "skills/agent-taskgraph/VERSION",
     "skills/agent-taskgraph/agents/openai.yaml",
     "skills/agent-taskgraph/init.sh",
+    "skills/agent-taskgraph/references/native-runtimes.md",
     "skills/agent-taskgraph/references/hapi-runtime.md",
     "skills/agent-taskgraph/references/dispatch-bootstrap.md",
     "skills/agent-taskgraph/references/runtime-profiles.md",
     "skills/agent-taskgraph/scripts/check-update.sh",
+    "skills/agent-taskgraph/scripts/check-operational-health.py",
     "skills/agent-taskgraph/scripts/hapi-hub-session.py",
     "skills/agent-taskgraph/scripts/open-worker-terminal.sh",
     "skills/agent-taskgraph/scripts/prepare-task.py",
@@ -1222,6 +1266,9 @@ required = (
     "skills/agent-taskgraph/scripts/validate-state.py",
     "skills/agent-taskgraph/scripts/verify-hapi-session.py",
     "skills/agent-taskgraph/templates/PROJECT.md",
+    "skills/agent-taskgraph/templates/PLAN.md",
+    "skills/agent-taskgraph/templates/TEAM.md",
+    "skills/agent-taskgraph/templates/task.md",
     "skills/agent-taskgraph/templates/ROLES.md",
     "skills/agent-taskgraph/templates/context.md",
     "skills/agent-taskgraph/templates/dispatch.md",
@@ -1244,10 +1291,12 @@ assert (package / "skills/agent-taskgraph/SKILL.md").read_text() == (root / "SKI
 assert (package / "LICENSE").read_text() == (root / "LICENSE").read_text()
 for relative in (
     "init.sh",
+    "references/native-runtimes.md",
     "references/hapi-runtime.md",
     "references/dispatch-bootstrap.md",
     "references/runtime-profiles.md",
     "scripts/check-update.sh",
+    "scripts/check-operational-health.py",
     "scripts/hapi-hub-session.py",
     "scripts/open-worker-terminal.sh",
     "scripts/prepare-task.py",
@@ -1257,6 +1306,8 @@ for relative in (
     "scripts/verify-hapi-session.py",
     "agents/openai.yaml",
     "templates/PROJECT.md",
+    "templates/PLAN.md",
+    "templates/TEAM.md",
     "templates/ROLES.md",
     "templates/context.md",
     "templates/dispatch.md",
@@ -1270,6 +1321,7 @@ for relative in (
     "templates/role.md",
     "templates/staffing-change.md",
     "templates/task-manifest.json",
+    "templates/task.md",
     "workers/log-cleanup.sh",
     "workers/parse-worker-log.py",
     "workers/watch-worker.sh",
