@@ -1,7 +1,7 @@
 interface:
   display_name: "Agent TaskGraph Protocol"
-  short_description: "Clarify coding work, then execute a verified task graph"
-  default_prompt: "Use $agent-taskgraph to inspect this project, clarify my request, and orchestrate execution only when the work is ready."
+  short_description: "Run a PMO-led native Agent Team with isolated contexts"
+  default_prompt: "Use $agent-taskgraph to understand this project, clarify the request, and create a PMO-led native Agent Team only when parallel work is useful."
 
 policy:
   allow_implicit_invocation: true

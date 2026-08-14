@@ -6,9 +6,9 @@
 
 **Native multi-session task orchestration for Codex and Claude Code.**
 
-Source version: [`v0.8.0-beta.15`](VERSION) | License: [Apache-2.0](LICENSE)
+Source version: [`v0.8.0-beta.16`](VERSION) | License: [Apache-2.0](LICENSE)
 
-Agent TaskGraph is a lightweight graph-engineering protocol for complex AI coding. The current Codex or Claude Code session acts as the **PMO**: it understands the request, asks only the decisions that cannot be inferred from the repository, creates a small task graph, starts native Agent sessions when parallel work is real, and verifies the result.
+Agent TaskGraph is a lightweight graph-engineering protocol for a **PMO-led native Agent Team**. The current Codex or Claude Code session understands the request, asks only the decisions that cannot be inferred from the repository, creates a small task graph, starts native Agent sessions when parallel work is real, and verifies the result.
 
 It is a protocol and skill, not a hosted scheduler. HAPI is an optional adapter for users who explicitly need cross-machine control. It is disabled in the normal workflow.
 
@@ -83,8 +83,8 @@ After the user confirms, the PMO creates the sessions and begins dispatch. Users
 1. **Discover**: PMO reads project rules, relevant code, tests, and build commands.
 2. **Clarify**: unresolved product or risk decisions are presented with a recommended default.
 3. **Plan**: PMO writes `PROJECT.md`, `PLAN.md`, `TEAM.md`, and one `tasks/<id>.md` per worker.
-4. **Preview**: the user sees each role, responsibility, task, dependencies, model/effort recommendation, permission mode, and write scope once.
-5. **Dispatch**: Codex uses native Agent threads/worktrees; Claude Code uses native subagents or Agent Teams when enabled.
+4. **Preview**: the user sees each role, task, native session type, model/effort, effective permission, visibility, worktree, and write scope once.
+5. **Dispatch**: Codex uses native Agent threads; Claude Code uses Agent Teams for an active coordinated batch, Agent View background sessions for durable workers, and subagents only for bounded side tasks.
 6. **Handoff**: a worker writes a short result, changed paths, revision/diff, verification, and risks into its task file.
 7. **Accept**: PMO checks the diff and runs the project verification commands. An independent reviewer is added only for risky or cross-module work.
 8. **Report**: PMO updates status, archives completed task files, and summarizes the result to the user.
@@ -99,7 +99,7 @@ Every Agent has an independent conversation context. A worker reads only:
 - direct dependency handoffs
 - source files found by targeted search
 
-The PMO does not paste its full conversation into worker prompts. Stable facts live in documents; task files stay short. This keeps long projects from repeatedly paying for the same context and makes a worker resumable.
+The PMO does not paste its full conversation into worker prompts. When the host offers history/context forking, the PMO explicitly selects a blank or minimal task context; it never relies on a default full-history fork. Stable facts live in documents, so long projects do not repeatedly pay for the same context.
 
 ## Roles
 
@@ -111,13 +111,30 @@ The PMO itself does not implement product code while the team is running. It coo
 
 ### Codex
 
-Use Codex's native subagent/thread capability. In the CLI, `/agent` shows and switches Agent threads. Independent write tasks should use Codex worktrees or non-overlapping paths. Durable recurring roles can be defined in `.codex/agents/` when needed.
+Use Codex's native subagent/thread capability. These are Agent threads inside the current Codex client, not separate terminal windows. In the CLI, `/agent` shows and switches threads; App/IDE uses the Agent panel. Native threads do not prove worktree isolation, so concurrent writers need an observed worktree or non-overlapping paths. Durable roles can be defined in `.codex/agents/`.
 
 ### Claude Code
 
-Use native subagents by default. Claude Agent Teams provide separate interactive sessions and direct team communication when the experimental feature is enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). When Agent Teams are unavailable, the skill uses subagents or the single-session path; it does not silently switch to HAPI.
+For a PMO-led coordinated batch, prefer Claude **Agent Teams** when the experimental feature is enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). The lead is the PMO and teammates are independent Claude Code sessions with separate contexts. The default display is the in-process Agent panel, not one Terminal window per Agent.
+
+Use **Agent View background sessions** for durable, resumable workers that need independent worktrees or may outlive the PMO session. `claude agents` is the management screen; sessions run under the background supervisor and can be attached later. Use **subagents** only for short exploration, tests, log analysis, or review. If Agent Teams are unavailable, the skill reports the actual downgrade instead of silently calling subagents a multi-session team.
+
+Visible tmux/iTerm2 panes are opt-in. HAPI is not used as a fallback.
 
 If the host cannot create or observe native Agents, the skill clearly falls back to one current session.
+
+## Permissions
+
+Permissions are part of the one-time team preview. The PMO records the effective mode observed after launch, not only the requested value.
+
+| Role | Claude Code | Codex |
+|---|---|---|
+| Explorer/Reviewer | `plan` or read-only tools | `read-only` |
+| Implementation Worker | isolated worktree + `acceptEdits`/`auto` | `workspace-write + on-request` |
+| Unattended bounded Worker | `dontAsk` + exact allowlist | `workspace-write + never` |
+| Migration/release | normal prompts + Human Gate | `on-request` + Human Gate |
+
+`bypassPermissions`, `danger-full-access + never`, and `--yolo` require explicit owner authorization and an externally isolated environment. If the parent session already uses Full Access/Yolo, the PMO warns once that native workers will inherit it.
 
 ## When To Use One Agent
 

@@ -1,10 +1,10 @@
 # Agent TaskGraph
 
-Native multi-session orchestration for complex work in Codex and Claude Code.
+PMO-led native Agent Team orchestration for complex work in Codex and Claude Code.
 
-Source version: [`v0.8.0-beta.15`](../../VERSION) | License: [Apache-2.0](../../LICENSE)
+Source version: [`v0.8.0-beta.16`](../../VERSION) | License: [Apache-2.0](../../LICENSE)
 
-The current session is the PMO. It clarifies the request, creates native Codex threads or Claude Code subagents only when parallel work is useful, gives each Agent an independent context and explicit write scope, coordinates document-based handoffs, and verifies the result. Small tasks stay in the current session.
+The current session is the PMO. It clarifies the request and creates a native Agent Team only when parallel work is useful. Codex uses Agent threads. Claude Code prefers Agent Teams for an active coordinated batch, Agent View background sessions for durable workers, and subagents only for bounded side tasks. Each Agent gets an independent context, an effective permission record, and an explicit worktree/write scope.
 
 HAPI is an optional advanced adapter for explicit cross-machine control. It is disabled by default and is never required for normal use.
 

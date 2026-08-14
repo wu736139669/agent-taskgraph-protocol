@@ -49,7 +49,7 @@ git -C "$TMP/update-local" remote add origin "$TMP/update-remote.git"
 git -C "$TMP/update-local" push -u origin main >/dev/null
 
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" > "$TMP/update-current.out"
-grep -q 'version: 0.8.0-beta.15' "$TMP/update-current.out"
+grep -q 'version: 0.8.0-beta.16' "$TMP/update-current.out"
 grep -q 'Update status: current' "$TMP/update-current.out"
 AGENT_TASKGRAPH_ROOT="$TMP/update-local" "$ROOT/scripts/check-update.sh" --quiet > "$TMP/update-quiet-current.out"
 [ ! -s "$TMP/update-quiet-current.out" ] || fail "quiet update check printed while current"
@@ -82,7 +82,7 @@ assert_link_to "$TMP/home-install/.claude/skills/agent-taskgraph" "$ROOT"
 assert_link_to "$TMP/home-install/.codex/skills/agent-taskgraph" "$ROOT"
 HOME="$TMP/home-install" "$ROOT/install.sh" --status > "$TMP/status.out"
 grep -q "$ROOT" "$TMP/status.out"
-grep -q 'Version: 0.8.0-beta.15' "$TMP/status.out"
+grep -q 'Version: 0.8.0-beta.16' "$TMP/status.out"
 HOME="$TMP/home-install" "$ROOT/install.sh" --uninstall > "$TMP/uninstall.out"
 [ ! -e "$TMP/home-install/.claude/skills/agent-taskgraph" ] || fail "Claude link was not removed"
 [ ! -e "$TMP/home-install/.codex/skills/agent-taskgraph" ] || fail "Codex link was not removed"
@@ -976,7 +976,7 @@ cat > "$TMP/prepare-project/.agent-taskgraph/PROJECT.md" <<MD
 
 | 配置 | 项目选择 |
 |---|---|
-| Agent TaskGraph 协议版本 | 0.8.0-beta.15 |
+| Agent TaskGraph 协议版本 | 0.8.0-beta.16 |
 | Source baseline | READY: repo=$TMP/prepare-project; HEAD=$PREPARE_HEAD; branch=main; clean |
 | 已启用可选适配器 | hapi |
 | Preferred runtime | hapi |
@@ -1188,12 +1188,12 @@ import re
 import sys
 
 root = Path(sys.argv[1])
-assert (root / "VERSION").read_text().strip() == "0.8.0-beta.15"
+assert (root / "VERSION").read_text().strip() == "0.8.0-beta.16"
 assert "Apache License" in (root / "LICENSE").read_text()
 skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
 assert "description:" in skill.split("---", 2)[1]
-for phrase in ("一句话可以开始", "PROJECT.md", "PLAN.md", "TEAM.md", "Human Gate", "独立上下文"):
+for phrase in ("一句话可以开始", "PROJECT.md", "PLAN.md", "TEAM.md", "Human Gate", "独立上下文", "Agent Teams", "Agent View background sessions", "full-history fork"):
     assert phrase in skill, phrase
 assert "references/hapi-runtime.md" in skill
 assert "HAPI 默认关闭" in skill
@@ -1206,8 +1206,11 @@ for phrase in ("只在", "native-first", "派发硬门", "不得自动启用", "
 for phrase in ("verify-hapi-session.py", "RUNTIME_CONFIG_MISMATCH", "先不要 `ping_peer`"):
     assert phrase in hapi_reference, phrase
 project_template = (root / "templates/PROJECT.md").read_text()
-for phrase in ("原生宿主", "模型/推理", "HAPI", "Human Gates"):
+for phrase in ("原生宿主", "团队运行形态", "模型/推理", "Dangerous mode", "HAPI", "Human Gates"):
     assert phrase in project_template, phrase
+native_reference = (root / "references/native-runtimes.md").read_text()
+for phrase in ("PMO", "Agent Teams", "Agent View background sessions", "dontAsk", "workspace-write", "full-history fork", "不表示必须打开一个 Terminal"):
+    assert phrase in native_reference, phrase
 runtime_profiles = (root / "references/runtime-profiles.md").read_text()
 for phrase in ("一次确认协议", "adaptive-batch", "Permission scope", "目录探测"):
     assert phrase in runtime_profiles, phrase

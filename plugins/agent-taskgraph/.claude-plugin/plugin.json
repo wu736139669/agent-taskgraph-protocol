@@ -1,7 +1,7 @@
 {
   "name": "agent-taskgraph",
-  "description": "Native Claude Code multi-session orchestration with isolated Agent contexts and document handoffs.",
-  "version": "0.8.0-beta.15",
+  "description": "PMO-led native Claude Code Agent Teams with isolated contexts and document handoffs.",
+  "version": "0.8.0-beta.16",
   "author": {
     "name": "wu736139669"
   },

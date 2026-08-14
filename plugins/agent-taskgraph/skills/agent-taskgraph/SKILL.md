@@ -30,10 +30,10 @@ PMO 先输出一段短摘要：
 
 需要团队时，再展示一次团队预览：
 
-| Agent | 长期职责 | 本次任务 | 独立上下文 | 模型/推理 | 写入范围 |
-|---|---|---|---|---|---|
+| Agent | 长期职责 | 本次任务 | 原生运行形态 | 模型/推理 | 权限 | Worktree/写入范围 |
+|---|---|---|---|---|---|---|
 
-用户确认“开始”后一次性创建团队。不要让用户确认 Goal 路径、Session ID、machine ID、wait primitive、runtime evidence 或内部命令。
+同时用一句话说明 PMO 只做计划、派发、监督和验收。用户确认“开始”后一次性创建团队；不要让用户确认 Goal 路径、Session ID、wait primitive、runtime evidence 或内部命令。只有运行形态、可见方式或权限扩大时才重新确认。
 
 **最短用法**：
 
@@ -68,15 +68,18 @@ PMO 先输出一段短摘要：
 - 优先使用当前会话暴露的原生 subagent/agent-thread 能力。
 - CLI 中 Agent thread 可由 `/agent` 查看；App/IDE 使用其原生 Agent 面板。
 - Codex 自己负责 spawn、wait、steer、stop 和结果回传；Skill 不再用 HAPI 模拟这些能力。
-- 读任务可共享当前 checkout；并行写任务使用 Codex 原生 worktree 或互不重叠的工作区。
+- 原生 Agent thread 默认不是新 Terminal，也不保证自动隔离 checkout。读任务可共享；并行写任务必须使用宿主 worktree 或互不重叠的路径。
 - 自定义长期岗位可放在 `.codex/agents/`，但只在角色确实反复使用时创建。
 
 ### Claude Code
 
-- 优先使用 Claude Code 原生 subagents。
-- 用户需要可直接切换、互相通信的独立会话，且 Agent Teams 已启用时，使用原生 Agent Teams。
-- Agent Teams 未启用时，如实使用 subagents 或单 Agent；不得自动改走 HAPI。
-- Agent Teams 是实验能力，使用前只做一次能力确认；不让普通用户配置内部任务文件。
+- 复杂团队任务优先使用 **Agent Teams**：主会话是 Lead/PMO，teammates 拥有独立 Claude Code 会话和独立上下文。只在已启用实验能力时使用；未启用时说明降级，不静默把“多会话团队”替换成 subagents。
+- 需要跨 PMO 恢复、长期后台运行或独立 worktree 的 Worker，优先使用 **Agent View background sessions**；`claude agents` 是管理界面，Worker 不需要绑定单独终端。
+- **Subagents** 只用于一次性探索、测试、日志分析或 Reviewer 等短支线；它们不算长期 Team Worker。
+- 默认显示是当前终端内的 Agent 面板或后台列表。只有用户明确要求可见分屏时才使用 tmux/iTerm2；不要自动打开多个 Terminal.app 窗口。
+- Agent Teams teammates 不自动隔离 worktree；并行写任务必须分区。需要强隔离时改用 background sessions 或支持 worktree isolation 的 subagents。
+
+仅在实际创建团队时读取 [`references/native-runtimes.md`](references/native-runtimes.md)，按宿主当前能力选择运行形态，不凭记忆编造 CLI flag。
 
 ### 能力不足
 
@@ -143,6 +146,8 @@ Agent 启动时只读：
 
 禁止默认读取全部 `PLAN`、全部其他任务、整个 archive、PMO 聊天或其他 Agent 日志。需要新上下文时，PMO把稳定引用追加到本任务文件，不粘贴整段历史。
 
+如果宿主的 spawn API 支持 history/context fork，必须显式选择空白或最小任务上下文；不得省略该选项后意外继承 PMO 全部历史。Claude 不用 `/fork` 创建隔离 Worker；Codex 不使用 full-history fork。稳定上下文只通过 task 文件和直接 handoff 传递。
+
 ## 8. 派发和交接
 
 派发消息保持短：
@@ -165,11 +170,16 @@ PMO 观察到准确的 `TASK_READY` 后才认为 Agent 开工。Agent 完成时�
 
 ## 9. 模型、推理和权限
 
-- 默认继承当前宿主配置，AI按任务复杂度选择；团队预览中只显示最终选择，不逐字段追问。
+- 派发前读取宿主的**有效**模型、推理、sandbox/permission 和可见方式；只记录脱敏结果，不读取或复制 token、API key、settings 中的 secret。
+- AI 按任务复杂度推荐配置，团队预览一次展示最终选择，不逐字段追问。
 - 用户明确要求控制成本或模型时，才逐 Agent 调整。
 - 轻量探索/格式整理用较快模型和较低推理；架构、复杂调试、Reviewer 使用更强模型和较高推理。
-- 权限默认继承父会话/项目设置。只有扩大权限时询问一次；不要由 Skill 强制 yolo。
-- Codex/Claude 原生 Agent 的真实配置和权限规则优先于 Skill 中的任何抽象名称。
+- Claude 建议：探索/只读 Reviewer 用 `plan` 或只读 tools；实现 Worker 用独立 worktree + `acceptEdits`/`auto`；无人值守且不弹窗时用 `dontAsk` + 精确 allowlist，让越权操作失败。
+- Codex 建议：探索/Reviewer 用 `read-only`；实现 Worker 用 `workspace-write + on-request`。需要无人值守时可用 `workspace-write + never`，让越界操作失败而不是取消 sandbox。
+- `bypassPermissions`、`danger-full-access + never` 或 `--yolo` 只在用户明确授权且环境已隔离时使用。检测到父会话已经是 Full Access/Yolo，必须在团队预览中说明它会传播给 Workers，并确认一次。
+- Claude Agent Teams teammates 在 spawn 时继承 Lead 权限，不能逐人设置；需要混合权限时改用 background sessions/subagents，或在开工前逐个调整并验证。
+- Codex Agent thread 继承父会话 sandbox/approval；父会话 live override 和 Yolo 会传播。自定义 Agent 文件只能在宿主允许时收紧，不得把请求值当成实际生效证据。
+- 权限扩大、安装、联网、迁移、删除、合并和发布仍是 Human Gate。不要由 Skill 强制 yolo。
 
 ## 10. 监督、失败和验收
 
@@ -189,7 +199,7 @@ PMO 观察到准确的 `TASK_READY` 后才认为 Agent 开工。Agent 完成时�
 2. PMO 运行最终集成验证。
 3. `STATUS.md` 只保留结果、风险和唯一下一步。
 4. 已完成 task 文件移入 `archive/`。
-5. 关闭不再需要的原生 Agent thread/session；长期角色可保留空闲会话。
+5. 关闭不再需要的原生 Agent thread/session；长期角色保留在 `TEAM.md` 和宿主角色定义中。Claude Agent Teams 的 in-process teammates 不假定可跨 Lead resume，需跨批次恢复时使用 Agent View background session。
 6. 向用户报告做了什么、如何验证、哪些未完成。
 
 ## 12. HAPI 可选补充
