@@ -18,10 +18,16 @@ assert_link_to() {
 }
 
 VERSION="$(tr -d '\r\n' < "$ROOT/VERSION")"
-[ "$VERSION" = "0.8.0-beta.18" ] || fail "unexpected VERSION: $VERSION"
+[ "$VERSION" = "0.8.0-beta.19" ] || fail "unexpected VERSION: $VERSION"
 
 echo "[1/8] shell and metadata syntax"
 bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" "$ROOT/tests/smoke.sh"
+python3 - "$ROOT/scripts/check-docs.py" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+compile(path.read_text(encoding="utf-8"), str(path), "exec")
+PY
 python3 - "$ROOT" "$VERSION" <<'PY'
 import json
 import pathlib
@@ -46,8 +52,10 @@ assert skill.startswith("---\nname: agent-taskgraph\n")
 assert "description:" in skill.split("---", 2)[1]
 assert "references/native-runtimes.md" in skill
 assert "references/team-protocol.md" in skill
+assert "references/development-team-example.md" in skill
 assert (root / "references/native-runtimes.md").is_file()
 assert (root / "references/team-protocol.md").is_file()
+assert (root / "references/development-team-example.md").is_file()
 assert "<TODO>" not in skill
 PY
 
@@ -92,6 +100,7 @@ grep -q 'hub-and-spoke' "$ROOT/references/native-runtimes.md"
 grep -q '可能成为 teammate' "$ROOT/references/native-runtimes.md"
 grep -q 'Team Charter' "$ROOT/references/team-protocol.md"
 grep -q 'Development Team' "$ROOT/references/team-protocol.md"
+grep -q 'T1-contract' "$ROOT/references/development-team-example.md"
 
 echo "[3/8] optional durable-state initialization"
 mkdir -p "$TMP/project"
@@ -102,6 +111,8 @@ done
 assert_file "$TMP/project/.agent-taskgraph/tasks/TEMPLATE.md"
 assert_dir "$TMP/project/.agent-taskgraph/archive"
 grep -q 'Team Charter' "$TMP/project/.agent-taskgraph/TEAM.md"
+grep -q 'Protocol version' "$TMP/project/.agent-taskgraph/TEAM.md"
+grep -q 'Updated at' "$TMP/project/.agent-taskgraph/TEAM.md"
 grep -q 'Team Task Graph' "$TMP/project/.agent-taskgraph/PLAN.md"
 grep -q 'Lifecycle phase' "$TMP/project/.agent-taskgraph/STATUS.md"
 grep -q 'Produces for' "$TMP/project/.agent-taskgraph/tasks/TEMPLATE.md"
@@ -178,6 +189,7 @@ for pair in \
   "agents/openai.yaml:agents/openai.yaml" \
   "references/native-runtimes.md:references/native-runtimes.md" \
   "references/team-protocol.md:references/team-protocol.md" \
+  "references/development-team-example.md:references/development-team-example.md" \
   "scripts/check-update.sh:scripts/check-update.sh" \
   "templates/PROJECT.md:templates/PROJECT.md" \
   "templates/PLAN.md:templates/PLAN.md" \
@@ -195,6 +207,7 @@ SKILL.md
 VERSION
 agents/openai.yaml
 init.sh
+references/development-team-example.md
 references/native-runtimes.md
 references/team-protocol.md
 scripts/check-update.sh
@@ -213,6 +226,7 @@ ACTUAL_PLUGIN_FILES="$(cd "$PLUGIN" && find . -type f | sed 's#^./##' | sort)"
 }
 
 echo "[7/8] documentation and package version consistency"
+python3 "$ROOT/scripts/check-docs.py"
 grep -q "v$VERSION" "$ROOT/README.md"
 grep -q "v$VERSION" "$ROOT/README.zh-CN.md"
 grep -q "v$VERSION" "$ROOT/plugins/agent-taskgraph/README.md"
@@ -221,8 +235,8 @@ import pathlib
 import sys
 root = pathlib.Path(sys.argv[1])
 required = {
-    "README.md": ["Solo", "Delegation", "Team Charter", "Collaboration protocol", "Lifecycle", "Agent Teams"],
-    "README.zh-CN.md": ["Solo", "Delegation", "Team Charter", "协作协议", "生命周期", "Agent Teams"],
+    "README.md": ["Start in 60 seconds", "Solo", "Delegation", "Team Charter", "Documentation map", "Agent Teams"],
+    "README.zh-CN.md": ["60 秒开始", "Solo", "Delegation", "Team Charter", "文档导航", "Agent Teams"],
 }
 for name, phrases in required.items():
     text = (root / name).read_text()
@@ -233,6 +247,7 @@ PY
 echo "[8/8] repository hygiene"
 git -C "$ROOT" diff --check
 [ -x "$ROOT/init.sh" ] || fail "init.sh is not executable"
+[ -x "$ROOT/scripts/check-docs.py" ] || fail "check-docs.py is not executable"
 [ -x "$ROOT/scripts/check-update.sh" ] || fail "check-update.sh is not executable"
 [ -x "$ROOT/tests/smoke.sh" ] || fail "tests/smoke.sh is not executable"
 

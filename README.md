@@ -4,88 +4,15 @@
 
 # Agent TaskGraph
 
-**Build native Codex and Claude Code Agent Teams with a shared goal, roles, task relationships, a collaboration protocol, and a lifecycle.**
+**Build native Codex and Claude Code Agent Teams with a shared outcome, roles, task relationships, a collaboration protocol, and a lifecycle.**
 
-Version: [`v0.8.0-beta.18`](VERSION) | License: [Apache-2.0](LICENSE)
+Version: [`v0.8.0-beta.19`](VERSION) | License: [Apache-2.0](LICENSE)
 
-Agent TaskGraph does more than launch several Agents in parallel. The current session becomes the Lead, selects Solo, Delegation, or Team mode, forms the team, assigns roles, manages task dependencies, supervises handoffs, organizes review, integrates the result, and disbands the team.
+Agent TaskGraph makes the current session the Lead, selects Solo, Delegation, or Team mode, and uses the host's native Agents to form the team, delegate work, coordinate Handoffs, review changes, and integrate the result. It runs no external orchestration service.
 
-It uses only the current host's native Agent capabilities and runs no external orchestration service.
+## Start in 60 seconds
 
-## Three execution modes
-
-| Mode | Use when | Shape |
-|---|---|---|
-| **Solo** | Small fix, one module, or sequential work | Current session |
-| **Delegation** | Independent branches only need to report to the Lead | Lead + native subagents |
-| **Team** | Shared outcome, role collaboration, task dependencies, or cross-module integration | Team Charter + roles + task graph + lifecycle |
-
-An explicit request to “form a team” selects Team mode unless native Agents are unavailable, the work cannot be safely decomposed, or writes cannot be isolated.
-
-## What makes a Team
-
-### Shared outcome
-
-The team has one observable integrated result, explicit non-goals, and a team-level definition of done.
-
-### Roles
-
-- **Lead:** formation, assignment, dependencies, decisions, supervision, and integration.
-- **Builder / Specialist:** owns one bounded Task at a time.
-- **Reviewer:** independently reviews according to risk without reimplementing the task.
-- **Integrator:** consumes handoffs, resolves conflicts, and runs team-level acceptance; normally the Lead.
-
-Roles are created from real work. A default Team has two to four active members including the Lead, never idle members added to fill an organization chart.
-
-### Task relationships
-
-Every Task records:
-
-```text
-Owner / Role / Goal / Needs / Produces / Consumer / Writes / Acceptance
-```
-
-Independent Tasks can run in parallel. Dependent Tasks wait for handoffs. Shared writes run sequentially or in isolated worktrees.
-
-### Collaboration protocol
-
-Teams use four concise semantic events:
-
-- `READY`: the assignment is clear and executable.
-- `BLOCKED`: the blocker, attempts, and required decision or deliverable.
-- `HANDOFF`: result, paths, verification, risks, and downstream notes.
-- `REVIEW`: pass or changes-required with evidence.
-
-### Lifecycle
-
-```text
-forming → briefing → executing → reviewing → integrating → complete/stopped
-```
-
-A Team is complete only after critical Tasks reach terminal states, handoffs are consumed, integration checks pass, risks are disclosed, and unused Agents are ended.
-
-## Codex and Claude Code
-
-### Codex
-
-A Codex Team defaults to a **Lead-centered hub-and-spoke topology**: the main thread is Lead and native subagents/Agent threads are members. Peer messaging is not required; the Lead coordinates dependencies through assignment contracts, artifacts, and handoffs.
-
-### Claude Code
-
-- **Subagents:** Lead-centered Teams for development, research, and review.
-- **Agent Teams:** only when teammates must message each other, claim shared tasks, or coordinate decisions.
-
-A logical Team is not synonymous with Claude Agent Teams. If Agent Teams are unavailable, subagents can still implement a Lead-centered Team.
-
-## Write and Git ownership
-
-- Parallel writers use separate worktrees or disjoint paths.
-- A file, generated artifact, or migration state has one Owner at a time.
-- Workers do not commit, merge, rebase, tag, push, or release by default.
-- The Integrator owns the final diff, conflict resolution, and team-level verification.
-- Multi-agent execution never expands existing permissions or authorization for external effects.
-
-## Install
+### 1. Install
 
 ```bash
 git clone https://github.com/wu736139669/agent-taskgraph-protocol.git
@@ -94,67 +21,135 @@ cd agent-taskgraph-protocol
 ./install.sh --status
 ```
 
-The installer links the same Skill into:
+The same Skill is linked into:
 
 - `~/.codex/skills/agent-taskgraph`
 - `~/.claude/skills/agent-taskgraph`
 
-## Use
-
-Form a development team:
+### 2. Form a development team
 
 ```text
-Use agent-taskgraph to form a development team for this request. Understand the project, establish the shared outcome, roles, task dependencies, write boundaries, and definition of done, then use the current host's native Agents to execute, hand off, review, and integrate the work.
+Use agent-taskgraph to form a development team for this request.
+Understand the project, define the shared outcome, roles, task dependencies,
+write boundaries, and definition of done, then execute, hand off, review,
+and integrate the work with the current host's native Agents.
 ```
 
-Use independent delegation only:
+The Lead produces a preview such as:
 
 ```text
-Use agent-taskgraph. Delegate independent branches to native subagents; the main session will synthesize and verify them. The members do not need to collaborate with each other.
+Mode and topology: Team / hub-and-spoke
+Team outcome: ...
+Members: Lead/Integrator, Backend Builder, Frontend Builder, Reviewer
+Task relationships: T1 → T2/T3 → T4 Review → T5 Integration
+Definition of done: integration tests, build, and risk checks pass
 ```
 
-Let the Skill choose:
+Invoking the Skill authorizes reasonable internal team formation. Only product decisions, permission expansion, or external side effects require additional confirmation.
+
+## Three modes
+
+| Mode | Use when | Shape |
+|---|---|---|
+| **Solo** | Small fix, one module, or sequential work | Current session |
+| **Delegation** | Independent branches only need to report to the Lead | Lead + native Members |
+| **Team** | Shared outcome, role collaboration, dependencies, or cross-module integration | Team Charter + Task Graph + lifecycle |
+
+### Do not form a Team for appearances
+
+Use Solo or Delegation when:
+
+- the work cannot produce two independent, testable outputs
+- Members would edit the same files concurrently
+- coordination costs more than the work itself
+- the request is too unclear to define Task Acceptance
+
+## Five parts of a Team
+
+1. **Outcome:** the shared result, Non-goals, and Definition of done.
+2. **Roles:** Lead, Integrator, and the Builders, Specialists, or Reviewers required by current Tasks.
+3. **Task Graph:** Owner, Needs, Produces, Consumer, Writes, and Acceptance.
+4. **Collaboration:** `READY / BLOCKED / HANDOFF / REVIEW`.
+5. **Lifecycle:**
 
 ```text
-Use agent-taskgraph for this task. Choose Solo, Delegation, or Team based on the work. Isolate parallel writes and verify the integrated result.
+forming → briefing → executing → reviewing → integrating → complete/stopped
 ```
 
-## Optional durable Team state
+A default Team has two to four active Members including the Lead. No real Task means no corresponding Member.
 
-Short Teams can use only native tasks and messages. For cross-session work, important dependencies, or an audit trail, run:
+## Complete development example
+
+[`references/development-team-example.md`](references/development-team-example.md) follows an asynchronous report-export feature through the full Team lifecycle:
+
+```text
+T1 API contract
+ ├─ T2 Backend implementation
+ └─ T3 Frontend implementation
+       ↓
+T4 Independent review
+       ↓
+T5 Integration and team acceptance
+```
+
+The example includes the Team Charter, Roster, Task Graph, assignment contract, blocker, Handoff, Review, and completion report.
+
+## Native runtimes
+
+### Codex
+
+A Codex Team defaults to `hub-and-spoke`: the main thread is Lead and native subagents/Agent threads are Members. The Lead manages dependencies through Task contracts, artifacts, and Handoffs without assuming peer messaging.
+
+### Claude Code
+
+- **Subagents:** Lead-centered Teams.
+- **Agent Teams:** only when Members must message each other, claim shared tasks, or coordinate decisions.
+
+A logical Team is not synonymous with Claude Agent Teams. If Agent Teams are unavailable, subagents can still implement a Lead-centered Team.
+
+## Writes, Git, and permissions
+
+- Parallel writers use separate worktrees or disjoint paths.
+- A file, generated artifact, or migration state has one Owner at a time.
+- Members do not commit, merge, rebase, tag, push, or release by default.
+- The Integrator owns the final diff, conflict resolution, and team-level verification.
+- Multi-agent execution never expands current permissions or authorization for external effects.
+
+## Optional durable state
+
+Short Teams use native tasks and messages. For cross-session work, important dependencies, or an audit trail, run:
 
 ```bash
 ./init.sh /path/to/project
 ```
 
-This creates:
-
 ```text
 .agent-taskgraph/
-├── PROJECT.md
-├── TEAM.md          # Team Charter and roster
-├── PLAN.md          # Task graph and dependencies
-├── STATUS.md        # Team lifecycle
-├── DECISIONS.md
-├── tasks/TEMPLATE.md
-└── archive/
+├── PROJECT.md       # stable project facts
+├── TEAM.md          # Team Charter and Roster
+├── PLAN.md          # Task Graph and integration path
+├── STATUS.md        # lifecycle, progress, and blockers
+├── DECISIONS.md     # decisions that changed the team contract
+├── tasks/<id>.md    # one Task contract and Handoff
+└── archive/         # ended Team batches
 ```
 
-Durable state restores team facts and handoffs, not presumed-live Agents. A new Lead session checks native state first, then resumes or recreates members.
+Templates use stable English field names; values can use the project's primary language. Durable files restore team facts, not presumed-live Agents.
 
-## Team presets
+## Documentation map
 
-These are starting points, not fixed organization charts:
-
-- **Development Team:** Lead/Integrator, module Builders, and risk-driven Reviewers.
-- **Research Team:** Lead/Synthesizer and Researchers divided by question domain.
-- **Review Team:** Lead and read-only Reviewers divided by correctness, security, testing, or product intent.
+| Document | Read when |
+|---|---|
+| [`SKILL.md`](SKILL.md) | Skill routing and non-negotiable constraints |
+| [`references/team-protocol.md`](references/team-protocol.md) | Entering Team mode |
+| [`references/native-runtimes.md`](references/native-runtimes.md) | Creating or controlling native Members |
+| [`references/development-team-example.md`](references/development-team-example.md) | Learning the complete end-to-end flow |
+| [`templates/`](templates/) | Persisting Team state across sessions |
 
 ## Validate and update
 
 ```bash
 ./tests/smoke.sh
+python3 ./scripts/check-docs.py
 ./install.sh --check-update
 ```
-
-See [`SKILL.md`](SKILL.md) for the entrypoint, [`references/team-protocol.md`](references/team-protocol.md) for the Team contract, and [`references/native-runtimes.md`](references/native-runtimes.md) for runtime mapping.

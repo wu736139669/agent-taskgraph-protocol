@@ -1,10 +1,12 @@
 # Team Task Graph
 
-> Maintained by the Lead. Record real dependencies and ownership, not chat history.
+> Lead-maintained source of truth for Tasks, dependencies, ownership, and integration order.
 
-## Team outcome
-
-<same observable result as TEAM.md>
+| Field | Value |
+|---|---|
+| Team ID | <same as TEAM.md> |
+| Updated at | <ISO 8601 timestamp> |
+| Outcome | <same observable result as TEAM.md> |
 
 ## Tasks
 

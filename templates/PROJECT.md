@@ -1,16 +1,20 @@
 # Project Facts
 
-> Optional durable state. Keep only facts future Team sessions cannot cheaply rediscover.
+> Lead-maintained source of truth for stable facts that future Team sessions cannot cheaply rediscover.
+> Keep field names in English; values may use the project's primary language.
 
-## Product
+## Project
 
-- Purpose:
-- Current phase:
-- Repository root:
+| Field | Value |
+|---|---|
+| Purpose | |
+| Current phase | |
+| Repository root | |
+| Primary document language | <English / 中文 / other> |
 
 ## Important paths
 
-| Path | Purpose / Owner constraint |
+| Path | Purpose / ownership constraint |
 |---|---|
 
 ## Build and verification

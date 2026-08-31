@@ -1,15 +1,18 @@
 # Task: <id> - <title>
 
+> Owner-maintained source of truth for this Task contract, event summary, and final Handoff.
+
 | Field | Value |
 |---|---|
-| Team ID | <team id> |
-| Owner / Role | <Agent / role responsibility> |
+| Team ID | <same as TEAM.md> |
+| Updated at | <ISO 8601 timestamp> |
+| Owner / Role | <Member / role responsibility> |
 | Status | pending |
-| Native Agent | <runtime session/thread or PENDING> |
+| Native Member | <runtime session/thread or PENDING> |
 | Goal | <one observable result> |
-| Needs | <none / task ids and required handoffs> |
-| Produces for | <downstream task / Integrator> |
-| Reads | <3-6 paths, symbols, or direct handoffs> |
+| Needs | <none / Task IDs and required Handoffs> |
+| Produces for | <downstream Task / Integrator> |
+| Reads | <3-6 paths, symbols, or direct Handoffs> |
 | Writes | <allowed paths; none for read-only work> |
 | Does not own | <explicit exclusions> |
 | Acceptance | <command or observable check> |

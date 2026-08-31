@@ -1,6 +1,6 @@
 {
   "name": "agent-taskgraph",
-  "version": "0.8.0-beta.18",
+  "version": "0.8.0-beta.19",
   "description": "Build native Codex Agent Teams with goals, roles, task graphs, collaboration protocols, and lifecycles.",
   "author": {
     "name": "wu736139669"

@@ -6,86 +6,13 @@
 
 **在 Codex 和 Claude Code 中建立有目标、角色、任务关系、协作协议和生命周期的原生 Agent Team。**
 
-版本：[`v0.8.0-beta.18`](VERSION) | 许可证：[Apache-2.0](LICENSE)
+版本：[`v0.8.0-beta.19`](VERSION) | 许可证：[Apache-2.0](LICENSE)
 
-Agent TaskGraph 不只是并行启动几个 Agent。它让当前会话成为 Lead，根据任务选择 Solo、Delegation 或 Team，并负责组建团队、分配角色、建立任务依赖、监督交接、组织审查、完成集成和解散团队。
+Agent TaskGraph 让当前会话成为 Lead，根据工作选择 Solo、Delegation 或 Team，使用宿主原生 Agents 完成组队、派发、协作、审查和集成。它不运行外部调度服务。
 
-它只使用当前宿主的原生 Agent 能力，不运行外部调度服务。
+## 60 秒开始
 
-## 三种工作模式
-
-| 模式 | 适用情况 | 运行方式 |
-|---|---|---|
-| **Solo** | 小修复、单模块或顺序任务 | 当前会话直接完成 |
-| **Delegation** | 多个独立支线，只需分别交给 Lead | Lead + 原生 subagents |
-| **Team** | 有共同目标、角色协作、任务依赖或跨模块集成 | Team Charter + 角色 + 任务图 + 生命周期 |
-
-用户明确要求“组一个团队”时优先进入 Team 模式。只有原生 Agent 不可用、任务无法安全拆分或写入无法隔离时才降级。
-
-## 一个 Team 包含什么
-
-### 共同目标
-
-团队有一个可观察的集成结果，同时声明当前批次的非目标和完成条件。
-
-### 角色
-
-- **Lead**：组队、派发、依赖、决策、监督和集成。
-- **Builder / Specialist**：负责边界清楚的 Task。
-- **Reviewer**：按风险独立审查，不重新实现任务。
-- **Integrator**：消费 handoff、解决冲突、运行团队级验收，默认由 Lead 担任。
-
-角色按真实任务动态创建。默认团队包含 Lead 在内共 2-4 个 active members，不为了组织结构完整创建空闲成员。
-
-### 任务关系
-
-每个 Task 都有：
-
-```text
-Owner / Role / Goal / Needs / Produces / Consumer / Writes / Acceptance
-```
-
-独立 Task 可以并行；有依赖的 Task 等待 handoff；共享写入范围必须串行或使用独立 worktree。
-
-### 协作协议
-
-团队使用四种简洁的语义事件：
-
-- `READY`：任务合同清楚且可以开始。
-- `BLOCKED`：报告阻塞、尝试和需要的决定或交付。
-- `HANDOFF`：交付结果、路径、验证和下游注意事项。
-- `REVIEW`：给出通过/修正结论及证据。
-
-### 生命周期
-
-```text
-forming → briefing → executing → reviewing → integrating → complete/stopped
-```
-
-Team 只有在关键任务收口、handoff 被消费、集成验证完成、风险被披露并结束不再需要的 Agent 后才算完成。
-
-## Codex 与 Claude Code
-
-### Codex
-
-Codex Team 默认是 **Lead 中心化的 hub-and-spoke 团队**：当前主线程是 Lead，原生 subagents/agent threads 是成员。成员间不需要直接通信；Lead 通过任务合同、代码产物和 handoff 协调依赖。
-
-### Claude Code
-
-- **Subagents**：用于 Lead 中心化团队，适合开发、研究和审查。
-- **Agent Teams**：只有 teammates 需要互相通信、认领共享任务或协作决策时使用。
-
-逻辑 Team 不等同于 Claude Agent Teams。Agent Teams 不可用时，仍然可以用 subagents 建立中心化 Team。
-
-## 写入和 Git 所有权
-
-- 并行写任务使用独立 worktree 或不重叠路径。
-- 一个文件、生成物或迁移状态同一时刻只有一个 Owner。
-- Worker 默认不 commit、merge、rebase、打 Tag、推送或发布。
-- Integrator 负责最终 diff、冲突处理和团队级验证。
-- 多 Agent 不扩大当前会话已有的权限和外部操作授权。
-
-## 安装
+### 1. 安装
 
 ```bash
 git clone https://github.com/wu736139669/agent-taskgraph-protocol.git
@@ -94,67 +21,134 @@ cd agent-taskgraph-protocol
 ./install.sh --status
 ```
 
-安装器会把同一个 Skill 链接到：
+同一个 Skill 会链接到：
 
 - `~/.codex/skills/agent-taskgraph`
 - `~/.claude/skills/agent-taskgraph`
 
-## 使用
-
-建立开发团队：
+### 2. 组一个开发团队
 
 ```text
-使用 agent-taskgraph 组一个开发团队完成这个需求。先理解项目，建立共同目标、角色、任务依赖、写入边界和完成条件，然后用当前宿主的原生 Agent 执行、交接、审查和集成。
+使用 agent-taskgraph 组一个开发团队完成这个需求。
+先理解项目，建立共同目标、角色、任务依赖、写入边界和完成条件，
+然后用当前宿主的原生 Agents 执行、交接、审查和集成。
 ```
 
-只做独立并行委派：
+Lead 会输出类似：
 
 ```text
-使用 agent-taskgraph。可以独立并行的任务交给原生 subagents，主会话负责汇总和验收，不需要成员互相协作。
+模式与拓扑：Team / hub-and-spoke
+团队目标：...
+成员：Lead/Integrator、Backend Builder、Frontend Builder、Reviewer
+任务关系：T1 → T2/T3 → T4 Review → T5 Integration
+完成条件：集成测试、构建和风险检查通过
 ```
 
-让 Skill 自动选择：
+用户调用 Skill 已经授权合理的内部组队；只有产品决策、权限扩大或外部副作用需要额外确认。
+
+## 三种模式
+
+| 模式 | 适用情况 | 运行方式 |
+|---|---|---|
+| **Solo** | 小修复、单模块、顺序工作 | 当前会话直接完成 |
+| **Delegation** | 多个独立支线只需分别交给 Lead | Lead + 原生 Members |
+| **Team** | 有共同目标、角色协作、任务依赖或跨模块集成 | Team Charter + Task Graph + 生命周期 |
+
+### 不要为了形式组 Team
+
+以下情况使用 Solo 或 Delegation：
+
+- 工作无法拆出两个独立、可验收的产出
+- 多个 Members 会同时修改同一批文件
+- 协调成本高于实际工作
+- 需求还不清楚，无法定义 Task Acceptance
+
+## Team 的五个组成部分
+
+1. **Outcome**：团队共同结果、Non-goals 和 Definition of done。
+2. **Roles**：Lead、Integrator，以及当前 Tasks 需要的 Builders、Specialists 或 Reviewers。
+3. **Task Graph**：Owner、Needs、Produces、Consumer、Writes、Acceptance。
+4. **Collaboration**：`READY / BLOCKED / HANDOFF / REVIEW`。
+5. **Lifecycle**：
 
 ```text
-使用 agent-taskgraph 完成这个任务。根据复杂度选择 Solo、Delegation 或 Team；并行写入必须隔离，最后统一验收。
+forming → briefing → executing → reviewing → integrating → complete/stopped
 ```
 
-## 可选的持久化 Team 状态
+默认团队包含 Lead 在内共 2-4 个 active Members。没有真实 Task 就不创建对应 Member。
 
-短 Team 可以只使用宿主原生任务和消息。跨会话、任务依赖复杂或需要审计时运行：
+## 完整开发团队示例
+
+[`references/development-team-example.md`](references/development-team-example.md) 展示一个异步报告导出功能如何运行：
+
+```text
+T1 API contract
+ ├─ T2 Backend implementation
+ └─ T3 Frontend implementation
+       ↓
+T4 Independent review
+       ↓
+T5 Integration and team acceptance
+```
+
+示例包含 Team Charter、Roster、Task Graph、派发合同、阻塞、Handoff、Review 和 Complete 报告。
+
+## 原生运行时
+
+### Codex
+
+Codex Team 默认是 `hub-and-spoke`：当前主线程是 Lead，原生 subagents/agent threads 是 Members。Lead 通过 Task 合同、代码产物和 Handoffs 管理依赖，不假设 Members 能直接互相通信。
+
+### Claude Code
+
+- **Subagents**：用于 Lead 中心化 Team。
+- **Agent Teams**：只有 Members 必须互相通信、认领共享任务或协作决策时使用。
+
+逻辑 Team 不等同于 Claude Agent Teams。Agent Teams 不可用时，仍可用 subagents 建立中心化 Team。
+
+## 写入、Git 和权限
+
+- 并行写 Tasks 使用独立 worktree 或不重叠路径。
+- 一个文件、生成物或迁移状态同一时刻只有一个 Owner。
+- Members 默认不 commit、merge、rebase、打 Tag、推送或发布。
+- Integrator 负责最终 diff、冲突处理和团队级验证。
+- 多 Agent 不扩大当前会话的权限或外部操作授权。
+
+## 可选的持久化状态
+
+短 Team 直接使用宿主原生任务和消息。跨会话、依赖复杂或需要审计时运行：
 
 ```bash
 ./init.sh /path/to/project
 ```
 
-生成：
-
 ```text
 .agent-taskgraph/
-├── PROJECT.md
-├── TEAM.md          # Team Charter 和成员
-├── PLAN.md          # 任务图和依赖
-├── STATUS.md        # 团队生命周期
-├── DECISIONS.md
-├── tasks/TEMPLATE.md
-└── archive/
+├── PROJECT.md       # 稳定项目事实
+├── TEAM.md          # Team Charter 和 Roster
+├── PLAN.md          # Task Graph 和集成路径
+├── STATUS.md        # 生命周期、进展和阻塞
+├── DECISIONS.md     # 改变团队合同的决定
+├── tasks/<id>.md    # 单个 Task 合同和 Handoff
+└── archive/         # 已结束批次
 ```
 
-持久化目录恢复的是团队事实和 handoff，不是假定仍然在线的 Agent。新 Lead 会话必须先检查原生状态，再恢复或重新创建成员。
+模板使用稳定的英文字段名，字段值可以使用项目主要语言。持久化文件恢复团队事实，不是假定仍然在线的 Agent。
 
-## 团队预设
+## 文档导航
 
-以下只是起点，不是固定组织结构：
-
-- **Development Team**：Lead/Integrator + 按模块划分的 Builders + 按风险创建 Reviewer。
-- **Research Team**：Lead/Synthesizer + 按问题域划分的 Researchers。
-- **Review Team**：Lead + 按正确性、安全、测试或产品意图划分的只读 Reviewers。
+| 文档 | 何时阅读 |
+|---|---|
+| [`SKILL.md`](SKILL.md) | Skill 入口、模式选择和不可违反的约束 |
+| [`references/team-protocol.md`](references/team-protocol.md) | 实际进入 Team 模式时 |
+| [`references/native-runtimes.md`](references/native-runtimes.md) | 准备创建或控制原生 Member 时 |
+| [`references/development-team-example.md`](references/development-team-example.md) | 需要完整端到端示例时 |
+| [`templates/`](templates/) | 需要跨会话 Team 状态时 |
 
 ## 验证和更新
 
 ```bash
 ./tests/smoke.sh
+python3 ./scripts/check-docs.py
 ./install.sh --check-update
 ```
-
-完整入口见 [`SKILL.md`](SKILL.md)，团队合同见 [`references/team-protocol.md`](references/team-protocol.md)，运行时映射见 [`references/native-runtimes.md`](references/native-runtimes.md)。
