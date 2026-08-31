@@ -1,6 +1,6 @@
 ---
 name: Usage feedback
-about: Share what you tried, what happened, and what would make the workflow more useful.
+about: Share what you tried and how native Agent orchestration could improve.
 title: "[Feedback] "
 labels: [feedback]
 assignees: []
@@ -8,34 +8,32 @@ assignees: []
 
 ## What did you try?
 
-Describe the project type and the task you gave Agent TaskGraph. Do not include private source code, credentials, customer data, or unredacted local paths.
+Describe the project type and task without private source code, credentials, customer data, or unredacted local paths.
 
 ## Environment
 
 - Agent TaskGraph version or commit:
-- Runtime: Claude Code / Codex / HAPI / other
+- Runtime: Claude Code / Codex
 - Operating system:
+- Mode used: current session / subagents / Agent Teams
 - Model and reasoning level, if relevant:
 
 ## Workflow used
 
-Select all that apply:
-
-- [ ] Project onboarding / `PROJECT.md`
-- [ ] Requirement clarification / `spec.md`
-- [ ] Task graph approval / `graph.yaml`
-- [ ] Worker execution
-- [ ] Independent review
-- [ ] Resume after interruption
-- [ ] Report, analysis, or other artifact workflow
+- [ ] Single-Agent fallback
+- [ ] Parallel exploration or review
+- [ ] Parallel implementation with disjoint paths
+- [ ] Worktree-isolated implementation
+- [ ] Claude Agent Team coordination
+- [ ] Cross-session durable state
 
 ## Result
 
-What did you expect? What actually happened? Include sanitized commands, status transitions, or evidence summaries when useful.
+What did you expect? What happened?
 
 ## What should improve?
 
-Describe the most important change that would make this workflow more useful.
+Describe the smallest change that would make the workflow more useful.
 
 ## Privacy check
 

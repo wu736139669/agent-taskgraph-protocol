@@ -2,28 +2,25 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-# Agent TaskGraph Protocol
+# Agent TaskGraph
 
-**专为 Codex 和 Claude Code 设计的原生多会话任务编排技能。**
+**面向 Codex 和 Claude Code 的原生多 Agent 编排 Skill。**
 
-源码版本：[`v0.8.0-beta.16`](VERSION) | 许可证：[Apache-2.0](LICENSE)
+版本：[`v0.8.0-beta.17`](VERSION) | 许可证：[Apache-2.0](LICENSE)
 
-Agent TaskGraph 是一种轻量的 graph engineering（图工程）协议，用来构建 **PMO 主导的原生 Agent Team**。当前 Codex 或 Claude Code 会话担任 PMO：先理解需求和项目，再只询问仓库无法回答的关键问题；之后拆出小任务，在确实有并行收益时创建原生 Agent 会话，最后统一验收并向用户汇报。
+Agent TaskGraph 帮当前会话判断任务是否值得并行，然后使用宿主自带的 Agent 能力拆分、派发、监督和验收。它不启动另一套调度服务，也不要求每个任务都创建项目状态目录。
 
-它是一个 Skill 和协作协议，不是托管式调度服务。HAPI 只作为明确需要跨机器控制时的可选适配器，正常流程不会启用或探测 HAPI。
+## 核心变化
 
-## 它解决什么问题
+- **单 Agent 优先**：小任务留在当前会话，避免协调开销。
+- **纯原生运行**：Codex 使用原生 subagents；Claude Code 默认使用 subagents，需要 teammates 互相协作时才使用 Agent Teams。
+- **主会话不空转**：协调者可以同时完成一个不与 Worker 重叠的任务；只有明确要求 lead-only 时才保持纯 PMO。
+- **最小上下文**：Worker 获得自包含任务，不复制主会话全部历史。
+- **写入隔离**：并行写任务必须使用 worktree 或不重叠路径。
+- **按需持久化**：`.agent-taskgraph/` 只用于跨会话、可恢复或需要审计的工作。
+- **原生监督**：使用宿主的 spawn、message、wait、resume 和 stop，不维护第二套 session 状态机。
 
-- 复杂需求先澄清，再开始实现。
-- 每个 Worker 都是独立的 Codex thread 或 Claude Code session，有自己的上下文。
-- 每个 Worker 只有一个长期职责、一个当前任务、一个写入边界和一份精简上下文契约。
-- Worker 之间通过项目文档和 handoff 交接，不复制漫长聊天记录。
-- PMO 负责理解、拆解、派发、监督、集成、验收和最终汇报。
-- 小任务留在当前会话完成，不为了“多 Agent”增加额外开销。
-
-## 快速开始
-
-### 安装
+## 安装
 
 ```bash
 git clone https://github.com/wu736139669/agent-taskgraph-protocol.git
@@ -32,136 +29,103 @@ cd agent-taskgraph-protocol
 ./install.sh --status
 ```
 
-安装器会同时链接到：
+安装器会把同一个 Skill 链接到：
 
-- Claude Code：`~/.claude/skills/agent-taskgraph`
-- Codex：`~/.codex/skills/agent-taskgraph`
+- `~/.codex/skills/agent-taskgraph`
+- `~/.claude/skills/agent-taskgraph`
 
-已有的非符号链接目录默认拒绝覆盖。使用 `./install.sh --check-update` 可以只检查远程版本，不修改本地文件。
+已有的非本仓库路径不会被覆盖；需要备份后替换时使用 `./install.sh --force`。
 
-### 初始化项目
+## 使用
 
-```bash
-./init.sh /path/to/your-project
+在 Codex 或 Claude Code 中直接说：
+
+```text
+使用 agent-taskgraph 完成这个任务。值得并行就用当前宿主的原生 Agent，不值得就当前会话直接做；并行写入必须隔离，最后统一检查 diff 和测试。
 ```
 
-新项目只创建轻量的共享状态目录：
+用户明确要求先看计划时：
+
+```text
+使用 agent-taskgraph。先给我简短的执行模式、分工、写入边界和验收，等我确认再开始。
+```
+
+Skill 会先读项目，再选择：
+
+| 情况 | 执行方式 |
+|---|---|
+| 小修复、单模块、顺序工作 | 当前会话直接完成 |
+| 两个以上独立的探索或实现任务 | 原生 subagents |
+| Claude teammates 必须互相讨论或认领共享任务 | Claude Agent Teams |
+| 没有原生 Agent 能力或无法隔离写入 | 降级为当前会话 |
+
+## Codex
+
+Codex 中使用当前客户端暴露的原生 subagent / agent-thread 工具。每个 Agent 接收一个自包含任务；若 spawn 接口支持上下文继承选项，Skill 会选择空白或最小上下文，而不是复制完整主会话历史。
+
+独立 Agent thread 不必然代表独立 worktree。并行写入前必须观察到真实隔离，或把文件范围明确分开。主会话使用原生 Agent 列表、消息和等待能力监督，结果不完整时优先在原 thread 上继续。
+
+## Claude Code
+
+聚焦的实现、探索、测试和审查默认使用 subagents。自定义 subagent 可以在 `.claude/agents/` 中定义工具、权限、skills 和 worktree isolation。
+
+只有 teammates 必须互相通信、共享任务列表或协作决策时才使用 Agent Teams。若 Agent Teams 未启用或不适合当前写入范围，Skill 使用 subagents 或当前会话，不会伪装成多会话团队。
+
+## 一个任务合同包含什么
+
+每个 Worker 只获得开始工作所需的事实：
+
+1. 一个可验收目标
+2. 3-6 个必须读取的路径、符号或直接 handoff
+3. 允许写入和明确不负责的范围
+4. 真实依赖
+5. 验证命令或可观察结果
+6. 完成时的摘要、修改路径、验证和风险
+
+Worker 默认不提交、合并、打 Tag、推送或发布。最终 Git 操作和外部副作用仍由主会话按照用户授权执行。
+
+## 可选持久化状态
+
+普通单次会话不需要初始化。工作需要跨会话恢复、保存复杂依赖或审计记录时，再运行：
+
+```bash
+./init.sh /path/to/project
+```
+
+生成：
 
 ```text
 .agent-taskgraph/
-├── PROJECT.md       # 稳定项目事实、命令和约束
-├── PLAN.md          # 当前任务图和依赖
-├── TEAM.md          # 长期职责与原生 session/thread
-├── STATUS.md        # 进度、阻塞和下一步
-├── DECISIONS.md     # 用户与 PMO 的关键决定
-├── tasks/<id>.md    # 每个 Worker 的任务与 handoff
-└── archive/         # 已完成任务记录
+├── PROJECT.md
+├── PLAN.md
+├── TEAM.md
+├── STATUS.md
+├── DECISIONS.md
+├── tasks/TEMPLATE.md
+└── archive/
 ```
 
-初始化会保留已有文件。旧版 beta 队列项目需要兼容旧校验时，才使用 `./init.sh --legacy-queue <project>`；新项目不要默认使用这个选项。
-
-### 启动技能
-
-在目标项目中打开 Codex 或 Claude Code，然后直接说：
-
-```text
-使用 agent-taskgraph。先理解项目和需求；如果值得并行，就由你作为 PMO 创建原生 Codex/Claude 多会话，每个 Agent 使用独立上下文，通过共享文档交接并统一验收；如果不值得并行，就当前会话直接完成。开始前先告诉我你的理解和分工。
-```
-
-这句话已经足够。PMO 会先读项目，然后给出：
-
-```text
-我的理解：...
-需要你决定：...（0-3 个真正阻塞的问题）
-计划：当前会话 / PMO + N 个原生 Agent
-```
-
-用户确认后，PMO 才会创建会话并派发任务。用户不需要填写 Goal ID、session ID、worktree 路径、wait 命令或 HAPI 参数。
-
-## 一批任务如何运行
-
-1. **发现**：PMO 读取项目规范、相关代码、测试和构建命令。
-2. **澄清**：把无法从代码确定的产品或风险决策连同推荐默认值交给用户。
-3. **计划**：写入 `PROJECT.md`、`PLAN.md`、`TEAM.md`，并为每个 Worker 创建 `tasks/<id>.md`。
-4. **预览**：一次展示每个角色、任务、原生会话类型、模型/推理、有效权限、可见方式、worktree 和写入范围。
-5. **派发**：Codex 使用原生 Agent thread；Claude Code 的协作批次优先 Agent Teams，长期 Worker 使用 Agent View background session，subagent 只做短支线。
-6. **交接**：Worker 将结果、修改路径、revision/diff、验证结果和风险写入自己的任务文件。
-7. **验收**：PMO 检查 diff 并运行项目验收命令。只有中高风险或跨模块变更才增加独立 Reviewer。
-8. **收口**：PMO 更新状态、归档完成任务，并向用户总结结果。
-
-## 上下文隔离
-
-每个 Agent 都有独立对话上下文。Worker 只读取：
-
-- 适用的 `AGENTS.md` 或 `CLAUDE.md`
-- `.agent-taskgraph/PROJECT.md` 的相关部分
-- 自己的 `.agent-taskgraph/tasks/<id>.md`
-- 直接依赖任务的 handoff
-- 通过定向搜索找到的相关源码
-
-PMO 不会把完整聊天记录粘贴给 Worker。宿主支持 history/context fork 时，必须显式选择空白或最小任务上下文，不使用默认 full-history fork。稳定事实放在文档里，长项目不会反复消耗同一份上下文。
-
-## 角色怎么确定
-
-PMO 根据真实项目和当前任务动态定义角色，而不是强行使用固定团队。常见角色有前端、后端、数据、测试、研究和 Reviewer。需要长期复用的职责记录在 `TEAM.md`；每次新任务仍然拥有新的范围和 handoff。没有当前任务的角色不会创建 Agent。
-
-团队运行期间，PMO 不偷偷编写产品代码；它负责计划、依赖、监督、证据检查和验收。
-
-## Codex 与 Claude Code
-
-### Codex
-
-使用 Codex 原生 subagent/thread 能力。它们是当前 Codex 客户端里的 Agent thread，不是多个终端窗口。CLI 中用 `/agent` 查看和切换，App/IDE 使用 Agent 面板。原生 thread 不代表已经隔离 worktree；并行写任务必须观察到真实 worktree，或保证写入路径不重叠。长期角色可定义在 `.codex/agents/`。
-
-### Claude Code
-
-PMO 主导的协作批次优先使用 Claude **Agent Teams**。Lead 是 PMO，teammates 是拥有独立上下文的完整 Claude Code session。Agent Teams 是实验能力，需要先启用：
+旧 `.agent-queue` 目录可以显式迁移：
 
 ```bash
-CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+./init.sh --migrate /path/to/project
 ```
 
-Agent Teams 默认显示在当前终端内的 Agent 面板中，不会为每个 Agent 新开 Terminal.app。只有用户明确要求时才使用 tmux/iTerm2 可见分屏。
+迁移只重命名并补齐当前最小模板，不会重写已有内容。
 
-需要跨 PMO 恢复、长期后台运行或独立 worktree 的 Worker，使用 **Agent View background sessions**，通过 `claude agents` 查看和 attach。一次性探索、测试、日志分析或 Reviewer 才使用 **subagents**。未启用 Agent Teams 时，技能必须报告实际降级，不会把 subagent 冒充多会话团队，也不会静默切换到 HAPI。
+持久化目录恢复的是任务事实和 handoff，不是正在运行的 Agent。Codex subagent thread 和 Claude teammates 都不能被假定在客户端重启或主会话恢复后仍然存在；新会话应先检查真实状态，再根据 handoff 恢复或重新创建任务。
 
-如果宿主没有创建、观察原生 Agent 的能力，技能会明确降级为当前单会话，而不是制造虚假的多 Agent 状态。
+## 权限与成本
 
-## 权限
+Skill 默认继承当前宿主的模型、推理和权限，不硬编码模型名，也不启用 bypass、无 sandbox 或 `--yolo`。若 Agent 会继承异常宽泛的父会话权限，会在第一次创建前说明。多 Agent 不扩大安装、联网写操作、迁移、删除、合并、Tag、推送或发布的授权范围。
 
-权限属于一次性团队预览。PMO 记录启动后观察到的有效权限，而不是只记录请求值。
+Agent Teams 和大量并行 Agent 会增加 token 成本。Skill 默认只创建 2-3 个确有独立工作的 Agent，不为固定组织结构创建空闲角色。
 
-| 角色 | Claude Code | Codex |
-|---|---|---|
-| Explorer/Reviewer | `plan` 或只读 tools | `read-only` |
-| 实现 Worker | 独立 worktree + `acceptEdits`/`auto` | `workspace-write + on-request` |
-| 无人值守的受限 Worker | `dontAsk` + 精确 allowlist | `workspace-write + never` |
-| 迁移/发布 | 正常询问 + Human Gate | `on-request` + Human Gate |
-
-`bypassPermissions`、`danger-full-access + never` 和 `--yolo` 只有 Owner 明确授权且外部环境已经隔离时才能使用。检测到父会话已经是 Full Access/Yolo 时，PMO 必须一次性说明它会传播给所有原生 Workers。
-
-## 什么时候只用一个 Agent
-
-单文件、小 bug、单模块、必须顺序进行的工作，或者多个角色会修改同一批文件时，留在当前会话更合适。只有至少两个任务可以独立推进并独立验收时，才创建多会话。
-
-## HAPI：可选高级适配器
-
-HAPI 不是必需品，正常流程不会探测或配置。只有跨机器控制、远程终端或统一外部控制面时，才明确要求启用。如果 HAPI 不可用或失败，回到 Codex/Claude 原生能力或单 Agent，不进入 HAPI 修复循环。
-
-## 更新
-
-Owner 会话可以运行：
+## 验证与更新
 
 ```bash
+./tests/smoke.sh
 ./install.sh --check-update
 ```
 
-检查是只读的。发现新版本时只提示建议命令，不会自动 pull、替换正在使用的 Skill 或重启会话。当前批次继续使用它记录的协议版本，下一批任务开始前再更新。
-
-## Beta 边界
-
-这是公开 Beta，依赖本机安装的 Codex 或 Claude Code 版本所提供的原生多 Agent 能力。它不提供无人值守的云端队列，也不保证不同宿主的界面完全一致，更不会绕过项目权限。迁移、删除、扩大权限、合并和发布仍然需要用户作为 Human Gate 做最终决定。
-
-## 许可证
-
-Apache License 2.0，详见 [LICENSE](LICENSE)。
+更新检查只读取远端状态，不会自动修改当前安装。完整协议见 [`SKILL.md`](SKILL.md)，运行时选择细节见 [`references/native-runtimes.md`](references/native-runtimes.md)。

@@ -1,19 +1,14 @@
-# 当前计划
+# Current plan
 
-> PMO 维护。只记录当前批次的任务、真实依赖和验收，不记录聊天过程。
+> Maintained by the coordinating session. Record real dependencies, not chat history.
 
-## 目标
+## Outcome
 
-<一句话目标>
+<one observable result>
 
-## 任务
+## Tasks
 
-| Task | Agent | 状态 | Needs | 产出 | 验收 |
+| Task | Owner | Status | Needs | Write scope | Acceptance |
 |---|---|---|---|---|---|
 
-状态只用：`pending / active / done / failed / blocked`。
-
-## 集成与人工闸
-
-- 集成负责人：PMO
-- Human Gates：<无 / 决策、迁移、权限、发布等>
+Status: `pending / active / done / failed / blocked`.

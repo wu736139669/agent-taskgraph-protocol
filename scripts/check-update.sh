@@ -44,7 +44,7 @@ fi
 
 print_header() {
   if [ "$QUIET" -eq 0 ]; then
-    printf 'Agent TaskGraph Protocol version: %s\n' "$CURRENT_VERSION"
+    printf 'Agent TaskGraph version: %s\n' "$CURRENT_VERSION"
   fi
 }
 

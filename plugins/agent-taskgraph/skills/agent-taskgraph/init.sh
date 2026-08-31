@@ -1,40 +1,29 @@
 #!/usr/bin/env bash
-# Initialize an agent-taskgraph instance inside a target project without overwriting state.
+# Initialize optional durable Agent TaskGraph state without overwriting existing files.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 TARGET="."
 TARGET_SET=0
 MIGRATE=0
-LEGACY_QUEUE=0
 
 usage() {
-  cat <<'EOF'
-Usage: ./init.sh [--migrate] [--legacy-queue] [project-directory]
+  cat <<'USAGE'
+Usage: ./init.sh [--migrate] [project-directory]
 
-  --migrate  Rename an existing .agent-queue instance to .agent-taskgraph.
+  --migrate  Rename an existing .agent-queue directory to .agent-taskgraph.
              Refuses to run when both directories already exist.
-  --legacy-queue  Also install the pre-beta.15 queue/role/ledger compatibility layout.
-EOF
+
+Initialization is optional. Use it only for work that must survive multiple sessions
+or needs an auditable task plan.
+USAGE
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --migrate)
-      MIGRATE=1
-      ;;
-    --legacy-queue)
-      LEGACY_QUEUE=1
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    -*)
-      echo "Unknown option: $1" >&2
-      usage >&2
-      exit 2
-      ;;
+    --migrate) MIGRATE=1 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     *)
       if [ "$TARGET_SET" -eq 1 ]; then
         echo "Choose only one project directory." >&2
@@ -57,80 +46,43 @@ TARGET="$(cd "$TARGET" && pwd)"
 INSTANCE="$TARGET/.agent-taskgraph"
 LEGACY_INSTANCE="$TARGET/.agent-queue"
 
-if [ -e "$LEGACY_INSTANCE" ] || [ -L "$LEGACY_INSTANCE" ]; then
+if [ "$MIGRATE" -eq 1 ]; then
   if [ -e "$INSTANCE" ] || [ -L "$INSTANCE" ]; then
-    echo "Both legacy and current state directories exist:" >&2
-    echo "  $LEGACY_INSTANCE" >&2
-    echo "  $INSTANCE" >&2
-    echo "Reconcile them manually before running init again." >&2
+    echo "Current state already exists: $INSTANCE" >&2
     exit 1
   fi
-  if [ "$MIGRATE" -ne 1 ]; then
-    echo "Legacy Agent Queue state found: $LEGACY_INSTANCE" >&2
-    echo "Review it, then run: ./init.sh --migrate '$TARGET'" >&2
-    exit 1
-  fi
-  if [ -L "$LEGACY_INSTANCE" ] || [ ! -d "$LEGACY_INSTANCE" ]; then
-    echo "Legacy state path is not a directory: $LEGACY_INSTANCE" >&2
+  if [ ! -d "$LEGACY_INSTANCE" ] || [ -L "$LEGACY_INSTANCE" ]; then
+    echo "Legacy state directory does not exist: $LEGACY_INSTANCE" >&2
     exit 1
   fi
   mv "$LEGACY_INSTANCE" "$INSTANCE"
   printf 'migrate %s -> %s\n' "$LEGACY_INSTANCE" "$INSTANCE"
-elif [ "$MIGRATE" -eq 1 ]; then
-  echo "No legacy .agent-queue directory found; initializing current state."
+elif [ -e "$LEGACY_INSTANCE" ] || [ -L "$LEGACY_INSTANCE" ]; then
+  echo "Legacy state found: $LEGACY_INSTANCE" >&2
+  echo "Review it, then run: ./init.sh --migrate '$TARGET'" >&2
+  exit 1
 fi
 
 install_if_missing() {
   local source="$1" destination="$2"
   if [ -e "$destination" ]; then
-    printf 'keep  %s\n' "$destination"
+    printf 'keep   %s\n' "$destination"
   else
     cp "$source" "$destination"
     printf 'create %s\n' "$destination"
   fi
 }
 
-touch_if_missing() {
-  local destination="$1"
-  if [ ! -e "$destination" ]; then
-    : > "$destination"
-  fi
-}
-
-mkdir -p \
-  "$INSTANCE/tasks" \
-  "$INSTANCE/archive"
-
+mkdir -p "$INSTANCE/tasks" "$INSTANCE/archive"
 install_if_missing "$SRC/templates/PROJECT.md" "$INSTANCE/PROJECT.md"
 install_if_missing "$SRC/templates/PLAN.md" "$INSTANCE/PLAN.md"
 install_if_missing "$SRC/templates/TEAM.md" "$INSTANCE/TEAM.md"
 install_if_missing "$SRC/templates/STATUS.md" "$INSTANCE/STATUS.md"
 install_if_missing "$SRC/templates/DECISIONS.md" "$INSTANCE/DECISIONS.md"
 install_if_missing "$SRC/templates/task.md" "$INSTANCE/tasks/TEMPLATE.md"
-
-if [ "$LEGACY_QUEUE" -eq 1 ]; then
-  mkdir -p \
-    "$INSTANCE/templates" \
-    "$INSTANCE/roles" \
-    "$INSTANCE/staffing" \
-    "$INSTANCE/queue/inbox" \
-    "$INSTANCE/queue/active" \
-    "$INSTANCE/queue/review" \
-    "$INSTANCE/queue/done" \
-    "$INSTANCE/queue/failed"
-  install_if_missing "$SRC/templates/ROLES.md" "$INSTANCE/ROLES.md"
-  for name in spec.md graph.yaml goal.md ledger.md report.md role.md context.md dispatch.md staffing-change.md task-manifest.json; do
-    install_if_missing "$SRC/templates/$name" "$INSTANCE/templates/$name"
-  done
-  for state in inbox active review done failed; do
-    touch_if_missing "$INSTANCE/queue/$state/.gitkeep"
-  done
-fi
-
-touch_if_missing "$INSTANCE/tasks/.gitkeep"
-touch_if_missing "$INSTANCE/archive/.gitkeep"
+: > "$INSTANCE/tasks/.gitkeep"
+: > "$INSTANCE/archive/.gitkeep"
 
 echo
-echo "agent-taskgraph initialized at $INSTANCE"
-echo "Native Codex/Claude team state is ready. Existing files were preserved."
-echo "Ask the agent to analyze the project and fill PROJECT.md; use --legacy-queue only for compatibility tests."
+echo "Optional Agent TaskGraph state initialized at $INSTANCE"
+echo "Existing files were preserved. Use native runtime tasks/messages for ordinary one-session work."

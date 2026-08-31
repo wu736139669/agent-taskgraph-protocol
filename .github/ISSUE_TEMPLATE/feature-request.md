@@ -1,6 +1,6 @@
 ---
 name: Feature or workflow proposal
-about: Propose a focused improvement to the protocol or its supporting tools.
+about: Propose a focused improvement to native Agent orchestration.
 title: "[Proposal] "
 labels: [enhancement]
 assignees: []
@@ -14,15 +14,15 @@ What user or team problem should this solve?
 
 Describe the smallest useful change. Include an example prompt or workflow when possible.
 
-## Graph and safety impact
+## Native runtime impact
 
-- Which roles, nodes, or artifacts would change?
-- Would this affect permissions, migrations, deletion, merge, release, or other Human Gates?
-- What should remain explicitly out of scope?
+- Which Codex or Claude Code mode changes?
+- Does it change Agent count, context, write isolation, permissions, or external effects?
+- What should remain out of scope?
 
 ## Alternatives considered
 
-Describe any existing command, template, or workaround that you tried.
+Describe any existing native capability, prompt, or template that you tried.
 
 ## Privacy check
 

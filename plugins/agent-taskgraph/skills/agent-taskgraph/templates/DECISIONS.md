@@ -1,12 +1,10 @@
-# 决策记录
+# Decisions
 
-> PMO 追加维护。只记录改变范围、职责、依赖、验收或权限的决定；不要复制聊天。
+> Append only decisions that changed scope, dependencies, acceptance, permissions, or external effects.
 
-## <日期> <决策一句话标题>
+## <YYYY-MM-DD> <decision>
 
-- **决策**：<做了什么决定>
-- **理由**：<为什么这么定——这是未来反悔时最需要的>
-- **关联**：<任务号 / 项目模块 / 其他决策>
-- **替代方案**：<被否掉的选项，一句话说明为何否掉>
-
----
+- Decision:
+- Reason:
+- Affected tasks or paths:
+- Rejected alternative:

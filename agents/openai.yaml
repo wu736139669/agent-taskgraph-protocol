@@ -1,7 +1,7 @@
 interface:
-  display_name: "Agent TaskGraph Protocol"
-  short_description: "Run a PMO-led native Agent Team with isolated contexts"
-  default_prompt: "Use $agent-taskgraph to understand this project, clarify the request, and create a PMO-led native Agent Team only when parallel work is useful."
+  display_name: "Agent TaskGraph"
+  short_description: "Coordinate native Codex or Claude Agents when parallel work pays off"
+  default_prompt: "Use $agent-taskgraph to inspect this project, choose single-agent or native multi-agent execution, isolate parallel writes, and verify the integrated result."
 
 policy:
   allow_implicit_invocation: true

@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem in the Skill, installer, scripts, or templates.
+about: Report a reproducible problem in the Skill, installer, templates, or native runtime guidance.
 title: "[Bug] "
 labels: [bug]
 assignees: []
@@ -23,13 +23,14 @@ Actual behavior:
 ## Environment
 
 - Agent TaskGraph version or commit:
-- Runtime: Claude Code / Codex / HAPI / other
+- Runtime: Claude Code / Codex
 - Operating system:
-- Relevant command:
+- Native mode used: current session / subagents / Agent Teams
+- Relevant command or prompt:
 
 ## Evidence
 
-Paste sanitized output, a minimal fixture, or a link to a reproducible branch. Do not include secrets, credentials, private paths, session IDs, or user data.
+Paste sanitized output, a minimal fixture, or a reproducible branch. Do not include secrets, credentials, private paths, session IDs, or user data.
 
 ## Privacy check
 

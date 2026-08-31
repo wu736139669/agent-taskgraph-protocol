@@ -1,7 +1,7 @@
 {
   "name": "agent-taskgraph",
-  "version": "0.8.0-beta.16",
-  "description": "PMO-led native Codex Agent Teams with isolated contexts and document handoffs.",
+  "version": "0.8.0-beta.17",
+  "description": "Native Codex subagent orchestration with isolated work and verified integration.",
   "author": {
     "name": "wu736139669"
   },
@@ -12,17 +12,17 @@
     "ai-coding",
     "agent-orchestration",
     "task-graph",
-    "graph-engineering",
+    "multi-agent",
     "codex"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent TaskGraph",
-    "shortDescription": "Plan and verify complex AI coding work.",
-    "longDescription": "Agent TaskGraph keeps the current session as PMO, starts a native Agent Team only when useful, isolates each Agent context, records effective permissions and worktrees, and verifies document-based handoffs.",
+    "shortDescription": "Coordinate native Agents for parallel coding work.",
+    "longDescription": "Agent TaskGraph chooses between single-session execution and native Codex subagents, gives Workers minimal self-contained assignments, isolates parallel writes, and verifies the integrated result.",
     "developerName": "wu736139669",
     "category": "Developer Tools",
     "capabilities": [],
-    "defaultPrompt": "Use Agent TaskGraph to clarify and verify this coding task."
+    "defaultPrompt": "Use Agent TaskGraph to choose and verify the smallest effective execution mode."
   }
 }

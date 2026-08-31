@@ -1,7 +1,7 @@
 {
   "name": "agent-taskgraph",
-  "description": "PMO-led native Claude Code Agent Teams with isolated contexts and document handoffs.",
-  "version": "0.8.0-beta.16",
+  "description": "Native Claude Code subagent and Agent Team orchestration with isolated work and verified integration.",
+  "version": "0.8.0-beta.17",
   "author": {
     "name": "wu736139669"
   },
@@ -12,7 +12,7 @@
     "ai-coding",
     "agent-orchestration",
     "task-graph",
-    "graph-engineering",
+    "multi-agent",
     "claude-code"
   ]
 }
