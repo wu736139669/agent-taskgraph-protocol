@@ -15,17 +15,18 @@ Describe the project type and task without private source code, credentials, cus
 - Agent TaskGraph version or commit:
 - Runtime: Claude Code / Codex
 - Operating system:
-- Mode used: current session / subagents / Agent Teams
+- Logical mode: Solo / Delegation / Team
+- Native runtime: current session / Codex subagents / Claude subagents / Claude Agent Teams
 - Model and reasoning level, if relevant:
 
 ## Workflow used
 
-- [ ] Single-Agent fallback
-- [ ] Parallel exploration or review
-- [ ] Parallel implementation with disjoint paths
-- [ ] Worktree-isolated implementation
-- [ ] Claude Agent Team coordination
-- [ ] Cross-session durable state
+- [ ] Solo execution
+- [ ] Delegation to independent Workers
+- [ ] Team Charter and role formation
+- [ ] Dependency-aware Team execution
+- [ ] Review and integration lifecycle
+- [ ] Cross-session durable Team state
 
 ## Result
 

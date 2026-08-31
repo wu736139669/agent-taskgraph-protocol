@@ -25,7 +25,9 @@ Actual behavior:
 - Agent TaskGraph version or commit:
 - Runtime: Claude Code / Codex
 - Operating system:
-- Native mode used: current session / subagents / Agent Teams
+- Logical mode: Solo / Delegation / Team
+- Native runtime: current session / Codex subagents / Claude subagents / Claude Agent Teams
+- Lifecycle phase, if Team:
 - Relevant command or prompt:
 
 ## Evidence

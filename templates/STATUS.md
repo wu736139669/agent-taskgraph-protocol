@@ -1,14 +1,25 @@
-# Current status
+# Team Status
 
-> Keep this short enough for a new coordinating session to resume safely.
+> Maintained by the Lead. Keep this short enough for a new Lead session to resume safely.
 
-- Outcome:
-- Mode: <single agent / Codex subagents / Claude subagents / Claude Agent Team>
-- Last verified progress:
-- Blockers:
-- Next action:
+| Field | Value |
+|---|---|
+| Team ID | |
+| Outcome | |
+| Lifecycle phase | <forming / briefing / executing / reviewing / integrating / complete / stopped> |
+| Last verified progress | |
+| Current blockers | |
+| Next coordination action | |
 
 ## Task status
 
-| Task | Status | Evidence or handoff |
-|---|---|---|
+| Task | Owner | Status | Evidence / latest handoff | Next action |
+|---|---|---|---|---|
+
+## Integration readiness
+
+- [ ] Critical Tasks reached terminal states.
+- [ ] Dependency handoffs were consumed.
+- [ ] Reviews required by risk are complete.
+- [ ] Integrator ran team-level verification.
+- [ ] Remaining risks and external effects are disclosed.

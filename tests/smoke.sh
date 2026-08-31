@@ -18,7 +18,7 @@ assert_link_to() {
 }
 
 VERSION="$(tr -d '\r\n' < "$ROOT/VERSION")"
-[ "$VERSION" = "0.8.0-beta.17" ] || fail "unexpected VERSION: $VERSION"
+[ "$VERSION" = "0.8.0-beta.18" ] || fail "unexpected VERSION: $VERSION"
 
 echo "[1/8] shell and metadata syntax"
 bash -n "$ROOT/install.sh" "$ROOT/init.sh" "$ROOT/scripts/check-update.sh" "$ROOT/tests/smoke.sh"
@@ -45,7 +45,9 @@ skill = (root / "SKILL.md").read_text()
 assert skill.startswith("---\nname: agent-taskgraph\n")
 assert "description:" in skill.split("---", 2)[1]
 assert "references/native-runtimes.md" in skill
+assert "references/team-protocol.md" in skill
 assert (root / "references/native-runtimes.md").is_file()
+assert (root / "references/team-protocol.md").is_file()
 assert "<TODO>" not in skill
 PY
 
@@ -70,15 +72,26 @@ if find "$ROOT" -path "$ROOT/.git" -prune -o -path "$ROOT/videos" -prune -o -typ
   fail "external runtime references remain"
 fi
 
-grep -q '当前会话直接完成' "$ROOT/SKILL.md"
-grep -q 'Claude Code 中，聚焦任务默认用 subagents' "$ROOT/SKILL.md"
-grep -q '主会话是协调者，不必强制空转' "$ROOT/SKILL.md"
-grep -q '持久化状态是可选项' "$ROOT/SKILL.md"
-grep -q '不保证恢复原生 Agent' "$ROOT/SKILL.md"
+grep -q '\*\*Solo\*\*' "$ROOT/SKILL.md"
+grep -q '\*\*Delegation\*\*' "$ROOT/SKILL.md"
+grep -q '\*\*Team\*\*' "$ROOT/SKILL.md"
+grep -q '共同目标' "$ROOT/SKILL.md"
+grep -q '角色' "$ROOT/SKILL.md"
+grep -q '任务关系' "$ROOT/SKILL.md"
+grep -q '协作协议' "$ROOT/SKILL.md"
+grep -q '生命周期' "$ROOT/SKILL.md"
+grep -q 'forming.*briefing.*executing.*reviewing.*integrating' "$ROOT/SKILL.md"
+grep -q 'READY' "$ROOT/SKILL.md"
+grep -q 'BLOCKED' "$ROOT/SKILL.md"
+grep -q 'HANDOFF' "$ROOT/SKILL.md"
+grep -q 'REVIEW' "$ROOT/SKILL.md"
+grep -q '不保证恢复 Agent' "$ROOT/SKILL.md"
 grep -q 'fork_turns' "$ROOT/SKILL.md"
 grep -q 'worktree' "$ROOT/SKILL.md"
-grep -q 'Agent Teams：只在需要同伴协作时使用' "$ROOT/references/native-runtimes.md"
+grep -q 'hub-and-spoke' "$ROOT/references/native-runtimes.md"
 grep -q '可能成为 teammate' "$ROOT/references/native-runtimes.md"
+grep -q 'Team Charter' "$ROOT/references/team-protocol.md"
+grep -q 'Development Team' "$ROOT/references/team-protocol.md"
 
 echo "[3/8] optional durable-state initialization"
 mkdir -p "$TMP/project"
@@ -88,6 +101,10 @@ for name in PROJECT.md PLAN.md TEAM.md STATUS.md DECISIONS.md; do
 done
 assert_file "$TMP/project/.agent-taskgraph/tasks/TEMPLATE.md"
 assert_dir "$TMP/project/.agent-taskgraph/archive"
+grep -q 'Team Charter' "$TMP/project/.agent-taskgraph/TEAM.md"
+grep -q 'Team Task Graph' "$TMP/project/.agent-taskgraph/PLAN.md"
+grep -q 'Lifecycle phase' "$TMP/project/.agent-taskgraph/STATUS.md"
+grep -q 'Produces for' "$TMP/project/.agent-taskgraph/tasks/TEMPLATE.md"
 printf 'user-owned\n' >> "$TMP/project/.agent-taskgraph/PROJECT.md"
 "$ROOT/init.sh" "$TMP/project" > "$TMP/reinit.out"
 grep -q 'user-owned' "$TMP/project/.agent-taskgraph/PROJECT.md"
@@ -160,6 +177,7 @@ for pair in \
   "init.sh:init.sh" \
   "agents/openai.yaml:agents/openai.yaml" \
   "references/native-runtimes.md:references/native-runtimes.md" \
+  "references/team-protocol.md:references/team-protocol.md" \
   "scripts/check-update.sh:scripts/check-update.sh" \
   "templates/PROJECT.md:templates/PROJECT.md" \
   "templates/PLAN.md:templates/PLAN.md" \
@@ -178,6 +196,7 @@ VERSION
 agents/openai.yaml
 init.sh
 references/native-runtimes.md
+references/team-protocol.md
 scripts/check-update.sh
 templates/DECISIONS.md
 templates/PLAN.md
@@ -202,8 +221,8 @@ import pathlib
 import sys
 root = pathlib.Path(sys.argv[1])
 required = {
-    "README.md": ["Native execution only", "Optional durable state", "Agent Teams"],
-    "README.zh-CN.md": ["纯原生运行", "按需持久化", "Agent Teams"],
+    "README.md": ["Solo", "Delegation", "Team Charter", "Collaboration protocol", "Lifecycle", "Agent Teams"],
+    "README.zh-CN.md": ["Solo", "Delegation", "Team Charter", "协作协议", "生命周期", "Agent Teams"],
 }
 for name, phrases in required.items():
     text = (root / name).read_text()

@@ -4,21 +4,86 @@
 
 # Agent TaskGraph
 
-**面向 Codex 和 Claude Code 的原生多 Agent 编排 Skill。**
+**在 Codex 和 Claude Code 中建立有目标、角色、任务关系、协作协议和生命周期的原生 Agent Team。**
 
-版本：[`v0.8.0-beta.17`](VERSION) | 许可证：[Apache-2.0](LICENSE)
+版本：[`v0.8.0-beta.18`](VERSION) | 许可证：[Apache-2.0](LICENSE)
 
-Agent TaskGraph 帮当前会话判断任务是否值得并行，然后使用宿主自带的 Agent 能力拆分、派发、监督和验收。它不启动另一套调度服务，也不要求每个任务都创建项目状态目录。
+Agent TaskGraph 不只是并行启动几个 Agent。它让当前会话成为 Lead，根据任务选择 Solo、Delegation 或 Team，并负责组建团队、分配角色、建立任务依赖、监督交接、组织审查、完成集成和解散团队。
 
-## 核心变化
+它只使用当前宿主的原生 Agent 能力，不运行外部调度服务。
 
-- **单 Agent 优先**：小任务留在当前会话，避免协调开销。
-- **纯原生运行**：Codex 使用原生 subagents；Claude Code 默认使用 subagents，需要 teammates 互相协作时才使用 Agent Teams。
-- **主会话不空转**：协调者可以同时完成一个不与 Worker 重叠的任务；只有明确要求 lead-only 时才保持纯 PMO。
-- **最小上下文**：Worker 获得自包含任务，不复制主会话全部历史。
-- **写入隔离**：并行写任务必须使用 worktree 或不重叠路径。
-- **按需持久化**：`.agent-taskgraph/` 只用于跨会话、可恢复或需要审计的工作。
-- **原生监督**：使用宿主的 spawn、message、wait、resume 和 stop，不维护第二套 session 状态机。
+## 三种工作模式
+
+| 模式 | 适用情况 | 运行方式 |
+|---|---|---|
+| **Solo** | 小修复、单模块或顺序任务 | 当前会话直接完成 |
+| **Delegation** | 多个独立支线，只需分别交给 Lead | Lead + 原生 subagents |
+| **Team** | 有共同目标、角色协作、任务依赖或跨模块集成 | Team Charter + 角色 + 任务图 + 生命周期 |
+
+用户明确要求“组一个团队”时优先进入 Team 模式。只有原生 Agent 不可用、任务无法安全拆分或写入无法隔离时才降级。
+
+## 一个 Team 包含什么
+
+### 共同目标
+
+团队有一个可观察的集成结果，同时声明当前批次的非目标和完成条件。
+
+### 角色
+
+- **Lead**：组队、派发、依赖、决策、监督和集成。
+- **Builder / Specialist**：负责边界清楚的 Task。
+- **Reviewer**：按风险独立审查，不重新实现任务。
+- **Integrator**：消费 handoff、解决冲突、运行团队级验收，默认由 Lead 担任。
+
+角色按真实任务动态创建。默认团队包含 Lead 在内共 2-4 个 active members，不为了组织结构完整创建空闲成员。
+
+### 任务关系
+
+每个 Task 都有：
+
+```text
+Owner / Role / Goal / Needs / Produces / Consumer / Writes / Acceptance
+```
+
+独立 Task 可以并行；有依赖的 Task 等待 handoff；共享写入范围必须串行或使用独立 worktree。
+
+### 协作协议
+
+团队使用四种简洁的语义事件：
+
+- `READY`：任务合同清楚且可以开始。
+- `BLOCKED`：报告阻塞、尝试和需要的决定或交付。
+- `HANDOFF`：交付结果、路径、验证和下游注意事项。
+- `REVIEW`：给出通过/修正结论及证据。
+
+### 生命周期
+
+```text
+forming → briefing → executing → reviewing → integrating → complete/stopped
+```
+
+Team 只有在关键任务收口、handoff 被消费、集成验证完成、风险被披露并结束不再需要的 Agent 后才算完成。
+
+## Codex 与 Claude Code
+
+### Codex
+
+Codex Team 默认是 **Lead 中心化的 hub-and-spoke 团队**：当前主线程是 Lead，原生 subagents/agent threads 是成员。成员间不需要直接通信；Lead 通过任务合同、代码产物和 handoff 协调依赖。
+
+### Claude Code
+
+- **Subagents**：用于 Lead 中心化团队，适合开发、研究和审查。
+- **Agent Teams**：只有 teammates 需要互相通信、认领共享任务或协作决策时使用。
+
+逻辑 Team 不等同于 Claude Agent Teams。Agent Teams 不可用时，仍然可以用 subagents 建立中心化 Team。
+
+## 写入和 Git 所有权
+
+- 并行写任务使用独立 worktree 或不重叠路径。
+- 一个文件、生成物或迁移状态同一时刻只有一个 Owner。
+- Worker 默认不 commit、merge、rebase、打 Tag、推送或发布。
+- Integrator 负责最终 diff、冲突处理和团队级验证。
+- 多 Agent 不扩大当前会话已有的权限和外部操作授权。
 
 ## 安装
 
@@ -34,59 +99,29 @@ cd agent-taskgraph-protocol
 - `~/.codex/skills/agent-taskgraph`
 - `~/.claude/skills/agent-taskgraph`
 
-已有的非本仓库路径不会被覆盖；需要备份后替换时使用 `./install.sh --force`。
-
 ## 使用
 
-在 Codex 或 Claude Code 中直接说：
+建立开发团队：
 
 ```text
-使用 agent-taskgraph 完成这个任务。值得并行就用当前宿主的原生 Agent，不值得就当前会话直接做；并行写入必须隔离，最后统一检查 diff 和测试。
+使用 agent-taskgraph 组一个开发团队完成这个需求。先理解项目，建立共同目标、角色、任务依赖、写入边界和完成条件，然后用当前宿主的原生 Agent 执行、交接、审查和集成。
 ```
 
-用户明确要求先看计划时：
+只做独立并行委派：
 
 ```text
-使用 agent-taskgraph。先给我简短的执行模式、分工、写入边界和验收，等我确认再开始。
+使用 agent-taskgraph。可以独立并行的任务交给原生 subagents，主会话负责汇总和验收，不需要成员互相协作。
 ```
 
-Skill 会先读项目，再选择：
+让 Skill 自动选择：
 
-| 情况 | 执行方式 |
-|---|---|
-| 小修复、单模块、顺序工作 | 当前会话直接完成 |
-| 两个以上独立的探索或实现任务 | 原生 subagents |
-| Claude teammates 必须互相讨论或认领共享任务 | Claude Agent Teams |
-| 没有原生 Agent 能力或无法隔离写入 | 降级为当前会话 |
+```text
+使用 agent-taskgraph 完成这个任务。根据复杂度选择 Solo、Delegation 或 Team；并行写入必须隔离，最后统一验收。
+```
 
-## Codex
+## 可选的持久化 Team 状态
 
-Codex 中使用当前客户端暴露的原生 subagent / agent-thread 工具。每个 Agent 接收一个自包含任务；若 spawn 接口支持上下文继承选项，Skill 会选择空白或最小上下文，而不是复制完整主会话历史。
-
-独立 Agent thread 不必然代表独立 worktree。并行写入前必须观察到真实隔离，或把文件范围明确分开。主会话使用原生 Agent 列表、消息和等待能力监督，结果不完整时优先在原 thread 上继续。
-
-## Claude Code
-
-聚焦的实现、探索、测试和审查默认使用 subagents。自定义 subagent 可以在 `.claude/agents/` 中定义工具、权限、skills 和 worktree isolation。
-
-只有 teammates 必须互相通信、共享任务列表或协作决策时才使用 Agent Teams。若 Agent Teams 未启用或不适合当前写入范围，Skill 使用 subagents 或当前会话，不会伪装成多会话团队。
-
-## 一个任务合同包含什么
-
-每个 Worker 只获得开始工作所需的事实：
-
-1. 一个可验收目标
-2. 3-6 个必须读取的路径、符号或直接 handoff
-3. 允许写入和明确不负责的范围
-4. 真实依赖
-5. 验证命令或可观察结果
-6. 完成时的摘要、修改路径、验证和风险
-
-Worker 默认不提交、合并、打 Tag、推送或发布。最终 Git 操作和外部副作用仍由主会话按照用户授权执行。
-
-## 可选持久化状态
-
-普通单次会话不需要初始化。工作需要跨会话恢复、保存复杂依赖或审计记录时，再运行：
+短 Team 可以只使用宿主原生任务和消息。跨会话、任务依赖复杂或需要审计时运行：
 
 ```bash
 ./init.sh /path/to/project
@@ -97,35 +132,29 @@ Worker 默认不提交、合并、打 Tag、推送或发布。最终 Git 操作�
 ```text
 .agent-taskgraph/
 ├── PROJECT.md
-├── PLAN.md
-├── TEAM.md
-├── STATUS.md
+├── TEAM.md          # Team Charter 和成员
+├── PLAN.md          # 任务图和依赖
+├── STATUS.md        # 团队生命周期
 ├── DECISIONS.md
 ├── tasks/TEMPLATE.md
 └── archive/
 ```
 
-旧 `.agent-queue` 目录可以显式迁移：
+持久化目录恢复的是团队事实和 handoff，不是假定仍然在线的 Agent。新 Lead 会话必须先检查原生状态，再恢复或重新创建成员。
 
-```bash
-./init.sh --migrate /path/to/project
-```
+## 团队预设
 
-迁移只重命名并补齐当前最小模板，不会重写已有内容。
+以下只是起点，不是固定组织结构：
 
-持久化目录恢复的是任务事实和 handoff，不是正在运行的 Agent。Codex subagent thread 和 Claude teammates 都不能被假定在客户端重启或主会话恢复后仍然存在；新会话应先检查真实状态，再根据 handoff 恢复或重新创建任务。
+- **Development Team**：Lead/Integrator + 按模块划分的 Builders + 按风险创建 Reviewer。
+- **Research Team**：Lead/Synthesizer + 按问题域划分的 Researchers。
+- **Review Team**：Lead + 按正确性、安全、测试或产品意图划分的只读 Reviewers。
 
-## 权限与成本
-
-Skill 默认继承当前宿主的模型、推理和权限，不硬编码模型名，也不启用 bypass、无 sandbox 或 `--yolo`。若 Agent 会继承异常宽泛的父会话权限，会在第一次创建前说明。多 Agent 不扩大安装、联网写操作、迁移、删除、合并、Tag、推送或发布的授权范围。
-
-Agent Teams 和大量并行 Agent 会增加 token 成本。Skill 默认只创建 2-3 个确有独立工作的 Agent，不为固定组织结构创建空闲角色。
-
-## 验证与更新
+## 验证和更新
 
 ```bash
 ./tests/smoke.sh
 ./install.sh --check-update
 ```
 
-更新检查只读取远端状态，不会自动修改当前安装。完整协议见 [`SKILL.md`](SKILL.md)，运行时选择细节见 [`references/native-runtimes.md`](references/native-runtimes.md)。
+完整入口见 [`SKILL.md`](SKILL.md)，团队合同见 [`references/team-protocol.md`](references/team-protocol.md)，运行时映射见 [`references/native-runtimes.md`](references/native-runtimes.md)。

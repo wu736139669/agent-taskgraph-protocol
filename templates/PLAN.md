@@ -1,14 +1,20 @@
-# Current plan
+# Team Task Graph
 
-> Maintained by the coordinating session. Record real dependencies, not chat history.
+> Maintained by the Lead. Record real dependencies and ownership, not chat history.
 
-## Outcome
+## Team outcome
 
-<one observable result>
+<same observable result as TEAM.md>
 
 ## Tasks
 
-| Task | Owner | Status | Needs | Write scope | Acceptance |
-|---|---|---|---|---|---|
+| Task | Owner / Role | Status | Needs | Produces / Consumer | Writes | Acceptance |
+|---|---|---|---|---|---|---|
 
-Status: `pending / active / done / failed / blocked`.
+Status: `pending / ready / active / review / done / blocked / failed / cancelled`.
+
+## Integration path
+
+- Integration order:
+- Shared or high-conflict paths:
+- Team-level verification:

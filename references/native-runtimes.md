@@ -2,17 +2,28 @@
 
 只在准备创建原生 Agent 时读取本文件。先以当前会话实际暴露的工具、帮助和配置为准；客户端版本不同，能力和字段可能不同。
 
+Team 是逻辑协作模型；“Team 模式”不要求运行时必须提供成员间直接通信。
+
 ## 选择表
 
 | 场景 | Codex | Claude Code |
 |---|---|---|
 | 聚焦的只读探索/测试/审查 | 原生 subagent | subagent |
 | 多个独立实现任务 | 原生 subagents；worktree 或不重叠路径 | 带 worktree isolation 的 subagents，或不重叠路径 |
-| Worker 必须互相讨论、认领共享任务 | 原生 subagents，由主线程协调 | Agent Teams |
+| 逻辑 Team，成员只需向 Lead 交付 | 原生 subagents，由 Lead 协调 | subagents，由 Lead 协调 |
+| 成员必须互相讨论、认领共享任务 | 原生 subagents；Lead 转交 handoff | Agent Teams |
 | 单个长任务需后台继续 | 宿主支持时使用后台/异步 Agent | background subagent |
 | 无原生 delegation 能力 | 当前会话直接完成 | 当前会话直接完成 |
 
 ## Codex
+
+### 团队拓扑
+
+Codex Team 默认是 `hub-and-spoke`：当前主线程是 Lead，原生 subagents 是成员。不要把逻辑 Team 描述为成员间可直接通信的 peer team，除非当前宿主明确暴露并验证了该能力。
+
+- Team Charter 和任务图由 Lead 维护。
+- Agent 之间的依赖通过 Lead、代码产物或持久化 handoff 传递。
+- Lead 使用原生 task/plan 能力记录进度；不要创建第二套运行时状态机。
 
 ### 派发
 
@@ -35,6 +46,13 @@
 Codex subagents 可能共享当前 checkout；“独立 thread”不等于“独立文件系统”。在实际观察到 worktree 隔离前，写任务必须按不重叠路径分区。
 
 ## Claude Code
+
+### 团队拓扑
+
+- `hub-and-spoke` Team：Lead + subagents。适用于开发任务、独立研究和集中集成。
+- `peer-capable` Team：Claude Agent Teams。只在 teammates 需要互相消息、共享任务列表或协作决策时使用。
+
+逻辑 Team 不应因为 Agent Teams 不可用就自动降级为“没有团队”；仍可用 subagents 实现 Lead 中心化 Team。只有原生 delegation 不可用或任务无法安全拆分时才降级 Solo。
 
 ### Subagents：默认选择
 

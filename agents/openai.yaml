@@ -1,7 +1,7 @@
 interface:
   display_name: "Agent TaskGraph"
-  short_description: "Coordinate native Codex or Claude Agents when parallel work pays off"
-  default_prompt: "Use $agent-taskgraph to inspect this project, choose single-agent or native multi-agent execution, isolate parallel writes, and verify the integrated result."
+  short_description: "Build goal-driven native Codex or Claude Agent Teams"
+  default_prompt: "Use $agent-taskgraph to choose Solo, Delegation, or Team mode, then define the shared outcome, roles, task graph, collaboration protocol, lifecycle, write ownership, and integrated acceptance."
 
 policy:
   allow_implicit_invocation: true

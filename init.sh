@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Initialize optional durable Agent TaskGraph state without overwriting existing files.
+# Initialize optional durable Agent Team state without overwriting existing files.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -14,8 +14,8 @@ Usage: ./init.sh [--migrate] [project-directory]
   --migrate  Rename an existing .agent-queue directory to .agent-taskgraph.
              Refuses to run when both directories already exist.
 
-Initialization is optional. Use it only for work that must survive multiple sessions
-or needs an auditable task plan.
+Initialization is optional. Use it for Agent Teams that span sessions, contain
+important task dependencies, or require an auditable Team Charter and handoffs.
 USAGE
 }
 
@@ -84,5 +84,5 @@ install_if_missing "$SRC/templates/task.md" "$INSTANCE/tasks/TEMPLATE.md"
 : > "$INSTANCE/archive/.gitkeep"
 
 echo
-echo "Optional Agent TaskGraph state initialized at $INSTANCE"
-echo "Existing files were preserved. Use native runtime tasks/messages for ordinary one-session work."
+echo "Optional Agent Team state initialized at $INSTANCE"
+echo "Fill TEAM.md before spawning a durable Team; ordinary Solo/Delegation work needs no state directory."

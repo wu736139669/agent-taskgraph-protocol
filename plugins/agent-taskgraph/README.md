@@ -1,26 +1,24 @@
 # Agent TaskGraph
 
-Native multi-agent orchestration for Codex and Claude Code.
+Build goal-driven native Agent Teams in Codex and Claude Code.
 
-Source version: [`v0.8.0-beta.17`](../../VERSION) | License: [Apache-2.0](../../LICENSE)
+Source version: [`v0.8.0-beta.18`](../../VERSION) | License: [Apache-2.0](../../LICENSE)
 
-The Skill keeps small tasks in the current session and uses native Agents only when independent work can run in parallel. Codex uses native subagents. Claude Code defaults to subagents and uses Agent Teams only when teammates need to coordinate with each other.
+Agent TaskGraph chooses Solo, Delegation, or Team mode. A Team has a shared outcome, explicit roles, a dependency-aware task graph, collaboration events, write ownership, integrated acceptance, and a complete lifecycle.
 
-Workers receive self-contained assignments, minimal context, explicit write ownership, and acceptance checks. Parallel writers need separate worktrees or disjoint paths. The main session verifies the integrated diff and tests.
-
-Optional durable state preserves task facts and handoffs; it does not promise that native Agent threads or teammates survive a client restart.
+Codex maps Teams to Lead-centered native subagents. Claude Code uses subagents for Lead-centered Teams and Agent Teams only when teammates need peer collaboration. No external orchestration service is required.
 
 ## Usage
 
 ```text
-Use agent-taskgraph for this task. Use native Agents when parallel work is worthwhile; otherwise finish in the current session. Isolate writes and verify the final result.
+Use agent-taskgraph to form a development team for this request. Define the shared outcome, roles, task graph, collaboration protocol, lifecycle, write ownership, and definition of done, then execute with native Agents and integrate the result.
 ```
 
-Durable project state is optional. Initialize it only for resumable, cross-session, or auditable work:
+Durable Team state is optional. Initialize it for cross-session, dependency-heavy, or auditable Teams:
 
 ```bash
 ~/.codex/skills/agent-taskgraph/init.sh /path/to/project
 # or ~/.claude/skills/agent-taskgraph/init.sh /path/to/project
 ```
 
-See the repository [README](../../README.md) for installation, runtime selection, assignment contracts, and safety boundaries.
+See the repository [README](../../README.md), the Team protocol, and native runtime mapping for details.

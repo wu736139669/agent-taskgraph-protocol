@@ -1,10 +1,11 @@
-# Decisions
+# Team Decisions
 
-> Append only decisions that changed scope, dependencies, acceptance, permissions, or external effects.
+> Lead appends only decisions that changed the Team Charter, task graph, ownership, acceptance, permissions, or external effects.
 
 ## <YYYY-MM-DD> <decision>
 
 - Decision:
-- Reason:
-- Affected tasks or paths:
+- Decided by: <Member / Lead / Human Gate>
+- Reason and evidence:
+- Affected Tasks or paths:
 - Rejected alternative:
