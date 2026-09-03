@@ -3,6 +3,7 @@
 GEP-lite（经验沉淀与复用）是 agent-taskgraph 的可选经验层插件。它把"派发 → 验收 → 归档"过程中已被验证的经验（Gene/Capsule）沉淀为本地资产，下一次任务开始前先召回、再注入、结束后回写 —— 让 Agent 团队"越用越强"，且全程纯本地、零新依赖、可审计。
 
 > 设计出处：`docs/design.md`（原始任务简报，含 schema、验收标准与 v0 边界）。
+> 完整接入手册：`references/gep-lite.md`（仓库根，含 SOP、经验→协议的自进化闭环、反模式清单）。
 
 ## 与 agent-taskgraph 的关系
 
