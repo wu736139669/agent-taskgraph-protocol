@@ -136,6 +136,25 @@ Short Teams use native tasks and messages. For cross-session work, important dep
 
 Templates use stable English field names; values can use the project's primary language. Durable files restore team facts, not presumed-live Agents.
 
+## Optional GEP-lite experience layer
+
+`plugins/agent-gep-lite` adds a local, optional experience loop to the existing Team workflow. It does not replace Solo, Delegation, Team, Task Acceptance, review, or integration. It adds two small hooks:
+
+- **Before dispatch:** recall matching Gene/Capsule lessons and inject only distilled warnings or strategy points (at most five entries, three lines each).
+- **After acceptance:** record both successful and failed outcomes, including verification evidence and failure-avoidance advice, so the next similar task starts with context instead of repeating the same mistake.
+
+The practical benefit is a feedback loop: `queue` still tracks the current work, while `lessons/` preserves reusable "how to do it" and "what not to do" guidance. Everything stays in local Markdown/JSON files, uses no external service or new dependency, and travels with the repository through Git.
+
+Quick start for a task contract:
+
+```bash
+L=plugins/agent-gep-lite/skills/agent-gep-lite/scripts
+"$L/lesson-recall.sh" --append .agent-taskgraph/tasks/<id>.md "并行开发; 冲突面; 验收命令"
+"$L/lesson-record.sh" .agent-taskgraph/tasks/<id>.md verify.out --kind success --gene gene-accept-run-command
+```
+
+Read [`plugins/agent-gep-lite/README.md`](plugins/agent-gep-lite/README.md) for the plugin overview and [`references/gep-lite.md`](references/gep-lite.md) for the SOP, decision upgrades, and experience-to-protocol loop.
+
 ## Documentation map
 
 | Document | Read when |
@@ -144,6 +163,8 @@ Templates use stable English field names; values can use the project's primary l
 | [`references/team-protocol.md`](references/team-protocol.md) | Entering Team mode |
 | [`references/native-runtimes.md`](references/native-runtimes.md) | Creating or controlling native Members |
 | [`references/development-team-example.md`](references/development-team-example.md) | Learning the complete end-to-end flow |
+| [`plugins/agent-gep-lite/README.md`](plugins/agent-gep-lite/README.md) | Using the optional experience layer |
+| [`references/gep-lite.md`](references/gep-lite.md) | GEP-lite SOP, boundaries, and integration guidance |
 | [`templates/`](templates/) | Persisting Team state across sessions |
 
 ## Validate and update

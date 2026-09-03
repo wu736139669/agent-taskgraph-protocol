@@ -14,6 +14,17 @@ GEP-lite（经验沉淀与复用）是 agent-taskgraph 的可选经验层插件�
 
 两者正交：不开 GEP-lite 不影响 taskgraph 主流程；开了也只是在"派发"与"验收回写"两个点各插一下。
 
+## 它对原流程有什么帮助
+
+| 原来的情况 | 加入 GEP-lite 后 |
+|---|---|
+| 验收经验停留在 `queue/done/`，下次只能靠 Lead 记忆 | 经验落为可检索的 Gene/Capsule，并按信号词召回 |
+| 派发时容易重复过去的冲突或漏验收 | 简报自动注入蒸馏后的策略要点和失败警告，不塞历史长文 |
+| 失败任务只留下错误日志 | 失败也记录为 `kind: failure`，沉淀 1–3 条「避免」建议 |
+| 经验是否真的被使用无法统计 | `lessons/ledger.json` 记录 `score` 与 `reuse_count` |
+
+它不改变 taskgraph 的模式选择、Task contract、Review 或 Integration 规则；关闭插件时原流程照常运行。
+
 ## 包内容
 
 | 路径 | 用途 |

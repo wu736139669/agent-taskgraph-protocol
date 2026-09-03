@@ -135,6 +135,25 @@ Codex Team 默认是 `hub-and-spoke`：当前主线程是 Lead，原生 subagent
 
 模板使用稳定的英文字段名，字段值可以使用项目主要语言。持久化文件恢复团队事实，不是假定仍然在线的 Agent。
 
+## 可选的 GEP-lite 经验层
+
+`plugins/agent-gep-lite` 为现有 Team 流程增加一条本地、可选的经验闭环。它**不替换** Solo、Delegation、Team、Task 验收、Review 或集成，只增加两个小钩子：
+
+- **派发前**：召回匹配的 Gene/Capsule，只把蒸馏后的警告或策略要点注入简报（最多 5 条，每条最多 3 行）。
+- **验收后**：把成功和失败都记录下来，保留验收证据与失败的避免建议，让下一次相似任务先看到上下文，而不是重复踩同一个坑。
+
+它对原流程的实际帮助是形成反馈闭环：`queue/` 继续记录当前任务，`lessons/` 额外保存可复用的“怎么做”和“不要怎么做”。全部内容是本地 Markdown/JSON，无外部服务、无新增依赖，并随仓库 Git 一起迁移。
+
+对一个 Task contract 的快速用法：
+
+```bash
+L=plugins/agent-gep-lite/skills/agent-gep-lite/scripts
+"$L/lesson-recall.sh" --append .agent-taskgraph/tasks/<id>.md "并行开发; 冲突面; 验收命令"
+"$L/lesson-record.sh" .agent-taskgraph/tasks/<id>.md verify.out --kind success --gene gene-accept-run-command
+```
+
+详见 [`plugins/agent-gep-lite/README.md`](plugins/agent-gep-lite/README.md) 的插件说明，以及 [`references/gep-lite.md`](references/gep-lite.md) 的 SOP、决策升级规则和“经验→协议”闭环。
+
 ## 文档导航
 
 | 文档 | 何时阅读 |
@@ -143,6 +162,8 @@ Codex Team 默认是 `hub-and-spoke`：当前主线程是 Lead，原生 subagent
 | [`references/team-protocol.md`](references/team-protocol.md) | 实际进入 Team 模式时 |
 | [`references/native-runtimes.md`](references/native-runtimes.md) | 准备创建或控制原生 Member 时 |
 | [`references/development-team-example.md`](references/development-team-example.md) | 需要完整端到端示例时 |
+| [`plugins/agent-gep-lite/README.md`](plugins/agent-gep-lite/README.md) | 使用可选经验层时 |
+| [`references/gep-lite.md`](references/gep-lite.md) | 需要 GEP-lite SOP、边界和接入指导时 |
 | [`templates/`](templates/) | 需要跨会话 Team 状态时 |
 
 ## 验证和更新
