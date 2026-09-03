@@ -201,6 +201,7 @@ fi
 
 TMP="$(mktemp "$CAPS_DIR/.capsule.XXXXXX")" || die "无法创建临时文件"
 {
+  echo "# Capsule $ID"
   echo "id: capsule-$ID"
   echo "type: capsule"
   echo "kind: $KIND"

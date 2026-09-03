@@ -1,3 +1,4 @@
+# Capsule capsule-03c6cd42e12c
 id: capsule-03c6cd42e12c
 type: capsule
 kind: failure
