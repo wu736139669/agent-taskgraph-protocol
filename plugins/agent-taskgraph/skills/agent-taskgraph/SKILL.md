@@ -86,3 +86,11 @@ archive/        已完成批次
 Lead 独占修改团队级状态；Member 只修改自己的 Task Handoff 和约定代码。持久化文件保存团队事实，不保证恢复 Agent 进程或 thread。新 Lead 先检查真实原生状态，再按 Handoff 恢复或重新创建 Members。
 
 只有关键 Tasks 收口、依赖 Handoff 被消费、集成验证完成、风险被披露且不再需要的 Agents 已结束时，Team 才进入 `complete`。
+
+## 7. 经验层（可选插件：agent-gep-lite）
+
+重复犯同一个错是最贵的。仓库自带 `plugins/agent-gep-lite`（GEP-lite，经验沉淀与复用，纯本地零依赖）：派发前召回已验证的 Gene/Capsule，验收后把结果（含失败教训）回写为可复用资产。使用方式：
+
+- **派发前**：对 Task contract 跑 `plugins/agent-gep-lite/skills/agent-gep-lite/scripts/lesson-recall.sh --append <task-contract>`，把 ≤5 条、每条 ≤3 行的经验摘要注入派发消息；召回见 2+ 条同场景 `failure` 时，先处理该风险再派发。
+- **验收后**：以真实验收为准跑 `lesson-record.sh` 回写（通过=success / 失败=failure，失败必须蒸馏成「避免:」短句，不堆长文）。
+- 经验字段、schema 与纪律见插件内 `skills/agent-gep-lite/SKILL.md`；经验库随 git 仓库走，换机器 clone 即继承。不开插件不影响本 Skill 任何流程。
