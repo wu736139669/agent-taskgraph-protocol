@@ -155,6 +155,17 @@ L=plugins/agent-gep-lite/skills/agent-gep-lite/scripts
 
 Read [`plugins/agent-gep-lite/README.md`](plugins/agent-gep-lite/README.md) for the plugin overview and [`references/gep-lite.md`](references/gep-lite.md) for the SOP, decision upgrades, and experience-to-protocol loop.
 
+## Related workflow: define the Goal first
+
+[Goal Instruction Writer](https://github.com/wu736139669/goal-instruction-writer)
+is a companion skill for previewing a bounded work loop and defining the outcome,
+acceptance evidence, checkpoints, and stop conditions before a longer task.
+Use that contract as input when choosing Solo, Delegation, or Team mode here.
+
+[Start in two minutes](https://github.com/wu736139669/goal-instruction-writer#start-in-two-minutes) ·
+[Three prompts to try](https://github.com/wu736139669/goal-instruction-writer/blob/main/docs/quickstart-examples.md) ·
+[Real workflow cases](https://github.com/wu736139669/goal-instruction-writer/blob/main/docs/cases/README.md)
+
 ## Documentation map
 
 | Document | Read when |
